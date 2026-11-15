@@ -6,7 +6,7 @@ from itertools import pairwise
 from typing import Any
 
 from custom_components.sat.const import PWMStatus
-from custom_components.sat.heat_budget import HeatBudget, HeatBudgetInputs, solar_elevation
+from custom_components.sat.heat_budget import HeatBudget, HeatBudgetInputs, _Hour, solar_elevation
 
 MINIMUM_POWER = 5.28
 WALL = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
@@ -213,3 +213,42 @@ def test_a_hot_water_reheat_brings_the_next_block_forward() -> None:
 
     assert budget.status == PWMStatus.ON
     assert budget.attributes["hot_water_piggybacks"] == 1
+
+
+def test_gaps_in_the_data_do_not_restart_the_learning() -> None:
+    budget = HeatBudget()
+
+    room, screed, now = 22.0, 26.0, 1000.0
+    while now < 1000 + 4 * 86400:
+        # A 45 minute outage every 10 hours, as from restarts or a sensor dropping out
+        if (now - 1000) % 36000 < 2700:
+            now += 30
+            continue
+        outdoor = 2 + 4 * math.sin(2 * math.pi * now / 86400)
+        flame = budget.status == PWMStatus.ON if budget.ready else int(now // 1800) % 2 == 0
+        budget.update(inputs(now, indoor=round(room, 1), outdoor=outdoor, flame_active=flame))
+        floor = 0.65 * (screed - room)
+        screed += ((MINIMUM_POWER if flame else 0) - floor) * (30 / 3600) / 2.4
+        room += (floor - 0.15 * (room - outdoor)) * (30 / 3600) / 2.5
+        now += 30
+
+    assert budget.ready
+    assert abs(budget.heat_loss - 0.15) < 0.02
+
+
+def test_a_biased_forecast_only_adds_its_trend() -> None:
+    plain = HeatBudget(heat_loss_kw_per_k=0.12)
+    biased = HeatBudget(heat_loss_kw_per_k=0.12)
+
+    # The forecast runs 3 K warmer than the local sensor but sees the same 2 K drop
+    plain.update(inputs(1000, outdoor=2.0, outdoor_forecast=0.0, outdoor_forecast_now=2.0))
+    biased.update(inputs(1000, outdoor=2.0, outdoor_forecast=3.0, outdoor_forecast_now=5.0))
+
+    assert plain.attributes["heat_need_kw"] == biased.attributes["heat_need_kw"]
+    assert plain.attributes["heat_need_kw"] == round(0.12 * (22 - 0), 2)
+
+
+def test_the_day_window_is_saved_and_restored() -> None:
+    hour = _Hour(1.2, 20.0, 0.1, 3600.0, 21.9, 22.0, 1_763_200_000.0)
+    assert _Hour.from_list(hour.to_list()) == hour
+    assert _Hour.from_list([1.0, "x"]) is None

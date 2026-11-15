@@ -1823,6 +1823,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             flame_active=coordinator.flame_active,
             hot_water_active=coordinator.hot_water_active,
             outdoor_forecast=sum(temperatures) / len(temperatures) if temperatures else None,
+            outdoor_forecast_now=temperatures[0] if temperatures else None,
             solar=solar,
             solar_forecast=sum(sunshine) / len(sunshine) if sunshine else None,
             cut_short_burn_ends=coordinator.flame.cut_short_burn_ends,
@@ -1888,13 +1889,18 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         return self.loop_measurement is not None and self.loop_measurement.running
 
     def _forecast_mean(self, hours: float) -> float | None:
+        """Mean outside temperature of the next hours: the measured one plus the forecast trend."""
         now = dt_util.utcnow()
         values = [
             temperature
             for moment, temperature, _ in self._weather_forecast
-            if temperature is not None and now <= moment <= now + timedelta(hours=hours)
+            if temperature is not None
+            and now - timedelta(hours=1) < moment <= now + timedelta(hours=hours)
         ]
-        return sum(values) / len(values) if values else None
+        outdoor = self.current_outside_temperature
+        if not values or outdoor is None:
+            return None
+        return outdoor + sum(values) / len(values) - values[0]
 
     def _warm_weather_shutdown(self) -> bool:
         if self.warm_weather is None or self._measuring_loops:

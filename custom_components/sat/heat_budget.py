@@ -19,7 +19,7 @@ import logging
 import math
 from collections import deque
 from dataclasses import dataclass
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.storage import Store
@@ -27,8 +27,6 @@ from homeassistant.helpers.storage import Store
 from .const import DOMAIN, PWMStatus
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,7 +41,14 @@ LEARNING_FORGETTING = 0.99
 LEARNING_MINIMUM_UPDATES = 12
 # An hour with a gap in the data says nothing reliable about the balance
 MAXIMUM_STEP_SECONDS = 300.0
-MINIMUM_HOUR_COVERAGE = 0.9
+# An hour with at least this share measured is scaled up to the full hour; a shorter one is
+# left out of the window, which keeps the other hours
+MINIMUM_HOUR_COVERAGE = 0.5
+# The day window learns once it holds this many hours, and drops hours older than a day
+LEARNING_MINIMUM_HOURS = 20
+LEARNING_WINDOW_SPAN_HOURS = 26.0
+# The forecast adds its trend to the measured outside temperature, within this much
+FORECAST_TREND_LIMIT = 5.0
 HEAT_LOSS_BOUNDS = (0.02, 0.6)
 SOLAR_GAIN_BOUNDS = (0.0, 3.0)
 # Before anything is learned an 87 m² flat loses roughly this much per kelvin
@@ -139,6 +144,7 @@ class HeatBudgetInputs:
     flame_active: bool
     hot_water_active: bool
     outdoor_forecast: float | None = None
+    outdoor_forecast_now: float | None = None
     solar: float | None = None
     solar_forecast: float | None = None
     cut_short_burn_ends: tuple[float, ...] = ()
@@ -155,6 +161,37 @@ class _Hour:
     seconds: float = 0.0
     indoor_start: float | None = None
     indoor_end: float | None = None
+    wall_end: float | None = None
+
+    def to_list(self) -> list[float | None]:
+        return [
+            self.heat_kwh,
+            self.kelvin_hours,
+            self.sun_hours,
+            self.seconds,
+            self.indoor_start,
+            self.indoor_end,
+            self.wall_end,
+        ]
+
+    @classmethod
+    def from_list(cls, values: object) -> _Hour | None:
+        if not isinstance(values, list) or len(values) != len(cls.__slots__):
+            return None
+        if not all(value is None or isinstance(value, int | float) for value in values):
+            return None
+        heat, kelvin, sun, seconds, start, end, wall = values
+        if heat is None or kelvin is None or sun is None or seconds is None:
+            return None
+        return cls(
+            float(heat),
+            float(kelvin),
+            float(sun),
+            float(seconds),
+            None if start is None else float(start),
+            None if end is None else float(end),
+            None if wall is None else float(wall),
+        )
 
 
 class _RecursiveLeastSquares:
@@ -267,6 +304,17 @@ class HeatBudget:
         self._integral = float(data.get("integral", 0.0))
         self._demand = float(data.get("demand", self._demand))
         self._clamp_parameters()
+
+        # The day window survives a restart, so the learning picks up where it was
+        now = datetime.now(UTC).timestamp()
+        for values in data.get("hours", []):
+            hour = _Hour.from_list(values)
+            if (
+                hour is not None
+                and hour.wall_end is not None
+                and now - hour.wall_end <= LEARNING_WINDOW_SPAN_HOURS * SECONDS_PER_HOUR
+            ):
+                self._hours.append(hour)
         _LOGGER.debug("Loaded heat budget: H=%.3f kW/K.", self.heat_loss)
 
     def _save(self) -> None:
@@ -279,6 +327,7 @@ class HeatBudget:
             "preheat": self._preheat.to_dict(),
             "integral": self._integral,
             "demand": self._demand,
+            "hours": [hour.to_list() for hour in self._hours],
         }
 
     # ------------------------------------------------------------- properties
@@ -439,8 +488,11 @@ class HeatBudget:
         outdoor: float,
         dt: float,
     ) -> float:
-        if inputs.outdoor_forecast is not None:
-            outdoor = inputs.outdoor_forecast
+        # The forecast's trend over the next hours, on top of the measured temperature:
+        # a forecast that runs warmer or colder than the local sensor does not bias the need
+        if inputs.outdoor_forecast is not None and inputs.outdoor_forecast_now is not None:
+            trend = inputs.outdoor_forecast - inputs.outdoor_forecast_now
+            outdoor += min(max(trend, -FORECAST_TREND_LIMIT), FORECAST_TREND_LIMIT)
         solar = inputs.solar_forecast if inputs.solar_forecast is not None else inputs.solar
         error = target - indoor
 
@@ -531,26 +583,44 @@ class HeatBudget:
 
         hour, self._hour = self._hour, _Hour(indoor_start=inputs.indoor)
         self._hour_started = now
+        wall = inputs.wall_time.timestamp()
+
+        # Drop the hours that fell out of the day
+        while (
+            self._hours
+            and self._hours[0].wall_end is not None
+            and wall - self._hours[0].wall_end > LEARNING_WINDOW_SPAN_HOURS * SECONDS_PER_HOUR
+        ):
+            self._hours.popleft()
+
         if (
             hour.seconds < MINIMUM_HOUR_COVERAGE * SECONDS_PER_HOUR
             or hour.indoor_start is None
             or hour.indoor_end is None
         ):
-            # A gap breaks the running day
-            self._hours.clear()
+            # Too little of this hour was measured; the rest of the day stays
             return
 
+        # A partly measured hour stands for the whole hour
+        scale = SECONDS_PER_HOUR / hour.seconds if hour.seconds < SECONDS_PER_HOUR else 1.0
+        hour.heat_kwh *= scale
+        hour.kelvin_hours *= scale
+        hour.sun_hours *= scale
+        hour.wall_end = wall
         self._hours.append(hour)
-        if len(self._hours) < LEARNING_WINDOW_HOURS:
+        self._save()
+        if len(self._hours) < LEARNING_MINIMUM_HOURS:
             return
 
         heat = sum(h.heat_kwh for h in self._hours)
         kelvin_hours = sum(h.kelvin_hours for h in self._hours)
         sun_hours = sum(h.sun_hours for h in self._hours)
-        start, end = self._hours[0].indoor_start, self._hours[-1].indoor_end
-        if kelvin_hours <= 0 or start is None or end is None:
+        if kelvin_hours <= 0:
             return
-        stored = BUILDING_CAPACITY_KWH_PER_K * (end - start)
+        # Each hour's own temperature change, so a missing hour leaves no false jump
+        stored = BUILDING_CAPACITY_KWH_PER_K * sum(
+            (h.indoor_end or 0.0) - (h.indoor_start or 0.0) for h in self._hours
+        )
 
         # heat + S * sun = H * kelvin_hours + stored
         self._learner.update([kelvin_hours, -sun_hours], heat - stored)
