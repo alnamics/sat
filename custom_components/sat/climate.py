@@ -7,6 +7,7 @@ import contextlib
 import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
+from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.components import sensor, weather
@@ -45,7 +46,7 @@ from homeassistant.core import (
     HomeAssistant,
     callback,
 )
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity import EntityPlatformState
 from homeassistant.helpers.event import (
     async_call_later,
@@ -57,36 +58,55 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from .area import SENSOR_TEMPERATURE_ID, Areas, is_heating_blocked
+from .boiler_diagnostics import BoilerDiagnostics
+from .boiler_stats import BoilerStats
 from .const import (
     COLD_SETPOINT,
+    CONF_BOILER_ANTI_CYCLING_TIME,
     CONF_CLIMATE_VALVE_OFFSET,
+    CONF_COMFORT_SCHEDULE_ENTITY_ID,
     CONF_DEFAULT_HVAC_MODE,
     CONF_DYNAMIC_MINIMUM_SETPOINT,
     CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
+    CONF_GAS_ENERGY_CONTENT,
+    CONF_HEAT_BUDGET_MINIMUM_BURN,
+    CONF_HEAT_BUDGET_MODE,
+    CONF_HEAT_BUDGET_PERIOD,
+    CONF_HEAT_LOSS_COEFFICIENT,
     CONF_HEATING_MODE,
     CONF_HEATING_SYSTEM,
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
     CONF_INSIDE_SENSOR_ENTITY_ID,
+    CONF_KEEP_HEATING_IN_PWM_OFF,
+    CONF_MAXIMUM_CONSUMPTION,
     CONF_MAXIMUM_RELATIVE_MODULATION,
+    CONF_MINIMUM_CONSUMPTION,
     CONF_OUTSIDE_SENSOR_ENTITY_ID,
     CONF_OVERSHOOT_PROTECTION,
     CONF_PUSH_SETPOINT_TO_THERMOSTAT,
     CONF_RADIATORS,
     CONF_SENSOR_MAX_VALUE_AGE,
+    CONF_SETBACK_TEMPERATURE,
     CONF_SIMULATION,
     CONF_SYNC_CLIMATES_WITH_MODE,
     CONF_SYNC_CLIMATES_WITH_PRESET,
     CONF_TARGET_TEMPERATURE_STEP,
     CONF_THERMAL_COMFORT,
     CONF_THERMOSTAT,
+    CONF_VALVE_OPENING_TIME,
+    CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_MINIMUM_OPEN_TIME,
     CONTROL_LOOP_STALL_TIME,
     DEADBAND,
     DOMAIN,
     DYNAMIC_MINIMUM_SETPOINT_VERSION_1,
     DYNAMIC_MINIMUM_SETPOINT_VERSION_2,
+    HEAT_BUDGET_OFF,
+    HEAT_BUDGET_ON,
+    HEAT_BUDGET_SHADOW,
     HEATING_MODE_ECO,
+    HEATING_SYSTEM_UNDERFLOOR,
     MINIMUM_RELATIVE_MODULATION,
     MINIMUM_SETPOINT,
     OPTIONS_DEFAULTS,
@@ -97,7 +117,14 @@ from .const import (
 from .coordinator import DeviceState, SatDataUpdateCoordinator
 from .entity import SatEntity
 from .errors import Error, Errors
+from .heat_budget import (
+    FORECAST_HORIZON_HOURS,
+    HeatBudget,
+    HeatBudgetInputs,
+    sun_factor,
+)
 from .helpers import convert_time_str_to_seconds, float_value, is_state_stale, state_age_seconds
+from .loop_monitor import LoopMonitor, RoomReading, estimate_water_flow
 from .manufacturers.geminox import Geminox
 from .relative_modulation import RelativeModulation, RelativeModulationState
 from .summer_simmer import SummerSimmer
@@ -112,6 +139,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import State
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from . import SatConfigEntry
@@ -127,6 +155,13 @@ ATTR_PRE_ACTIVITY_TEMPERATURE = "pre_activity_temperature"
 # How long the last control setpoint is refreshed while inputs are missing,
 # before the boiler goes back to the room thermostat
 INPUTS_MISSING_GRACE_PERIOD = timedelta(minutes=10)
+# The on-phase flame goes out within seconds of the off-phase setpoint reaching the boiler
+KEEP_HEATING_FLAME_GRACE_SECONDS = 90
+# A boiler that lit against the off-phase setpoint gets heating disabled between on-phases again
+KEEP_HEATING_SUSPEND_SECONDS = 3600
+# The flow and return only settle a few minutes into a burn, the flue gas a few more
+SETTLED_BURN_SECONDS = 180
+DIAGNOSTIC_BURN_SECONDS = 600
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -289,6 +324,19 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             config_options[CONF_WINDOW_MINIMUM_OPEN_TIME]
         )
 
+        # Thermal actuators take minutes to open, so the boiler waits for them before lighting
+        self._valve_opening_time = convert_time_str_to_seconds(
+            config_options[CONF_VALVE_OPENING_TIME]
+        )
+        self._valves_opening_since: dict[str, float] = {}
+        self._valve_wait_logged = False
+
+        # Some combi boilers swing their diverter valve to hot water once heating is disabled,
+        # so the pump overrun pulls the cylinder heat into the floor
+        self._keep_heating_in_pwm_off = bool(config_options.get(CONF_KEEP_HEATING_IN_PWM_OFF))
+        self._pwm_off_since: float | None = None
+        self._keep_heating_suspended_until: float | None = None
+
         # Create a PID controller with given configuration options
         self.pid = create_pid_controller(config_entry.data, config_options)
 
@@ -306,8 +354,59 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             coordinator.minimum_setpoint, config_options
         )
 
+        # Learn the heat loss of the house and dose the burner in blocks of one period
+        self._heat_budget_mode = str(config_options.get(CONF_HEAT_BUDGET_MODE) or HEAT_BUDGET_OFF)
+        self.heat_budget: HeatBudget | None = None
+        if self._heat_budget_mode != HEAT_BUDGET_OFF and coordinator.supports_setpoint_management:
+            anti_cycling = convert_time_str_to_seconds(
+                config_options.get(CONF_BOILER_ANTI_CYCLING_TIME) or "00:00:00"
+            )
+            heat_loss = float(config_options.get(CONF_HEAT_LOSS_COEFFICIENT) or 0) / 1000
+            self.heat_budget = HeatBudget(
+                period_seconds=int(config_options[CONF_HEAT_BUDGET_PERIOD]) * 60,
+                minimum_burn_seconds=convert_time_str_to_seconds(
+                    config_options[CONF_HEAT_BUDGET_MINIMUM_BURN]
+                ),
+                minimum_off_seconds=anti_cycling or 600,
+                heat_loss_kw_per_k=heat_loss or None,
+            )
+        # Fast radiators would swing with hour-long blocks, so they only learn
+        if (
+            self._heat_budget_mode == HEAT_BUDGET_ON
+            and self._heating_system != HEATING_SYSTEM_UNDERFLOOR
+        ):
+            _LOGGER.warning(
+                "The heat budget only drives underfloor heating, it learns without control here."
+            )
+            self._heat_budget_mode = HEAT_BUDGET_SHADOW
+        driving_budget = self.heat_budget if self._heat_budget_mode == HEAT_BUDGET_ON else None
+        self._driving_budget: HeatBudget | None = driving_budget
+        self._budget_overloaded = False
+
+        self._weather_forecast_entity_id = config_options.get(CONF_WEATHER_FORECAST_ENTITY_ID)
+        self._weather_forecast: list[tuple[datetime, float | None, float | None]] = []
+        self._comfort_schedule_entity_id = config_options.get(CONF_COMFORT_SCHEDULE_ENTITY_ID)
+        self._setback_temperature = float(config_options.get(CONF_SETBACK_TEMPERATURE) or 0)
+        self._minimum_consumption = float(config_options.get(CONF_MINIMUM_CONSUMPTION) or 0)
+        self._maximum_consumption = float(config_options.get(CONF_MAXIMUM_CONSUMPTION) or 0)
+        self._gas_energy_content = float(
+            config_options.get(CONF_GAS_ENERGY_CONTENT) or OPTIONS_DEFAULTS[CONF_GAS_ENERGY_CONTENT]
+        )
+
         # Create a PWM controller with given configuration options
-        self.pwm = create_pwm_controller(self.heating_curve, config_entry.data, config_options)
+        self.pwm = create_pwm_controller(
+            self.heating_curve, config_entry.data, config_options, driving_budget
+        )
+
+        # Running totals, loop watching and boiler diagnostics
+        self.boiler_stats = BoilerStats()
+        self.boiler_diagnostics: BoilerDiagnostics | None = None
+        monitored = [*self._radiators, *self.areas.items()]
+        self.loop_monitor = LoopMonitor(monitored) if monitored else None
+        self._heating_stopped_at: float | None = None
+        self._failed_monitors: set[str] = set()
+        self._last_pwm_status: PWMStatus | None = None
+        self._last_device_active: bool | None = None
 
         if self._simulation:
             _LOGGER.warning("Simulation mode!")
@@ -340,6 +439,24 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self.async_on_remove(async_at_started(self.hass, self._async_started))
 
         await self.minimum_setpoint.async_initialize(self.hass, self._config_entry.entry_id)
+
+        await self.boiler_stats.async_initialize(self.hass, self._config_entry.entry_id)
+        self.boiler_diagnostics = BoilerDiagnostics(
+            self.hass, self._config_entry.entry_id, self._config_entry.title
+        )
+
+        if self.heat_budget is not None:
+            await self.heat_budget.async_initialize(self.hass, self._config_entry.entry_id)
+
+            if self._weather_forecast_entity_id:
+                self.async_on_remove(
+                    async_track_time_interval(
+                        self.hass, self._async_refresh_weather_forecast, timedelta(minutes=30)
+                    )
+                )
+                self.hass.async_create_task(
+                    self._async_refresh_weather_forecast(), "sat_weather_forecast"
+                )
         await self._coordinator.async_initialize_flame(self._config_entry.entry_id)
 
         # Initialize the area system
@@ -467,6 +584,21 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 self.hass, self.areas.items(), self._async_climate_changed
             )
         )
+
+        if self._valve_opening_time > 0:
+            # Valves already asking for heat at startup have had their time to open
+            opened = monotonic() - self._valve_opening_time
+            for entity_id in self._radiators + self.areas.items():
+                if self._climate_wants_heat(self.hass.states.get(entity_id)):
+                    self._valves_opening_since[entity_id] = opened
+
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass,
+                    self._radiators + self.areas.items(),
+                    self._async_valve_climate_changed,
+                )
+            )
 
         for entity_id in self.areas.items():
             state = self.hass.states.get(entity_id)
@@ -650,7 +782,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             "relative_modulation_state": self.relative_modulation_state.name,
             "pulse_width_modulation_enabled": self.pulse_width_modulation_enabled,
             "pulse_width_modulation_state": self.pwm.status.name,
+            "heating_kept_on_in_pwm_off": self._heating_is_kept_on,
             "pulse_width_modulation_duty_cycle": self.pwm.duty_cycle,
+            **(
+                {"heat_budget_mode": self._heat_budget_mode, **self.heat_budget.attributes}
+                if self.heat_budget is not None
+                else {}
+            ),
+            **(self.boiler_diagnostics.attributes if self.boiler_diagnostics is not None else {}),
         }
 
     @callback
@@ -779,7 +918,16 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     @property
     def pulse_width_modulation_enabled(self) -> bool:
         """Return True if pulse width modulation is enabled, False otherwise."""
-        if not self._coordinator.supports_setpoint_management or self._force_pulse_width_modulation:
+        if not self._coordinator.supports_setpoint_management:
+            return True
+
+        # A learned heat budget doses the burner in blocks, unless the house needs more than
+        # the minimum power: then the curve and the boiler's own modulation take over
+        budget = self._driving_budget
+        if budget is not None and budget.ready:
+            if not budget.overloaded:
+                return True
+        elif self._force_pulse_width_modulation:
             return True
 
         if not self._overshoot_protection or self._calculated_setpoint is None:
@@ -832,6 +980,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             not self.relative_modulation.enabled
             and self._coordinator.supports_relative_modulation_management
         ):
+            return MINIMUM_RELATIVE_MODULATION
+
+        # Heating left enabled in an off-phase is not meant to burn, so any burn stays minimal
+        if self._heating_is_kept_on and not self._coordinator.hot_water_active:
             return MINIMUM_RELATIVE_MODULATION
 
         return self._maximum_relative_modulation
@@ -1228,6 +1380,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         async with self._control_lock:
             self._async_update_sensor_values()
 
+            # Totals and diagnostics also run while SAT is off, so summer hot water counts too
+            self._run_guarded("monitors", self._update_monitors)
+
             # No need to do anything if we are not on, or while something else drives the boiler
             if (
                 self.hvac_mode != HVACMode.HEAT
@@ -1320,6 +1475,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
                 self._valves_open = valves_open
 
+            # The heat budget learns in every mode and decides the blocks when it drives
+            self._run_guarded("heat budget", self._update_heat_budget)
+
             # Pulse Width Modulation
             if not self.pulse_width_modulation_enabled:
                 self.pwm.reset()
@@ -1374,14 +1532,309 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 # Calculate the dynamic minimum setpoint
                 self.minimum_setpoint.calculate(self._coordinator.boiler, self.pwm.status)
 
-            # If the setpoint is high, turn on the heater
+            # If the setpoint is high, turn on the heater; the off-phase check runs every time
+            # so it sees each off-phase start
+            kept_on = self._heating_kept_on_in_pwm_off()
             await self.async_set_heater_state(
                 DeviceState.ON
-                if self._setpoint is not None and self._setpoint > COLD_SETPOINT
+                if (self._setpoint is not None and self._setpoint > COLD_SETPOINT) or kept_on
                 else DeviceState.OFF
             )
 
             self.async_write_ha_state()
+
+    def _climate_wants_heat(self, state: State | None) -> bool:
+        """Return whether a controlled climate asks for heat, the way valves_open judges it."""
+        if state is None or state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE, HVACMode.OFF]:
+            return False
+
+        if (hvac_action := state.attributes.get("hvac_action")) is not None:
+            return bool(hvac_action == HVACAction.HEATING)
+
+        target_temperature = float_value(state.attributes.get("temperature"))
+        current_temperature = float_value(state.attributes.get("current_temperature"))
+        return (
+            current_temperature is not None
+            and target_temperature is not None
+            and target_temperature >= current_temperature + self._climate_valve_offset
+        )
+
+    async def _async_valve_climate_changed(self, event: Event[EventStateChangedData]) -> None:
+        """Record when a controlled climate starts asking for heat, so its valve starts opening."""
+        entity_id = event.data["entity_id"]
+        if self._climate_wants_heat(event.data.get("new_state")):
+            self._valves_opening_since.setdefault(entity_id, monotonic())
+        else:
+            self._valves_opening_since.pop(entity_id, None)
+
+    def _valve_opening_remaining(self) -> float:
+        """Return how long the boiler still waits for a valve that just started opening."""
+        if self._valve_opening_time <= 0 or not self._valves_opening_since:
+            return 0.0
+
+        # One valve open long enough already gives the water somewhere to go
+        opened_for = monotonic() - min(self._valves_opening_since.values())
+        return max(0.0, self._valve_opening_time - opened_for)
+
+    async def _async_refresh_weather_forecast(self, _time: datetime | None = None) -> None:
+        """Fetch the hourly forecast the heat budget looks ahead with."""
+        entity_id = self._weather_forecast_entity_id
+        if not entity_id:
+            return
+
+        try:
+            response = await self.hass.services.async_call(
+                weather.DOMAIN,
+                "get_forecasts",
+                {"entity_id": entity_id, "type": "hourly"},
+                blocking=True,
+                return_response=True,
+            )
+        except (HomeAssistantError, ValueError) as error:
+            _LOGGER.debug("No hourly forecast from %s: %s", entity_id, error)
+            return
+
+        result = (response or {}).get(entity_id)
+        entries = result.get("forecast") if isinstance(result, dict) else None
+        forecast: list[tuple[datetime, float | None, float | None]] = []
+        for entry in entries[:24] if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            if (when := dt_util.parse_datetime(str(entry.get("datetime")))) is None:
+                continue
+            temperature, cloud = entry.get("temperature"), entry.get("cloud_coverage")
+            forecast.append(
+                (
+                    dt_util.as_utc(when),
+                    float_value(temperature) if isinstance(temperature, int | float) else None,
+                    float_value(cloud) if isinstance(cloud, int | float) else None,
+                )
+            )
+        self._weather_forecast = forecast
+
+    def _heat_budget_inputs(self) -> HeatBudgetInputs:
+        """Collect what the heat budget needs for this control step."""
+        coordinator = self._coordinator
+        now_utc = dt_util.utcnow()
+        minimum_power = self._minimum_power()
+        heating_power = self._heating_power()
+
+        # The heat released now reaches the rooms over the next hours
+        horizon = now_utc + timedelta(hours=FORECAST_HORIZON_HOURS)
+        upcoming = [
+            entry
+            for entry in self._weather_forecast
+            if now_utc - timedelta(hours=1) < entry[0] <= horizon
+        ]
+        temperatures = [temperature for _, temperature, _ in upcoming if temperature is not None]
+        latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
+        sunshine = [
+            sun_factor(when, latitude, longitude, cloud)
+            for when, _, cloud in upcoming
+            if cloud is not None
+        ]
+        solar = sunshine[0] if sunshine else None
+
+        comfort: bool | None = None
+        next_change: datetime | None = None
+        if self._comfort_schedule_entity_id and (
+            schedule := self.hass.states.get(self._comfort_schedule_entity_id)
+        ):
+            if schedule.state in ("on", "off"):
+                comfort = schedule.state == "on"
+            next_event = schedule.attributes.get("next_event")
+            if isinstance(next_event, datetime):
+                next_change = next_event
+            elif next_event is not None:
+                next_change = dt_util.parse_datetime(str(next_event))
+            if next_change is not None:
+                next_change = dt_util.as_utc(next_change)
+
+        return HeatBudgetInputs(
+            now=monotonic(),
+            wall_time=now_utc,
+            indoor=self.native_current_temperature,
+            target=self.native_target_temperature,
+            outdoor=self.current_outside_temperature,
+            heating_power_kw=float(heating_power),
+            minimum_power_kw=float(minimum_power),
+            flame_active=coordinator.flame_active,
+            hot_water_active=coordinator.hot_water_active,
+            outdoor_forecast=sum(temperatures) / len(temperatures) if temperatures else None,
+            solar=solar,
+            solar_forecast=sum(sunshine) / len(sunshine) if sunshine else None,
+            cut_short_burn_ends=coordinator.flame.cut_short_burn_ends,
+            comfort=comfort,
+            next_comfort_change=next_change,
+            setback=self._setback_temperature,
+        )
+
+    def _gas_use(self) -> float | None:
+        """Gas the burner uses now in m³/h, from the consumption options and the modulation."""
+        if self._minimum_consumption <= 0 or self._maximum_consumption <= 0:
+            return None
+
+        modulation = float_value(self._coordinator.relative_modulation_value) or 0.0
+        return self._minimum_consumption + modulation / 100 * (
+            self._maximum_consumption - self._minimum_consumption
+        )
+
+    def _minimum_power(self) -> float:
+        """Return the burner's lowest heat output in kW."""
+        capacity = self._coordinator.minimum_boiler_capacity
+        if capacity is not None and capacity > 0:
+            return float(capacity)
+        if self._minimum_consumption > 0:
+            return self._minimum_consumption * self._gas_energy_content
+        return 5.0
+
+    def _heating_power(self) -> float:
+        """Return the burner's heat output in kW while it burns."""
+        power = self._coordinator.boiler_power
+        if power is not None and power > 0:
+            return float(power)
+        if (gas := self._gas_use()) is not None:
+            return gas * self._gas_energy_content
+        return self._minimum_power()
+
+    def _run_guarded(self, name: str, update: Callable[[], None]) -> None:
+        """Keep a failure in the totals, diagnostics or heat budget from stopping the control."""
+        try:
+            update()
+        except Exception:
+            if name not in self._failed_monitors:
+                _LOGGER.exception("SAT %s failed, the heating control continues without it", name)
+                self._failed_monitors.add(name)
+        else:
+            self._failed_monitors.discard(name)
+
+    def _update_monitors(self) -> None:
+        """Feed the running totals, the loop monitor and the boiler diagnostics."""
+        coordinator = self._coordinator
+        now = monotonic()
+        flame = coordinator.flame_active
+        hot_water = coordinator.hot_water_active
+
+        # Heating demand ends when PWM switches off or the boiler is no longer asked to heat
+        device_active = coordinator.device_active
+        if (self._last_pwm_status == PWMStatus.ON and self.pwm.status != PWMStatus.ON) or (
+            self._last_device_active is True and not device_active
+        ):
+            self._heating_stopped_at = now
+        self._last_pwm_status = self.pwm.status
+        self._last_device_active = device_active
+
+        heat = self._heating_power() if flame else None
+        self.boiler_stats.update(
+            now=now,
+            flame=flame,
+            hot_water=hot_water,
+            heat_kw=heat,
+            gas_m3_per_hour=(
+                (self._gas_use() or (heat or 0.0) / self._gas_energy_content) if flame else None
+            ),
+            outdoor=self.current_outside_temperature,
+            hot_water_temperature=coordinator.hot_water_temperature,
+            heating_stopped_at=self._heating_stopped_at,
+        )
+
+        on_time = coordinator.flame.latest_on_time_seconds
+        settled = (
+            flame and not hot_water and on_time is not None and on_time >= SETTLED_BURN_SECONDS
+        )
+        flow_sample = None
+        if (
+            settled
+            and heat is not None
+            and coordinator.boiler_temperature is not None
+            and coordinator.return_temperature is not None
+        ):
+            flow_sample = estimate_water_flow(
+                heat, coordinator.boiler_temperature, coordinator.return_temperature
+            )
+
+        if self.loop_monitor is not None:
+            readings: dict[str, RoomReading] = {}
+            for entity_id in self.loop_monitor.rooms:
+                state = self.hass.states.get(entity_id)
+                if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    continue
+                readings[entity_id] = RoomReading(
+                    open=self._climate_wants_heat(state),
+                    temperature=float_value(state.attributes.get("current_temperature")),
+                )
+            self.loop_monitor.update(now, readings, flow_sample)
+
+        if self.boiler_diagnostics is not None:
+            self.boiler_diagnostics.update(
+                now,
+                pressure=coordinator.water_pressure,
+                fault=coordinator.boiler_fault_reported,
+                fault_code=coordinator.boiler_fault_code_reported,
+                exhaust=coordinator.exhaust_temperature,
+                return_temperature=coordinator.return_temperature,
+                settled_heating_burn=settled
+                and on_time is not None
+                and on_time >= DIAGNOSTIC_BURN_SECONDS,
+            )
+
+    def _update_heat_budget(self) -> None:
+        if self.heat_budget is None:
+            return
+
+        self.heat_budget.update(self._heat_budget_inputs())
+        overloaded = self._driving_budget is not None and self.heat_budget.overloaded
+        if overloaded != self._budget_overloaded:
+            if overloaded:
+                _LOGGER.info(
+                    "The house needs more than the minimum power, "
+                    "handing the heat budget over to boiler modulation."
+                )
+            else:
+                _LOGGER.info("The house needs less than the minimum power, heat budget resumes.")
+            self._budget_overloaded = overloaded
+
+    @property
+    def _heating_is_kept_on(self) -> bool:
+        """Return True if the last control step left heating enabled in a PWM off-phase."""
+        return self._pwm_off_since is not None and self._keep_heating_suspended_until is None
+
+    def _heating_kept_on_in_pwm_off(self) -> bool:
+        """Return True if central heating stays enabled through this PWM off-phase."""
+        if (
+            not self._keep_heating_in_pwm_off
+            or not self._coordinator.supports_setpoint_management
+            or not self.pulse_width_modulation_enabled
+            or self.pwm.status != PWMStatus.OFF
+        ):
+            self._pwm_off_since = None
+            return False
+
+        now = monotonic()
+        if self._pwm_off_since is None:
+            self._pwm_off_since = now
+
+        if self._keep_heating_suspended_until is not None:
+            if now < self._keep_heating_suspended_until:
+                return False
+            self._keep_heating_suspended_until = None
+
+        # A boiler that raises the off-phase setpoint to its own minimum lights against it;
+        # the on-phase flame is given time to go out first
+        if (
+            self._coordinator.flame_active
+            and not self._coordinator.hot_water_active
+            and now - self._pwm_off_since > KEEP_HEATING_FLAME_GRACE_SECONDS
+        ):
+            self._keep_heating_suspended_until = now + KEEP_HEATING_SUSPEND_SECONDS
+            _LOGGER.warning(
+                "The boiler lit during a PWM off-phase with heating left enabled; "
+                "disabling heating between on-phases for the next %d minutes.",
+                KEEP_HEATING_SUSPEND_SECONDS // 60,
+            )
+            return False
+
+        return True
 
     async def async_set_heater_state(self, state: DeviceState) -> None:
         """Set the heater state, ensuring proper conditions are met."""
@@ -1399,6 +1852,17 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             if self._coordinator.device_active:
                 _LOGGER.debug("Heater is already active. No action taken.")
                 return
+
+            if (remaining := self._valve_opening_remaining()) > 0:
+                if not self._valve_wait_logged:
+                    _LOGGER.info(
+                        "Waiting %.0fs for the valves to open before lighting the boiler.",
+                        remaining,
+                    )
+                    self._valve_wait_logged = True
+                return
+
+            self._valve_wait_logged = False
 
         elif not self._coordinator.device_active:
             _LOGGER.debug("Heater is already off. No action taken.")

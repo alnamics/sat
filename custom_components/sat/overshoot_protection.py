@@ -12,6 +12,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_BOILER_ANTI_CYCLING_TIME,
     CONF_CALIBRATION_FLAME_TIMEOUT,
     CONF_CALIBRATION_PLATEAU_TIMEOUT,
     MINIMUM_RELATIVE_MODULATION,
@@ -69,13 +70,17 @@ def create_overshoot_protection(
     """Create the calibration with the timeouts from the options."""
     options = {**OPTIONS_DEFAULTS, **options}
 
+    # A boiler that waits long before relighting must get the chance to light during calibration
+    flame_timeout_seconds = convert_time_str_to_seconds(options[CONF_CALIBRATION_FLAME_TIMEOUT])
+    anti_cycling_seconds = convert_time_str_to_seconds(options[CONF_BOILER_ANTI_CYCLING_TIME])
+    if anti_cycling_seconds > 0:
+        flame_timeout_seconds = max(flame_timeout_seconds, anti_cycling_seconds + 120)
+
     return OvershootProtection(
         coordinator,
         heating_system,
         maximum_setpoint,
-        flame_timeout=timedelta(
-            seconds=convert_time_str_to_seconds(options[CONF_CALIBRATION_FLAME_TIMEOUT])
-        ),
+        flame_timeout=timedelta(seconds=flame_timeout_seconds),
         plateau_timeout=timedelta(
             seconds=convert_time_str_to_seconds(options[CONF_CALIBRATION_PLATEAU_TIMEOUT])
         ),

@@ -23,6 +23,7 @@ from homeassistant.helpers import (
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .boiler_stats import boiler_stats_store
 from .climate import SatClimate
 from .config_flow import SatFlowHandler
 from .const import (
@@ -36,10 +37,12 @@ from .const import (
 )
 from .coordinator_factory import SatDataUpdateCoordinatorFactory
 from .flame import flame_store
+from .heat_budget import heat_budget_store
 from .minimum_setpoint import minimum_setpoint_store
 from .mqtt import mqtt_store
 from .mqtt.ems import SatEmsMqttCoordinator
 from .mqtt.opentherm import SatOpenThermMqttCoordinator
+from .overshoot_learner import overshoot_learner_store
 from .services import async_setup_services
 
 if TYPE_CHECKING:
@@ -150,6 +153,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: SatConfigEntry) -> None
     hass.data.get(DOMAIN, {}).pop(f"setup_failed_{entry.entry_id}", None)
     await minimum_setpoint_store(hass, entry.entry_id).async_remove()
     await flame_store(hass, entry.entry_id).async_remove()
+    await overshoot_learner_store(hass, entry.entry_id).async_remove()
+    await heat_budget_store(hass, entry.entry_id).async_remove()
+    await boiler_stats_store(hass, entry.entry_id).async_remove()
 
     mqtt_coordinators = {
         MODE_MQTT_EMS: SatEmsMqttCoordinator,

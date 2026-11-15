@@ -8,20 +8,25 @@ from pyotgw import OpenThermGateway
 from pyotgw import vars as gw_vars
 from pyotgw.vars import (
     BOILER,
+    DATA_CH_WATER_PRESS,
     DATA_CH_WATER_TEMP,
     DATA_CONTROL_SETPOINT,
     DATA_DHW_SETPOINT,
+    DATA_DHW_TEMP,
+    DATA_EXHAUST_TEMP,
     DATA_MASTER_CH_ENABLED,
     DATA_REL_MOD_LEVEL,
     DATA_RETURN_WATER_TEMP,
     DATA_SLAVE_DHW_ACTIVE,
     DATA_SLAVE_DHW_MAX_SETP,
     DATA_SLAVE_DHW_MIN_SETP,
+    DATA_SLAVE_FAULT_IND,
     DATA_SLAVE_FLAME_ON,
     DATA_SLAVE_MAX_CAPACITY,
     DATA_SLAVE_MAX_RELATIVE_MOD,
     DATA_SLAVE_MEMBERID,
     DATA_SLAVE_MIN_MOD_LEVEL,
+    DATA_SLAVE_OEM_FAULT,
     DEFAULT_STATUS,
 )
 from serial import SerialException
@@ -139,6 +144,44 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
             return float(value)
 
         return super().return_temperature
+
+    @override
+    @property
+    def water_pressure(self) -> float | None:
+        # Boilers without a pressure sensor report 0
+        if (value := self.get(DATA_CH_WATER_PRESS)) is not None and value > 0:
+            return float(value)
+
+        return None
+
+    @override
+    @property
+    def exhaust_temperature(self) -> float | None:
+        if (value := self.get(DATA_EXHAUST_TEMP)) is not None and value > 0:
+            return float(value)
+
+        return None
+
+    @override
+    @property
+    def boiler_fault_reported(self) -> bool:
+        return bool(self.get(DATA_SLAVE_FAULT_IND))
+
+    @override
+    @property
+    def boiler_fault_code_reported(self) -> int | None:
+        if (value := self.get(DATA_SLAVE_OEM_FAULT)) is not None and value > 0:
+            return int(value)
+
+        return None
+
+    @override
+    @property
+    def hot_water_temperature(self) -> float | None:
+        if (value := self.get(DATA_DHW_TEMP)) is not None and value > 0:
+            return float(value)
+
+        return None
 
     @override
     @property

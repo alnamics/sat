@@ -254,7 +254,20 @@
               "target_temperature_step": "Target Temperature Step",
               "thermal_comfort": "Thermal Comfort",
               "calibration_flame_timeout": "Calibration flame timeout",
-              "calibration_plateau_timeout": "Calibration plateau timeout"
+              "calibration_plateau_timeout": "Calibration plateau timeout",
+              "gas_energy_content": "Heat per cubic metre of gas",
+              "pwm_short_burns_threshold": "Cut-short burns before ending the PWM on-phase",
+              "boiler_anti_cycling_time": "Boiler anti-cycling time",
+              "learn_overshoot_protection": "Learn overshoot protection value",
+              "valve_opening_time": "Valve opening time",
+              "keep_heating_in_pwm_off": "Keep heating enabled between PWM on-phases",
+              "heat_budget_mode": "Heat budget",
+              "heat_budget_period": "Heat budget period",
+              "heat_budget_minimum_burn": "Heat budget minimum burn",
+              "heat_loss_coefficient": "Heat loss of the house",
+              "weather_forecast_entity_id": "Weather forecast",
+              "comfort_schedule_entity_id": "Comfort schedule",
+              "setback_temperature": "Setback outside the comfort schedule"
             },
             "data_description": {
               "climate_valve_offset": "Offset to adjust the opening degree of the climate valve.",
@@ -266,7 +279,20 @@
               "target_temperature_step": "Adjust the target temperature step for fine-tuning comfort levels.",
               "thermal_comfort": "Enable the use of the Simmer Index for thermal comfort adjustment.",
               "calibration_flame_timeout": "How long the overshoot protection calibration waits for the burner to light.",
-              "calibration_plateau_timeout": "How long the overshoot protection calibration heats while waiting for a stable flow temperature."
+              "calibration_plateau_timeout": "How long the overshoot protection calibration heats while waiting for a stable flow temperature.",
+              "gas_energy_content": "Heat the boiler gets from one cubic metre of gas, in kWh/m³: about 10.2 for natural gas, 24 for propane. Used for the gas, heat and water flow estimates.",
+              "pwm_short_burns_threshold": "How many burns the boiler may cut short in one PWM on-phase before SAT ends the on-phase early. 1 allows a single burn per on-phase (default 2).",
+              "boiler_anti_cycling_time": "The boiler's own wait before it relights (anti-cycling). SAT waits this long plus a minute before reporting the flame as stuck off, and calibration waits at least this long plus two minutes for the burner to light. 0 keeps the defaults.",
+              "learn_overshoot_protection": "Start from the calibrated value and adjust it during normal operation: up when the boiler stops PWM burns by overheating or cannot light, down when long burns level off below the setpoint. Calibrating again or changing the value starts over.",
+              "valve_opening_time": "How long the valve actuators of the radiator and room thermostats take to open. When a thermostat starts asking for heat and no other one has asked for longer, SAT waits this long before lighting the boiler. 0 lights it at once.",
+              "keep_heating_in_pwm_off": "Leaves central heating enabled at the minimum setpoint in PWM off-phases instead of switching it off. The boiler stays in heating mode, so its pump keeps circulating through the floor and a combi boiler with a hot water cylinder does not swing its diverter valve to the cylinder and cool it with the pump overrun. If the boiler lights during an off-phase anyway, SAT switches heating off between on-phases again for an hour.",
+              "heat_budget_mode": "For slow emitters such as screed underfloor heating. SAT learns how much heat the house loses per degree (from the burner time and the indoor and outdoor temperatures over each day) and, once it knows, burns the heat the next period needs in one block at minimum power, carrying over heat that hot water or a boiler cut-out kept from being delivered. Learn only (shadow) learns and shows its plan in the climate attributes without controlling. Until it has learned (about 36 hours) the normal PWM controls.",
+              "heat_budget_period": "How often the heat budget burns one block. Longer periods mean fewer, longer burns; the screed evens out the room temperature.",
+              "heat_budget_minimum_burn": "The shortest block worth lighting the burner for. Less heat than this is carried into the next period.",
+              "heat_loss_coefficient": "Heat the house loses per degree between inside and outside, in W/K. 0 learns it.",
+              "weather_forecast_entity_id": "A weather entity with an hourly forecast. The heat budget plans with the temperature of the next three hours and, when the forecast has cloud cover, learns how much the sun heats the house.",
+              "comfort_schedule_entity_id": "A schedule helper that is on when the house should be at the target temperature. Outside it the heat budget lowers the target by the setback, starts the recovery early enough to be warm when the schedule turns on (learned from earlier recoveries) and stops an hour early because the screed keeps heating.",
+              "setback_temperature": "How much lower the heat budget keeps the house outside the comfort schedule. With screed floors small setbacks save little."
             }
           }
         }
@@ -625,6 +651,39 @@
       },
       "otgw_vref": {
         "name": "Gateway reference voltage setting"
+      },
+      "estimated_water_flow": {
+        "name": "Estimated water flow"
+      },
+      "flame_starts_last_hour": {
+        "name": "Flame starts in the last hour"
+      },
+      "total_starts": {
+        "name": "Burner starts"
+      },
+      "total_burn_hours": {
+        "name": "Burner hours"
+      },
+      "total_heating_kwh": {
+        "name": "Heat for space heating"
+      },
+      "total_hot_water_kwh": {
+        "name": "Heat for hot water"
+      },
+      "total_gas_m3": {
+        "name": "Estimated gas use"
+      },
+      "total_degree_days": {
+        "name": "Heating degree days"
+      },
+      "hot_water_cooling": {
+        "name": "Cylinder cooling after heating stops"
+      },
+      "open_loops": {
+        "name": "Open loops"
+      },
+      "loop_balance": {
+        "name": "Loops to rebalance"
       }
     },
     "button": {
@@ -654,6 +713,18 @@
     "setup_failed": {
       "title": "SAT {title} is not controlling the boiler",
       "description": "Setting up {title} failed and Home Assistant keeps retrying: {error}\n\nWhile it retries, the room thermostat attached to the boiler is in control."
+    },
+    "low_water_pressure": {
+      "title": "{title}: low water pressure",
+      "description": "The heating system pressure is {pressure} bar. Top the system up to about 1.2–1.5 bar (cold) and check for leaks or a flat expansion vessel if it keeps dropping. This issue clears itself above 0.9 bar."
+    },
+    "boiler_fault": {
+      "title": "{title}: the boiler reports a fault",
+      "description": "The boiler reports a fault (manufacturer code {code}). Check the boiler display and its manual. This issue clears itself when the boiler no longer reports the fault."
+    },
+    "heat_exchanger_fouling": {
+      "title": "{title}: the heat exchanger may need cleaning",
+      "description": "In settled heating burns the flue gas has been about {gap} K warmer than the return water over the last day. A clean condensing boiler stays within a few kelvin, so the heat exchanger or the burner may need a service."
     }
   }
 }

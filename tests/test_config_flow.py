@@ -673,3 +673,40 @@ async def test_simulators_with_different_names_can_both_be_set_up(hass: HomeAssi
     assert result.get("step_id") == "sensors"
     hass.config_entries.flow.async_abort(result["flow_id"])
     assert await hass.config_entries.async_unload(first.entry_id)
+
+
+async def test_underfloor_offers_fewer_cycles_per_hour(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=SatFlowHandler.VERSION,
+        data={**DEFAULT_USER_DATA, "minimum_setpoint": 45, "heating_system": "underfloor"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "system_configuration"}
+    )
+    schema = result["data_schema"]
+    assert schema is not None
+    assert "cycles_per_hour" in [str(key) for key in schema.schema]
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "automatic_duty_cycle": True,
+            "sync_climates_with_mode": True,
+            "cycles_per_hour": "2",
+            "sensor_max_value_age": "06:00:00",
+            "default_hvac_mode": "heat",
+            "window_minimum_open_time": "00:00:15",
+            "advanced": {},
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] == "create_entry"
+    assert entry.options["cycles_per_hour"] == "2"
+    assert await hass.config_entries.async_unload(entry.entry_id)

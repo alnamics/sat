@@ -14,24 +14,30 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .boiler import STABILIZATION_MARGIN, STABLE_DERIVATIVE, BoilerState, BoilerTemperatureTracker
 from .const import (
     BOILER_DEADBAND,
+    CONF_BOILER_ANTI_CYCLING_TIME,
     CONF_HEATING_SYSTEM,
+    CONF_LEARN_OVERSHOOT_PROTECTION,
     CONF_MANUFACTURER,
     CONF_MINIMUM_SETPOINT,
+    CONF_MODE,
     CONF_SIMULATION,
     CONTROL_LOOP_STALL_TIME,
     DOMAIN,
     HEATING_SYSTEM_UNKNOWN,
     MAX_BOILER_TEMPERATURE_AGE,
     MINIMUM_SETPOINT,
+    MODE_SWITCH,
+    OPTIONS_DEFAULTS,
     BoilerStatus,
 )
 from .flame import Flame, FlameState
-from .helpers import configured_maximum_setpoint, seconds_since
+from .helpers import configured_maximum_setpoint, convert_time_str_to_seconds, seconds_since
 from .manufacturer import Manufacturer, ManufacturerFactory
 from .manufacturers.geminox import Geminox
 from .manufacturers.ideal import Ideal
 from .manufacturers.intergas import Intergas
 from .manufacturers.nefit import Nefit
+from .overshoot_learner import OvershootLearner
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -92,7 +98,15 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         self._boiler_temperatures: list[tuple[float, float]] = []
         self._boiler_temperature_tracker: BoilerTemperatureTracker = BoilerTemperatureTracker()
 
-        self._flame: Flame = Flame()
+        flame_options: Mapping[str, Any] = options or {}
+        self._flame: Flame = Flame(
+            boiler_anti_cycling_seconds=convert_time_str_to_seconds(
+                flame_options.get(
+                    CONF_BOILER_ANTI_CYCLING_TIME,
+                    OPTIONS_DEFAULTS[CONF_BOILER_ANTI_CYCLING_TIME],
+                )
+            ),
+        )
         self._created_at: float = monotonic()
         self._device_on_since: float | None = None
         self._listeners_unsub: Callable[[], None] | None = None
@@ -110,6 +124,20 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
 
         if (manufacturer := config_data.get(CONF_MANUFACTURER)) is not None:
             self._manufacturer = ManufacturerFactory.resolve_by_name(manufacturer)
+
+        # Starts from the calibrated value and follows how PWM burns end
+        self._overshoot_learner: OvershootLearner | None = None
+        configured_minimum_setpoint = self._options.get(
+            CONF_MINIMUM_SETPOINT, config_data.get(CONF_MINIMUM_SETPOINT)
+        )
+        if (
+            self._options.get(CONF_LEARN_OVERSHOOT_PROTECTION)
+            and configured_minimum_setpoint is not None
+            and config_data.get(CONF_MODE) != MODE_SWITCH
+        ):
+            self._overshoot_learner = OvershootLearner(
+                float(configured_minimum_setpoint), self.maximum_setpoint
+            )
 
         self.async_add_listener(self.update_flame)
 
@@ -275,6 +303,31 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         return False
 
     @property
+    def water_pressure(self) -> float | None:
+        """Central heating water pressure in bar, if the boiler reports it."""
+        return None
+
+    @property
+    def exhaust_temperature(self) -> float | None:
+        """Flue gas temperature, if the boiler reports it."""
+        return None
+
+    @property
+    def hot_water_temperature(self) -> float | None:
+        """Hot water (cylinder) temperature, if the boiler reports it."""
+        return None
+
+    @property
+    def boiler_fault_reported(self) -> bool:
+        """Return True if the boiler reports a fault (lockout) over its own status."""
+        return self.fault_active
+
+    @property
+    def boiler_fault_code_reported(self) -> int | None:
+        """The manufacturer fault code, 0 or None when there is none."""
+        return self.fault_code
+
+    @property
     def fault_code(self) -> int | None:
         return None
 
@@ -380,6 +433,9 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
     @property
     def minimum_setpoint(self) -> float:
         """Return the minimum setpoint temperature before the device starts to overshoot."""
+        if self._overshoot_learner is not None:
+            return self._overshoot_learner.value
+
         return float(
             self._options.get(CONF_MINIMUM_SETPOINT, self._config_data.get(CONF_MINIMUM_SETPOINT))
         )
@@ -457,6 +513,9 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_initialize_flame(self, entry_id: str) -> None:
         await self._flame.async_initialize(self.hass, entry_id)
 
+        if self._overshoot_learner is not None:
+            await self._overshoot_learner.async_initialize(self.hass, entry_id)
+
     @callback
     def update_flame(self, pwm_state: PWMState | None = None) -> None:
         # An outage or a reconnect makes the flame read off until the gateway reports it again.
@@ -464,6 +523,9 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         # upgrade if outages turn out to be long
         if self.online and self.flame_reported:
             self._flame.update(boiler_state=self.boiler, pwm_state=pwm_state)
+
+            if self._overshoot_learner is not None:
+                self._overshoot_learner.update(self.boiler, pwm_state, self.maximum_setpoint)
 
     async def async_control_heating_loop(
         self, pwm_state: PWMState | None = None, _time: datetime | None = None

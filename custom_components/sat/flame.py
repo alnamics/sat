@@ -94,10 +94,22 @@ class Flame:
         BoilerStatus.OVERSHOOT_STABILIZED,
     )
 
-    def __init__(self, smoothing_alpha: float = 0.2) -> None:
+    def __init__(
+        self,
+        smoothing_alpha: float = 0.2,
+        *,
+        boiler_anti_cycling_seconds: float = 0.0,
+    ) -> None:
         if not (0.0 <= smoothing_alpha <= 1.0):
             msg = "smoothing_alpha must be within [0.0, 1.0]."
             raise ValueError(msg)
+
+        # A boiler that waits longer than the default before relighting is not stuck off,
+        # so the stuck-off timeout covers its wait plus a minute of margin
+        if boiler_anti_cycling_seconds > 0:
+            self.STUCK_OFF_SECONDS = max(
+                Flame.STUCK_OFF_SECONDS, float(boiler_anti_cycling_seconds) + 60.0
+            )
 
         self._smoothing_alpha: float = smoothing_alpha
         self._store: Store[dict[str, Any]] | None = None

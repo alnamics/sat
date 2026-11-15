@@ -19,7 +19,9 @@ from custom_components.sat.const import (
     CONF_HEATING_SYSTEM,
     CONF_MAXIMUM_SETPOINT,
     CONF_MINIMUM_SETPOINT,
+    CONF_PWM_SHORT_BURNS_THRESHOLD,
     CONF_RADIATORS,
+    CONF_VALVE_OPENING_TIME,
     DOMAIN,
     HEATING_SYSTEM_RADIATORS,
     MINIMUM_SETPOINT,
@@ -421,6 +423,35 @@ async def test_a_restarted_burn_the_boiler_cuts_short_ends_the_duty_cycle(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+async def test_a_threshold_of_one_ends_the_duty_cycle_after_the_first_cut_burn(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry, climate, coordinator = await setup_climate(
+        hass, {CONF_FORCE_PULSE_WIDTH_MODULATION: True, CONF_PWM_SHORT_BURNS_THRESHOLD: 1}
+    )
+    assert climate.pwm is not None
+    await coordinator.async_set_boiler_temperature(57)
+    await climate.async_set_target_temperature(21.0)
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+    await climate.async_control_heating_loop()
+    assert climate.pwm.status == PWMStatus.ON
+
+    # The fake boiler lights with the heater, before PWM switches ON
+    await coordinator.async_set_heater_state(DeviceState.OFF)
+    coordinator.async_update_listeners()
+
+    await coordinator.async_set_heater_state(DeviceState.ON)
+    coordinator.async_update_listeners()
+    freezer.tick(timedelta(seconds=30))
+    await coordinator.async_set_heater_state(DeviceState.OFF)
+    coordinator.async_update_listeners()
+    freezer.tick(timedelta(seconds=90))
+    await climate.async_control_heating_loop()
+
+    assert climate.pwm.status == PWMStatus.OFF
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_an_early_off_phase_lasts_until_the_planned_cycle_ends(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -515,4 +546,51 @@ async def test_hot_water_flow_does_not_shape_the_duty_cycle(
 
     assert climate.pwm.status == PWMStatus.ON
     assert climate.pwm.duty_cycle == duty_cycle
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_boiler_waits_for_a_valve_to_open(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    attributes = {"temperature": 21.0, "current_temperature": 20.8}
+    hass.states.async_set("climate.radiator", HVACMode.HEAT, {**attributes, "hvac_action": "idle"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            **DEFAULT_USER_DATA,
+            CONF_HEATING_SYSTEM: HEATING_SYSTEM_RADIATORS,
+            CONF_RADIATORS: ["climate.radiator"],
+        },
+        options={
+            CONF_HEATING_CURVE_COEFFICIENT: 1.8,
+            CONF_MAXIMUM_SETPOINT: 75,
+            CONF_VALVE_OPENING_TIME: "00:05:00",
+        },
+    )
+    hass.states.async_set("sensor.test_inside_sensor", "20.9")
+    hass.states.async_set("sensor.test_outside_sensor", "9.9")
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    climate, coordinator = entry.runtime_data.climate, entry.runtime_data.coordinator
+
+    await coordinator.async_set_boiler_temperature(40)
+    await climate.async_set_target_temperature(23.0)
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+
+    # The thermostat opens its valve, which takes five minutes
+    hass.states.async_set(
+        "climate.radiator", HVACMode.HEAT, {**attributes, "hvac_action": "heating"}
+    )
+    await hass.async_block_till_done()
+    await climate.async_control_heating_loop()
+    assert not coordinator.device_active
+
+    freezer.tick(timedelta(seconds=240))
+    await climate.async_control_heating_loop()
+    assert not coordinator.device_active
+
+    freezer.tick(timedelta(seconds=61))
+    await climate.async_control_heating_loop()
+    assert coordinator.device_active
     assert await hass.config_entries.async_unload(entry.entry_id)

@@ -51,10 +51,12 @@ class PWM:
         *,
         automatic_duty_cycle: bool,
         force: bool = False,
+        short_burns_threshold: int = Flame.PWM_SHORT_BURNS_THRESHOLD,
     ) -> None:
         """Initialize the PWM control."""
         self._alpha: float = 0.2
         self._force: bool = force
+        self._short_burns_threshold: int = max(1, int(short_burns_threshold))
         self._last_boiler_temperature: float | None = None
 
         self._cycles: CycleConfig = cycles
@@ -218,13 +220,14 @@ class PWM:
         if (
             self._status == PWMStatus.ON
             and sum(ended >= self._last_update for ended in flame.cut_short_burn_ends)
-            >= Flame.PWM_SHORT_BURNS_THRESHOLD
+            >= self._short_burns_threshold
         ):
             self._status = PWMStatus.OFF
             # The off time counts from the planned end of the on time, so the cycle keeps its length
             self._last_update += self._duty_cycle[0]
             _LOGGER.info(
-                "The boiler cut short two burns in this duty cycle. Switching to OFF state."
+                "The boiler cut short %d burn(s) in this duty cycle. Switching to OFF state.",
+                self._short_burns_threshold,
             )
             return
 

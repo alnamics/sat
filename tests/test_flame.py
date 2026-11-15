@@ -646,3 +646,25 @@ async def test_removing_the_entry_deletes_its_cycle_statistics(
     await hass.async_block_till_done()
 
     assert f"{DOMAIN}.sat.flame" not in hass_storage
+
+
+@pytest.mark.parametrize("cycles", [1, 3], ids=["thin_history", "full_history"])
+def test_a_long_boiler_anti_cycling_wait_is_not_stuck_off(
+    freezer: FrozenDateTimeFactory, cycles: int
+) -> None:
+    flame = Flame(boiler_anti_cycling_seconds=600)
+    for _ in range(cycles):
+        run_cycle(flame, freezer, 300)
+
+    idle(flame, freezer, 3600)
+    wait_for_flame(flame, freezer, 600)
+    assert flame.health_status != FlameStatus.STUCK_OFF
+
+    wait_for_flame(flame, freezer, 120)
+    assert flame.health_status == FlameStatus.STUCK_OFF
+
+
+def test_the_stuck_off_timeout_never_drops_below_the_default() -> None:
+    assert Flame(boiler_anti_cycling_seconds=60).STUCK_OFF_SECONDS == Flame.STUCK_OFF_SECONDS
+    assert Flame(boiler_anti_cycling_seconds=600).STUCK_OFF_SECONDS == 660
+    assert Flame().STUCK_OFF_SECONDS == Flame.STUCK_OFF_SECONDS
