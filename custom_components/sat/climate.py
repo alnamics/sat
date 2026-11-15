@@ -65,6 +65,7 @@ from .const import (
     CONF_BOILER_ANTI_CYCLING_TIME,
     CONF_CLIMATE_VALVE_OFFSET,
     CONF_COMFORT_SCHEDULE_ENTITY_ID,
+    CONF_CONDENSING_BOILER,
     CONF_DEFAULT_HVAC_MODE,
     CONF_DYNAMIC_MINIMUM_SETPOINT,
     CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
@@ -131,6 +132,7 @@ from .const import (
 )
 from .coordinator import DeviceState, SatDataUpdateCoordinator
 from .curve_advisor import CurveAdvisor
+from .efficiency import EfficiencyTracker, fuel_for
 from .entity import SatEntity
 from .errors import Error, Errors
 from .heat_budget import (
@@ -485,6 +487,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._window_detected = False
 
         self.curve_advisor = CurveAdvisor()
+        self.efficiency = EfficiencyTracker(
+            fuel_for(self._gas_energy_content),
+            condensing=bool(config_options.get(CONF_CONDENSING_BOILER, True)),
+        )
         self._gas_price = float(config_options.get(CONF_GAS_PRICE) or 0)
         screed = float(config_options.get(CONF_SCREED_MAXIMUM_TEMPERATURE) or 0)
         self._screed_limit = (
@@ -2060,6 +2066,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         if self._last_hot_water_active and not hot_water:
             self._hot_water_ended_at = now
+
+        self.efficiency.update(
+            now,
+            flame=flame,
+            hot_water=hot_water,
+            exhaust=coordinator.exhaust_temperature,
+            return_temperature=coordinator.return_temperature,
+        )
         self._last_hot_water_active = hot_water
 
         heat = self._heating_power() if flame else None

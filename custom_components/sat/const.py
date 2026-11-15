@@ -93,6 +93,7 @@ CONF_SCREED_MAXIMUM_TEMPERATURE = "screed_maximum_temperature"
 CONF_LAST_SERVICE_DATE = "last_service_date"
 CONF_SERVICE_INTERVAL = "service_interval"
 CONF_GAS_PRICE = "gas_price"
+CONF_CONDENSING_BOILER = "condensing_boiler"
 LEGIONELLA_OFF = "off"
 
 HEAT_BUDGET_OFF = "off"
@@ -209,6 +210,8 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_LAST_SERVICE_DATE: None,
     CONF_SERVICE_INTERVAL: 12,
     CONF_GAS_PRICE: 0.0,
+    # Without a flue gas sensor the efficiency of a condensing boiler follows the return water
+    CONF_CONDENSING_BOILER: True,
     CONF_SIMULATED_WARMING_UP: "00:00:15",
     CONF_WINDOW_MINIMUM_OPEN_TIME: "00:00:15",
     CONF_ACTIVITY_TEMPERATURE: 10,

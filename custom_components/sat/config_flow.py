@@ -45,6 +45,7 @@ from .const import (
     CONF_CLIMATE_VALVE_OFFSET,
     CONF_COMFORT_SCHEDULE_ENTITY_ID,
     CONF_COMFORT_TEMPERATURE,
+    CONF_CONDENSING_BOILER,
     CONF_CYCLES_PER_HOUR,
     CONF_DEFAULT_HVAC_MODE,
     CONF_DERIVATIVE,
@@ -1480,6 +1481,9 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
         )
         advanced[vol.Required(CONF_GAS_PRICE, default=options[CONF_GAS_PRICE])] = number(
             0, 50, 0.01
+        )
+        advanced[vol.Required(CONF_CONDENSING_BOILER, default=options[CONF_CONDENSING_BOILER])] = (
+            bool
         )
 
     async def update_options(self, _user_input: dict[str, Any]) -> ConfigFlowResult:
