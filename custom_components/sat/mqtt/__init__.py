@@ -12,7 +12,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from ..const import CONF_MQTT_TOPIC
+from ..const import CONF_MQTT_TOPIC, DOMAIN
 from ..coordinator import MqttMessage, SatDataUpdateCoordinator
 from ..helpers import snake_case
 
@@ -68,8 +68,7 @@ class SatMqttCoordinator(SatDataUpdateCoordinator):
         await self._load_stored_data()
 
         if not await mqtt.async_wait_for_mqtt_client(self.hass):
-            message = "MQTT is not available"
-            raise ConfigEntryNotReady(message)
+            raise ConfigEntryNotReady(translation_domain=DOMAIN, translation_key="mqtt_unavailable")
 
         for key in self.get_tracked_entities():
             self._subscriptions.append(

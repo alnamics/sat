@@ -26,6 +26,7 @@ from pyotgw.vars import (
 )
 from serial import SerialException
 
+from ..const import DOMAIN
 from ..coordinator import DeviceState, SatDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -209,8 +210,11 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         try:
             await self._api.connect(port=self._port, timeout=5)
         except (TimeoutError, ConnectionError, SerialException) as exception:
-            message = f"Could not connect to gateway at {self._port}: {exception}"
-            raise ConfigEntryNotReady(message) from exception
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN,
+                translation_key="serial_connect_failed",
+                translation_placeholders={"port": self._port, "error": str(exception)},
+            ) from exception
 
         return self
 

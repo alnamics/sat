@@ -363,6 +363,20 @@
       }
     }
   },
+  "exceptions": {
+    "esphome_device_not_found": {
+      "message": "ESPHome device {device_id} is not a main device in the device registry."
+    },
+    "mqtt_unavailable": {
+      "message": "MQTT is not available."
+    },
+    "serial_connect_failed": {
+      "message": "Could not connect to the gateway at {port}: {error}"
+    },
+    "unsupported_preset_mode": {
+      "message": "Preset mode {preset_mode} is not supported. Choose one of: {preset_modes}."
+    }
+  },
   "issues": {
     "setup_failed": {
       "title": "SAT {title} is not controlling the boiler",

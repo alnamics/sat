@@ -45,6 +45,7 @@ from homeassistant.core import (
     HomeAssistant,
     callback,
 )
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity import EntityPlatformState
 from homeassistant.helpers.event import (
     async_call_later,
@@ -82,6 +83,7 @@ from .const import (
     CONF_WINDOW_MINIMUM_OPEN_TIME,
     CONTROL_LOOP_STALL_TIME,
     DEADBAND,
+    DOMAIN,
     DYNAMIC_MINIMUM_SETPOINT_VERSION_1,
     DYNAMIC_MINIMUM_SETPOINT_VERSION_2,
     HEATING_MODE_ECO,
@@ -1462,10 +1464,15 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     @override
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode for the thermostat."""
-        # Check if the given preset mode is valid
         if self.preset_modes is None or preset_mode not in self.preset_modes:
-            msg = f"Got unsupported preset_mode {preset_mode}. Must be one of {self.preset_modes}"
-            raise ValueError(msg)
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unsupported_preset_mode",
+                translation_placeholders={
+                    "preset_mode": preset_mode,
+                    "preset_modes": ", ".join(self.preset_modes or []),
+                },
+            )
 
         # Return if the given preset mode is already set
         if preset_mode == self._attr_preset_mode:
