@@ -230,6 +230,8 @@ async def test_pid_uses_the_configured_heating_system(hass: HomeAssistant) -> No
 
 
 ROOM = "climate.room"
+HEATING_ROOM = {"hvac_action": "heating", "temperature": 23.0, "current_temperature": 19.0}
+IDLE_RADIATOR = {"hvac_action": "idle", "temperature": 21.0, "current_temperature": 21.0}
 
 
 async def setup_rooms(
@@ -259,6 +261,61 @@ async def test_room_turned_off_adds_no_error(hass: HomeAssistant) -> None:
 
     assert len(climate.areas.errors) == 0
     assert climate.max_error.entity_id == climate.entity_id
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_blocked_room_adds_no_error_and_no_open_valve(hass: HomeAssistant) -> None:
+    hass.states.async_set("climate.radiator", HVACMode.HEAT, IDLE_RADIATOR)
+    hass.states.async_set(
+        ROOM, HVACMode.HEAT, {**HEATING_ROOM, "heating_blocked_by": "valve_maintenance"}
+    )
+    entry = await setup_rooms(hass, {CONF_RADIATORS: ["climate.radiator"]})
+    climate = entry.runtime_data.climate
+
+    await climate.async_set_target_temperature(21.0)
+
+    assert len(climate.areas.errors) == 0
+    assert climate.max_error.entity_id == climate.entity_id
+    assert climate.valves_open is False
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.parametrize(
+    "blocked_by",
+    [
+        {},
+        {"heating_blocked_by": None},
+        {"heating_blocked_by": ""},
+        {"heating_blocked_by": "[]"},
+        {"heating_blocked_by": []},
+    ],
+    ids=["missing", "none", "empty", "json-empty", "empty-list"],
+)
+async def test_unblocked_room_keeps_its_error_and_open_valve(
+    hass: HomeAssistant, blocked_by: dict[str, Any]
+) -> None:
+    hass.states.async_set("climate.radiator", HVACMode.HEAT, IDLE_RADIATOR)
+    hass.states.async_set(ROOM, HVACMode.HEAT, {**HEATING_ROOM, **blocked_by})
+    entry = await setup_rooms(hass, {CONF_RADIATORS: ["climate.radiator"]})
+    climate = entry.runtime_data.climate
+
+    assert len(climate.areas.errors) == 1
+    assert climate.valves_open is True
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_unblocking_a_room_restores_its_error(hass: HomeAssistant) -> None:
+    hass.states.async_set(ROOM, HVACMode.HEAT, {**HEATING_ROOM, "heating_blocked_by": "startup"})
+    entry = await setup_rooms(hass)
+    climate = entry.runtime_data.climate
+    await climate.async_set_target_temperature(21.0)
+    assert climate.max_error.entity_id == climate.entity_id
+
+    hass.states.async_set(ROOM, HVACMode.HEAT, {**HEATING_ROOM, "heating_blocked_by": None})
+    await hass.async_block_till_done()
+
+    assert climate.max_error.entity_id == ROOM
+    assert climate.pid.last_error == 4.0
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
