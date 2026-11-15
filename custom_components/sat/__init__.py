@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers import (
     config_validation as cv,
 )
@@ -104,6 +104,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SatConfigEntry) -> bool:
                 hass,
                 DOMAIN,
                 issue_id,
+                config_entry_id=entry.entry_id,
                 is_fixable=False,
                 severity=ir.IssueSeverity.ERROR,
                 translation_key="setup_failed",
@@ -147,7 +148,6 @@ async def async_release_control(entry: SatConfigEntry) -> None:
 
 async def async_remove_entry(hass: HomeAssistant, entry: SatConfigEntry) -> None:
     hass.data.get(DOMAIN, {}).pop(f"setup_failed_{entry.entry_id}", None)
-    ir.async_delete_issue(hass, DOMAIN, f"setup_failed_{entry.entry_id}")
     await minimum_setpoint_store(hass, entry.entry_id).async_remove()
     await flame_store(hass, entry.entry_id).async_remove()
 
@@ -238,10 +238,11 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if entry.version < 10 and entry.data.get("mode") == "mqtt":
             device = device_registry.async_get(hass).async_get(entry.data["device"])
             if device is None:
-                _LOGGER.error(
-                    "Cannot migrate, MQTT device %s no longer exists", entry.data["device"]
+                raise ConfigEntryError(
+                    translation_domain=DOMAIN,
+                    translation_key="migration_mqtt_device_missing",
+                    translation_placeholders={"device": entry.data["device"]},
                 )
-                return False
 
             new_data["mode"] = "mqtt_opentherm"
             new_data["device"] = next(iter(device.identifiers))[1]

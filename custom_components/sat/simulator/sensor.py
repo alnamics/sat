@@ -34,7 +34,6 @@ async def async_setup_entry(
 
 
 class SatSetpointSensor(SatEntity, sensor.SensorEntity):
-    _attr_has_entity_name = False
     _attr_device_class = sensor.SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
@@ -47,7 +46,7 @@ class SatSetpointSensor(SatEntity, sensor.SensorEntity):
             f"{config_entry.data[CONF_NAME].lower()}_setpoint",
             hass=coordinator.hass,
         )
-        self._attr_name = f"Current Setpoint {config_entry.data.get(CONF_NAME)} (Boiler)"
+        self._attr_translation_key = "simulator_setpoint"
         self._attr_unique_id = f"{config_entry.entry_id}-setpoint"
 
     @override
@@ -62,7 +61,6 @@ class SatSetpointSensor(SatEntity, sensor.SensorEntity):
 
 
 class SatBoilerTemperatureSensor(SatEntity, sensor.SensorEntity):
-    _attr_has_entity_name = False
     _attr_device_class = sensor.SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
@@ -75,7 +73,7 @@ class SatBoilerTemperatureSensor(SatEntity, sensor.SensorEntity):
             f"{config_entry.data[CONF_NAME].lower()}_boiler_temperature",
             hass=coordinator.hass,
         )
-        self._attr_name = f"Current Temperature {config_entry.data.get(CONF_NAME)} (Boiler)"
+        self._attr_translation_key = "simulator_boiler_temperature"
         self._attr_unique_id = f"{config_entry.entry_id}-boiler_temperature"
 
     @override

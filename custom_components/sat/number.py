@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from . import SatConfigEntry
     from .coordinator import SatDataUpdateCoordinator
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     _hass: HomeAssistant,
@@ -30,7 +32,6 @@ async def async_setup_entry(
 class SatHotWaterSetpointEntity(SatEntity, NumberEntity):
     _attr_translation_key = "hot_water_setpoint"
     _attr_device_class = NumberDeviceClass.TEMPERATURE
-    _attr_icon = "mdi:thermometer"
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     def __init__(self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry) -> None:

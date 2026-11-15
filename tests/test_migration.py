@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant.common import MockConfigEntry
@@ -34,6 +35,21 @@ async def test_v10_copies_sync_with_thermostat(hass: HomeAssistant) -> None:
 
     assert entry.version == SatFlowHandler.VERSION
     assert entry.options["push_setpoint_to_thermostat"] is True
+
+
+async def test_v9_mqtt_without_device_fails_migration(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=9,
+        data={**DEFAULT_USER_DATA, "mode": "mqtt", "device": "missing"},
+    )
+    entry.add_to_hass(hass)
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.MIGRATION_ERROR
+    assert entry.reason == "Cannot migrate: MQTT device missing no longer exists"
+    assert entry.version == 9
 
 
 async def test_v11_moves_unique_ids_to_entry_id(hass: HomeAssistant) -> None:

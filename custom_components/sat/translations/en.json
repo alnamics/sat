@@ -324,6 +324,108 @@
             "name": "Problems"
           }
         }
+      },
+      "master_ch_enabled": {
+        "name": "Thermostat central heating ({source})"
+      },
+      "master_dhw_enabled": {
+        "name": "Thermostat hot water ({source})"
+      },
+      "master_cooling_enabled": {
+        "name": "Thermostat cooling ({source})"
+      },
+      "master_otc_enabled": {
+        "name": "Thermostat outside temperature correction ({source})"
+      },
+      "master_ch2_enabled": {
+        "name": "Thermostat central heating 2 ({source})"
+      },
+      "slave_fault_indication": {
+        "name": "Boiler fault ({source})"
+      },
+      "slave_ch_active": {
+        "name": "Boiler central heating ({source})"
+      },
+      "slave_dhw_active": {
+        "name": "Boiler hot water ({source})"
+      },
+      "slave_flame_on": {
+        "name": "Boiler flame ({source})"
+      },
+      "slave_cooling_active": {
+        "name": "Boiler cooling ({source})"
+      },
+      "slave_ch2_active": {
+        "name": "Boiler central heating 2 ({source})"
+      },
+      "slave_diagnostic_indication": {
+        "name": "Boiler diagnostics ({source})"
+      },
+      "slave_dhw_present": {
+        "name": "Boiler hot water present ({source})"
+      },
+      "slave_control_type": {
+        "name": "Boiler control type ({source})"
+      },
+      "slave_cooling_supported": {
+        "name": "Boiler cooling support ({source})"
+      },
+      "slave_dhw_config": {
+        "name": "Boiler hot water configuration ({source})"
+      },
+      "slave_master_low_off_pump": {
+        "name": "Boiler pump commands support ({source})"
+      },
+      "slave_ch2_present": {
+        "name": "Boiler central heating 2 present ({source})"
+      },
+      "slave_service_required": {
+        "name": "Boiler service required ({source})"
+      },
+      "slave_remote_reset": {
+        "name": "Boiler remote reset support ({source})"
+      },
+      "slave_low_water_pressure": {
+        "name": "Boiler low water pressure ({source})"
+      },
+      "slave_gas_fault": {
+        "name": "Boiler gas fault ({source})"
+      },
+      "slave_air_pressure_fault": {
+        "name": "Boiler air pressure fault ({source})"
+      },
+      "slave_water_overtemp": {
+        "name": "Boiler water over-temperature ({source})"
+      },
+      "remote_transfer_dhw": {
+        "name": "Remote hot water setpoint transfer support ({source})"
+      },
+      "remote_transfer_max_ch": {
+        "name": "Remote maximum central heating setpoint write support ({source})"
+      },
+      "remote_rw_dhw": {
+        "name": "Remote hot water setpoint write support ({source})"
+      },
+      "remote_rw_max_ch": {
+        "name": "Remote central heating setpoint write support ({source})"
+      },
+      "rovrd_man_prio": {
+        "name": "Remote override manual change priority ({source})"
+      },
+      "rovrd_auto_prio": {
+        "name": "Remote override program change priority ({source})"
+      },
+      "otgw_gpio_a_state": {
+        "name": "Gateway GPIO A"
+      },
+      "otgw_gpio_b_state": {
+        "name": "Gateway GPIO B"
+      },
+      "otgw_ignore_transitions": {
+        "name": "Gateway ignore transitions"
+      },
+      "otgw_ovrd_high_byte": {
+        "name": "Gateway override high byte"
       }
     },
     "number": {
@@ -355,12 +457,197 @@
       },
       "boiler_fault_code": {
         "name": "Boiler fault code"
+      },
+      "simulator_boiler_temperature": {
+        "name": "Current temperature (Boiler)"
+      },
+      "simulator_setpoint": {
+        "name": "Current setpoint (Boiler)"
+      },
+      "control_setpoint": {
+        "name": "Control setpoint ({source})"
+      },
+      "master_memberid": {
+        "name": "Thermostat member ID ({source})"
+      },
+      "slave_memberid": {
+        "name": "Boiler member ID ({source})"
+      },
+      "slave_oem_fault": {
+        "name": "Boiler OEM fault code ({source})"
+      },
+      "cooling_control": {
+        "name": "Cooling control signal ({source})"
+      },
+      "control_setpoint_2": {
+        "name": "Control setpoint 2 ({source})"
+      },
+      "room_setpoint_ovrd": {
+        "name": "Room setpoint override ({source})"
+      },
+      "slave_max_relative_modulation": {
+        "name": "Boiler maximum relative modulation ({source})"
+      },
+      "slave_max_capacity": {
+        "name": "Boiler maximum capacity ({source})"
+      },
+      "slave_min_mod_level": {
+        "name": "Boiler minimum modulation level ({source})"
+      },
+      "room_setpoint": {
+        "name": "Room setpoint ({source})"
+      },
+      "relative_mod_level": {
+        "name": "Relative modulation level ({source})"
+      },
+      "ch_water_pressure": {
+        "name": "Central heating water pressure ({source})"
+      },
+      "dhw_flow_rate": {
+        "name": "Hot water flow rate ({source})"
+      },
+      "room_setpoint_2": {
+        "name": "Room setpoint 2 ({source})"
+      },
+      "room_temp": {
+        "name": "Room temperature ({source})"
+      },
+      "ch_water_temp": {
+        "name": "Central heating water temperature ({source})"
+      },
+      "dhw_temp": {
+        "name": "Hot water temperature ({source})"
+      },
+      "outside_temp": {
+        "name": "Outside temperature ({source})"
+      },
+      "return_water_temp": {
+        "name": "Return water temperature ({source})"
+      },
+      "solar_storage_temp": {
+        "name": "Solar storage temperature ({source})"
+      },
+      "solar_coll_temp": {
+        "name": "Solar collector temperature ({source})"
+      },
+      "ch_water_temp_2": {
+        "name": "Central heating 2 water temperature ({source})"
+      },
+      "dhw_temp_2": {
+        "name": "Hot water 2 temperature ({source})"
+      },
+      "exhaust_temp": {
+        "name": "Exhaust temperature ({source})"
+      },
+      "slave_dhw_max_setp": {
+        "name": "Hot water maximum setpoint ({source})"
+      },
+      "slave_dhw_min_setp": {
+        "name": "Hot water minimum setpoint ({source})"
+      },
+      "slave_ch_max_setp": {
+        "name": "Boiler maximum central heating setpoint ({source})"
+      },
+      "slave_ch_min_setp": {
+        "name": "Boiler minimum central heating setpoint ({source})"
+      },
+      "max_ch_setpoint": {
+        "name": "Maximum central heating setpoint ({source})"
+      },
+      "oem_diag": {
+        "name": "OEM diagnostic code ({source})"
+      },
+      "burner_starts": {
+        "name": "Total burner starts ({source})"
+      },
+      "ch_pump_starts": {
+        "name": "Central heating pump starts ({source})"
+      },
+      "dhw_pump_starts": {
+        "name": "Hot water pump starts ({source})"
+      },
+      "dhw_burner_starts": {
+        "name": "Hot water burner starts ({source})"
+      },
+      "burner_hours": {
+        "name": "Total burner hours ({source})"
+      },
+      "ch_pump_hours": {
+        "name": "Central heating pump hours ({source})"
+      },
+      "dhw_pump_hours": {
+        "name": "Hot water pump hours ({source})"
+      },
+      "dhw_burner_hours": {
+        "name": "Hot water burner hours ({source})"
+      },
+      "master_ot_version": {
+        "name": "Thermostat OpenTherm version ({source})"
+      },
+      "slave_ot_version": {
+        "name": "Boiler OpenTherm version ({source})"
+      },
+      "master_product_type": {
+        "name": "Thermostat product type ({source})"
+      },
+      "master_product_version": {
+        "name": "Thermostat product version ({source})"
+      },
+      "slave_product_type": {
+        "name": "Boiler product type ({source})"
+      },
+      "slave_product_version": {
+        "name": "Boiler product version ({source})"
+      },
+      "otgw_mode": {
+        "name": "Gateway/Monitor mode"
+      },
+      "otgw_dhw_ovrd": {
+        "name": "Gateway hot water override mode"
+      },
+      "otgw_about": {
+        "name": "Gateway firmware version"
+      },
+      "otgw_build": {
+        "name": "Gateway firmware build"
+      },
+      "otgw_setback_temp": {
+        "name": "Gateway setback temperature"
+      },
+      "otgw_setpoint_ovrd_mode": {
+        "name": "Gateway room setpoint override mode"
+      },
+      "otgw_smart_pwr": {
+        "name": "Gateway smart power mode"
+      },
+      "otgw_thermostat_detect": {
+        "name": "Gateway thermostat detection"
+      },
+      "otgw_vref": {
+        "name": "Gateway reference voltage setting"
       }
     },
     "button": {
       "calibrate_overshoot_protection": {
         "name": "Calibrate overshoot protection"
       }
+    }
+  },
+  "exceptions": {
+    "esphome_device_not_found": {
+      "message": "ESPHome device {device_id} is not a main device in the device registry."
+    },
+    "migration_mqtt_device_missing": {
+      "message": "Cannot migrate: MQTT device {device} no longer exists."
+    },
+    "mqtt_unavailable": {
+      "message": "MQTT is not available."
+    },
+    "serial_connect_failed": {
+      "message": "Could not connect to the gateway at {port}: {error}"
+    },
+    "unsupported_preset_mode": {
+      "message": "Preset mode {preset_mode} is not supported. Choose one of: {preset_modes}."
     }
   },
   "issues": {

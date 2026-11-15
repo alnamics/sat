@@ -8,6 +8,7 @@ from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.event import async_track_state_change_event
 
+from ..const import DOMAIN
 from ..coordinator import DeviceState, SatDataUpdateCoordinator, SatEntityCoordinator
 from ..helpers import float_value, int_value
 
@@ -60,8 +61,11 @@ class SatEspHomeCoordinator(SatDataUpdateCoordinator, SatEntityCoordinator):
 
         registry = device_registry.async_get(hass)
         if (device := registry.async_get(device_id, include_child_devices=False)) is None:
-            message = f"ESPHome device {device_id} is not a main device in the device registry"
-            raise ConfigEntryError(message)
+            raise ConfigEntryError(
+                translation_domain=DOMAIN,
+                translation_key="esphome_device_not_found",
+                translation_placeholders={"device_id": device_id},
+            )
 
         self._device: DeviceEntry = device
         self._mac_address: str = next(iter(self._device.connections))[1]
