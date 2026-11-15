@@ -112,8 +112,9 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+    from . import SatConfigEntry
     from .pwm import PWMState
 
 ATTR_ROOMS = "rooms"
@@ -130,8 +131,13 @@ INPUTS_MISSING_GRACE_PERIOD = timedelta(minutes=10)
 _LOGGER = logging.getLogger(__name__)
 
 
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    _hass: HomeAssistant, _config_entry: ConfigEntry, _async_add_devices: AddEntitiesCallback
+    _hass: HomeAssistant,
+    _config_entry: SatConfigEntry,
+    _async_add_devices: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the SatClimate device."""
     _async_add_devices([_config_entry.runtime_data.climate])
