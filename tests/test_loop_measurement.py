@@ -126,9 +126,10 @@ async def test_a_measurement_stopped_by_home_assistant_keeps_its_record(
     measurement = LoopMeasurement(
         hass, ["climate.a"], valve_seconds=3600, sample=lambda: None, store=store
     )
-    task = hass.async_create_task(measurement.async_run())
-    await hass.async_block_till_done(wait_background_tasks=False)
-    await asyncio.sleep(0)
+    # A plain task, so Home Assistant's own waiting does not wait for the hour-long valve time
+    task = asyncio.get_running_loop().create_task(measurement.async_run())
+    for _ in range(20):
+        await asyncio.sleep(0)
     assert measurement.running
 
     measurement.abandoned = True
