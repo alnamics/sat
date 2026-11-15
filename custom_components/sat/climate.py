@@ -2096,7 +2096,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             if flow_sample is not None:
                 self._last_water_flow = flow_sample
             indoor = self.native_current_temperature
-            if on_time is not None and on_time >= DIAGNOSTIC_BURN_SECONDS and indoor is not None:
+            if on_time >= DIAGNOSTIC_BURN_SECONDS and indoor is not None:
                 self.curve_advisor.update(
                     heat_kw=heat,
                     flow=coordinator.boiler_temperature,
