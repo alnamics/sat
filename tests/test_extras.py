@@ -135,3 +135,62 @@ def test_the_curve_advice_matches_the_house() -> None:
     suggested = advisor.suggest(curve, heat_loss_kw_per_k=0.12, target=22, water_flow_lpm=16)
     assert suggested is not None
     assert 0.5 <= suggested <= 2.5
+
+
+def test_a_long_gap_restarts_the_warm_weather_average() -> None:
+    shutdown = WarmWeatherShutdown(16.0)
+    now = feed(shutdown, 0, 12, 20.0)
+    assert shutdown.active
+
+    # Nothing was read for weeks; a summer average must not stop the heating in autumn
+    shutdown.update(now + 30 * 86400, 4.0)
+    assert not shutdown.active
+    assert shutdown.mean == 4.0
+
+
+def test_the_warm_weather_average_continues_after_a_restart() -> None:
+    shutdown = WarmWeatherShutdown(16.0)
+    shutdown.restore(19.5, active=True)
+
+    assert shutdown.update(0, 18.0)
+    assert shutdown.mean == 19.5
+
+
+def test_an_absence_continues_after_a_restart() -> None:
+    tracker = PresenceTracker()
+    tracker.resume_away(1000)
+
+    assert tracker.state == Occupancy.AWAY
+    assert tracker.update(1030, home=False, distance_km=None) == Occupancy.AWAY
+    assert tracker.update(1060, home=True, distance_km=None) == Occupancy.HOME
+
+
+def test_a_window_pause_continues_after_a_restart() -> None:
+    detector = TemperatureDropDetector()
+    detector.resume(0)
+
+    assert detector.update(60, 20.0)
+    assert not detector.update(1900, 20.5)
+
+
+def test_a_boiler_below_sixty_degrees_is_boosted_to_its_maximum() -> None:
+    schedule = HotWaterSchedule(
+        HotWaterPlan(comfort_temperature=48, legionella_weekday=6, legionella_start_seconds=0)
+    )
+
+    assert schedule.target(SUNDAY, comfort=None, temperature=45, maximum=55) == 55
+    reached = SUNDAY + timedelta(minutes=30)
+    assert schedule.target(reached, comfort=None, temperature=54, maximum=55) == 55
+    assert schedule.target(reached + timedelta(minutes=61), comfort=None, temperature=55) == 48
+
+
+def test_a_boost_of_this_week_is_not_repeated_after_a_restart() -> None:
+    schedule = HotWaterSchedule(
+        HotWaterPlan(comfort_temperature=50, legionella_weekday=6, legionella_start_seconds=0)
+    )
+    schedule.restore_last_boost("2026-W46")
+    assert schedule.attributes["hot_water_last_boost_week"] == "2026-W46"
+
+    assert schedule.target(SUNDAY + timedelta(hours=14), comfort=None, temperature=48) == 50
+    next_week = SUNDAY + timedelta(days=7)
+    assert schedule.target(next_week, comfort=None, temperature=48) == LEGIONELLA_TEMPERATURE

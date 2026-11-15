@@ -143,9 +143,14 @@ from .heat_budget import (
 )
 from .helpers import convert_time_str_to_seconds, float_value, is_state_stale, state_age_seconds
 from .hot_water_schedule import HotWaterPlan, HotWaterSchedule
-from .loop_measurement import LoopMeasurement
+from .loop_measurement import (
+    LoopMeasurement,
+    async_restore_interrupted,
+    loop_measurement_store,
+)
 from .loop_monitor import LoopMonitor, RoomReading, estimate_water_flow
 from .manufacturers.geminox import Geminox
+from .modulation_scale import ModulationScale
 from .presence import Occupancy, PresenceTracker, is_home
 from .relative_modulation import RelativeModulation, RelativeModulationState
 from .summer_simmer import SummerSimmer
@@ -187,6 +192,10 @@ SETTLED_BURN_SECONDS = 180
 DIAGNOSTIC_BURN_SECONDS = 600
 # After hot water the flow sensor still reads the hot water temperature for a while
 AFTER_HOT_WATER_SECONDS = 300
+# The flue gas of a clean heat exchanger is only judged this close to the minimum power
+NEAR_MINIMUM_POWER_SHARE = 0.15
+# A warm weather average older than this is not continued after a restart
+WARM_WEATHER_RESTORE_AGE = timedelta(hours=6)
 DISTANCE_TO_KM = {"m": 0.001, "km": 1.0, "mi": 1.609344, "ft": 0.0003048, "yd": 0.0009144}
 
 _LOGGER = logging.getLogger(__name__)
@@ -241,6 +250,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             "integral",
             "proportional",
             "pulse_width_modulation_duty_cycle",
+            # Heat budget and monitoring values that move with every reading; the sensors
+            # carry their history
+            "heat_need_kw",
+            "heat_credit_kwh",
+            "heat_block_minutes",
+            "flue_return_gap",
+            "outside_temperature_mean",
+            "loop_measurement_step",
         }
     )
 
@@ -433,8 +450,13 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._failed_monitors: set[str] = set()
         self._last_pwm_status: PWMStatus | None = None
         self._last_device_active: bool | None = None
+        self._modulation_scale = ModulationScale()
         self._flow_sample: float | None = None
         self._last_water_flow: float | None = None
+        self._water_flow_details: dict[str, float | None] = {
+            "heat_output_kw": None,
+            "flow_return_difference": None,
+        }
         self._hot_water_ended_at: float | None = None
         self._last_hot_water_active = False
         self._init_extras(coordinator, config_options)
@@ -538,6 +560,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self.hass,
             self._config_entry.entry_id,
             self._config_entry.title,
+            underfloor=self._heating_system == HEATING_SYSTEM_UNDERFLOOR,
             screed_limit=self._screed_limit,
             last_service=self._last_service,
             service_interval_months=self._service_interval,
@@ -639,6 +662,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._loop_measurement_task = None
 
     async def _async_started(self, _hass: HomeAssistant) -> None:
+        await self._async_run_guarded(
+            "loop measurement restore", self._async_restore_interrupted_measurement
+        )
         await self._register_event_listeners()
         await self.async_control_heating_loop()
 
@@ -769,6 +795,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             if old_state.attributes.get(ATTR_PRE_CUSTOM_TEMPERATURE):
                 self._pre_custom_temperature = old_state.attributes.get(ATTR_PRE_CUSTOM_TEMPERATURE)
 
+            self._restore_extras(old_state)
+
             if optimal_coefficient := old_state.attributes.get(ATTR_OPTIMAL_COEFFICIENT):
                 self.heating_curve.restore_autotune(
                     optimal_coefficient,
@@ -797,6 +825,41 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._pre_custom_temperature = self.native_target_temperature
 
         self.async_write_ha_state()
+
+    def _restore_extras(self, old_state: State) -> None:
+        """Pick up the warm weather average, an absence and a window pause after a restart."""
+        attributes = old_state.attributes
+        mean = float_value(attributes.get("outside_temperature_mean"))
+        if (
+            self.warm_weather is not None
+            and mean is not None
+            and dt_util.utcnow() - old_state.last_updated <= WARM_WEATHER_RESTORE_AGE
+        ):
+            self.warm_weather.restore(mean, active=bool(attributes.get("warm_weather_shutdown")))
+            self._warm_weather_was_active = self.warm_weather.active
+
+        # Without these the preset SAT set itself would stay after the restart
+        previous = attributes.get("presence_previous_preset")
+        if (
+            self.presence is not None
+            and self.preset_mode == PRESET_AWAY
+            and isinstance(previous, str)
+            and (previous == PRESET_NONE or previous in (self.preset_modes or []))
+        ):
+            self._presence_previous_preset = previous
+            self.presence.resume_away(monotonic())
+
+        # A boost that already ran this week is not repeated after a restart
+        if self.hot_water_schedule is not None:
+            self.hot_water_schedule.restore_last_boost(attributes.get("hot_water_last_boost_week"))
+
+        if (
+            self.window_detector is not None
+            and self.preset_mode == PRESET_ACTIVITY
+            and attributes.get("window_open_detected") is True
+        ):
+            self._window_detected = True
+            self.window_detector.resume(monotonic())
 
     async def async_stop_control(self) -> None:
         """Wait for a running control loop and stop sending boiler commands."""
@@ -907,6 +970,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             attributes.update(self.hot_water_schedule.attributes)
         if self.presence is not None:
             attributes["occupancy"] = self.presence.state.value
+            attributes["presence_previous_preset"] = self._presence_previous_preset
         if self.window_detector is not None:
             attributes["window_open_detected"] = self._window_detected
         if (transfer := self.curve_advisor.transfer_kw_per_k) is not None:
@@ -1530,6 +1594,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             # Totals and diagnostics also run while SAT is off, so summer hot water counts too
             self._run_guarded("monitors", self._update_monitors)
+            self._run_guarded("warm weather", self._update_warm_weather)
             await self._async_run_guarded("hot water", self._async_control_hot_water)
 
             # No need to do anything if we are not on, or while something else drives the boiler
@@ -1832,13 +1897,26 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             setback=self._setback_temperature,
         )
 
+    def _burner_share(self) -> float | None:
+        """Where the burner is between its minimum and maximum power (0..1), if it tells."""
+        reading = float_value(self._coordinator.relative_modulation_value)
+        if reading is None:
+            return None
+        return self._modulation_scale.share(reading)
+
+    def _modulation_capped(self) -> bool:
+        """Return True while SAT holds the burner at its minimum modulation."""
+        return (
+            self._coordinator.supports_relative_modulation_management
+            and self.relative_modulation_value == MINIMUM_RELATIVE_MODULATION
+        )
+
     def _gas_use(self) -> float | None:
         """Gas the burner uses now in m³/h, from the consumption options and the modulation."""
         if self._minimum_consumption <= 0 or self._maximum_consumption <= 0:
             return None
 
-        modulation = float_value(self._coordinator.relative_modulation_value) or 0.0
-        return self._minimum_consumption + modulation / 100 * (
+        return self._minimum_consumption + (self._burner_share() or 0.0) * (
             self._maximum_consumption - self._minimum_consumption
         )
 
@@ -1851,14 +1929,30 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             return self._minimum_consumption * self._gas_energy_content
         return 5.0
 
-    def _heating_power(self) -> float:
-        """Return the burner's heat output in kW while it burns."""
-        power = self._coordinator.boiler_power
-        if power is not None and power > 0:
-            return float(power)
+    def _known_heating_power(self) -> float | None:
+        """Return the burner's heat output in kW while it burns, or None when nothing tells."""
+        capacity = self._coordinator.boiler_capacity
+        minimum = self._coordinator.minimum_boiler_capacity
+        share = self._burner_share()
+        if (
+            capacity is not None
+            and minimum is not None
+            and share is not None
+            and capacity > 0
+            and minimum > 0
+        ):
+            return float(minimum + (capacity - minimum) * share)
         if (gas := self._gas_use()) is not None:
             return gas * self._gas_energy_content
-        return self._minimum_power()
+        return None
+
+    def _heating_power(self) -> float:
+        """Return the burner's heat output in kW for the heat budget.
+
+        Without a known power the budget counts in units of the minimum power, which still
+        doses the right burn time because the heat loss is learned in the same units.
+        """
+        return self._known_heating_power() or self._minimum_power()
 
     def _run_guarded(self, name: str, update: Callable[[], None]) -> None:
         """Keep a failure in the totals, diagnostics or heat budget from stopping the control."""
@@ -1902,13 +1996,18 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             return None
         return outdoor + sum(values) / len(values) - values[0]
 
+    def _update_warm_weather(self) -> None:
+        """Follow the daily mean outside temperature, also while SAT is off."""
+        if self.warm_weather is not None:
+            self.warm_weather.update(
+                monotonic(), self.current_outside_temperature, self._forecast_mean(12)
+            )
+
     def _warm_weather_shutdown(self) -> bool:
         if self.warm_weather is None or self._measuring_loops:
             return False
 
-        active = self.warm_weather.update(
-            monotonic(), self.current_outside_temperature, self._forecast_mean(12)
-        )
+        active = self.warm_weather.active
         if active != self._warm_weather_was_active:
             _LOGGER.info(
                 "Warm weather: central heating %s (daily mean %s °C).",
@@ -1934,7 +2033,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             comfort = {STATE_ON: True, STATE_OFF: False}.get(state.state)
 
         target = schedule.target(
-            dt_util.now(), comfort=comfort, temperature=self._coordinator.hot_water_temperature
+            dt_util.now(),
+            comfort=comfort,
+            temperature=self._coordinator.hot_water_temperature,
+            maximum=self._coordinator.maximum_hot_water_setpoint,
         )
         target = min(
             max(target, self._coordinator.minimum_hot_water_setpoint),
@@ -2027,6 +2129,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             list(rooms),
             valve_seconds=self._valve_opening_time or 360,
             sample=lambda: self._flow_sample,
+            store=loop_measurement_store(self.hass, self._config_entry.entry_id),
         )
         self._loop_measurement_task = self.hass.async_create_background_task(
             self._async_run_loop_measurement(self.loop_measurement), "sat_measure_loops"
@@ -2037,26 +2140,42 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self.schedule_control_heating_loop(force=True)
         try:
             result = await measurement.async_run()
+            self._loop_measurement_result = result.as_dict()
+            lines = [f"- base (loops never closed): {result.as_dict()['base_lpm']} l/min"]
+            lines += [
+                f"- {entity_id}: {flow} l/min"
+                for entity_id, flow in result.as_dict()["loops_lpm"].items()
+            ]
+            message = "\n".join(lines)
+        except HomeAssistantError as error:
+            message = f"The loop measurement stopped: {error}"
+            _LOGGER.warning(message)
         finally:
+            # The room targets were moved around, which the PIDs took for real errors
+            self._async_control_pid(reset=True)
             self.schedule_control_heating_loop(force=True)
 
-        self._loop_measurement_result = result.as_dict()
-        lines = [f"- base (loops without actuator): {result.as_dict()['base_lpm']} l/min"]
-        lines += [
-            f"- {entity_id}: {flow} l/min"
-            for entity_id, flow in result.as_dict()["loops_lpm"].items()
-        ]
         persistent_notification.async_create(
             self.hass,
-            "\n".join(lines),
+            message,
             title=f"{self._config_entry.title}: loop flows",
             notification_id=f"{DOMAIN}_{self._config_entry.entry_id}_loop_measurement",
         )
         self.async_write_ha_state()
 
+    async def _async_restore_interrupted_measurement(self) -> None:
+        if self.loop_monitor is not None:
+            await async_restore_interrupted(
+                self.hass, loop_measurement_store(self.hass, self._config_entry.entry_id)
+            )
+
     def _update_monitors(self) -> None:
         """Feed the running totals, the loop monitor and the boiler diagnostics."""
         coordinator = self._coordinator
+        # During an outage the last readings stay, and a stale flame would count as burning
+        if not coordinator.online or not coordinator.flame_reported:
+            return
+
         now = monotonic()
         flame = coordinator.flame_active
         hot_water = coordinator.hot_water_active
@@ -2082,27 +2201,39 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         )
         self._last_hot_water_active = hot_water
 
-        heat = self._heating_power() if flame else None
+        on_time = coordinator.flame.latest_on_time_seconds
+        settled = (
+            flame and not hot_water and on_time is not None and on_time >= SETTLED_BURN_SECONDS
+        )
+
+        # What the boiler reports while SAT holds it at minimum power is its zero point
+        reading = float_value(coordinator.relative_modulation_value)
+        if settled and reading is not None and self._modulation_capped():
+            self._modulation_scale.observe_minimum(
+                reading, coordinator.minimum_relative_modulation_value
+            )
+
+        heat = self._known_heating_power() if flame else None
+        gas = None
+        if flame:
+            gas = self._gas_use()
+            if gas is None and heat is not None:
+                gas = heat / self._gas_energy_content
         today = dt_util.now().date()
         self.boiler_stats.update(
             now=now,
             flame=flame,
             hot_water=hot_water,
             heat_kw=heat,
-            gas_m3_per_hour=(
-                (self._gas_use() or (heat or 0.0) / self._gas_energy_content) if flame else None
-            ),
+            gas_m3_per_hour=gas,
             outdoor=self.current_outside_temperature,
+            indoor=self.native_current_temperature,
             hot_water_temperature=coordinator.hot_water_temperature,
             heating_stopped_at=self._heating_stopped_at,
             day=today.isoformat(),
             gas_price=self._gas_price,
         )
 
-        on_time = coordinator.flame.latest_on_time_seconds
-        settled = (
-            flame and not hot_water and on_time is not None and on_time >= SETTLED_BURN_SECONDS
-        )
         flow_sample = None
         if (
             settled
@@ -2115,6 +2246,12 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             )
             if flow_sample is not None:
                 self._last_water_flow = flow_sample
+                self._water_flow_details = {
+                    "heat_output_kw": round(heat, 2),
+                    "flow_return_difference": round(
+                        coordinator.boiler_temperature - coordinator.return_temperature, 1
+                    ),
+                }
             indoor = self.native_current_temperature
             if on_time >= DIAGNOSTIC_BURN_SECONDS and indoor is not None:
                 self.curve_advisor.update(
@@ -2156,8 +2293,29 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                     self._hot_water_ended_at is None
                     or now - self._hot_water_ended_at > AFTER_HOT_WATER_SECONDS
                 ),
-                gas_use_ratio=self.boiler_stats.gas_per_degree_day_ratio,
+                gas_use_ratio=self.boiler_stats.gas_use_ratio,
+                near_minimum_power=(share := self._burner_share()) is not None
+                and share <= NEAR_MINIMUM_POWER_SHARE,
+                system_temperature=(
+                    coordinator.return_temperature
+                    if coordinator.return_temperature is not None
+                    else coordinator.boiler_temperature
+                ),
+                hot_water=hot_water
+                or (
+                    self._hot_water_ended_at is not None
+                    and now - self._hot_water_ended_at <= AFTER_HOT_WATER_SECONDS
+                ),
             )
+
+    @property
+    def water_flow(self) -> float | None:
+        """The last estimated water flow of a settled space heating burn, in l/min."""
+        return self._last_water_flow
+
+    @property
+    def water_flow_details(self) -> dict[str, float | None]:
+        return self._water_flow_details
 
     def _update_heat_budget(self) -> None:
         if self.heat_budget is None:

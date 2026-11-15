@@ -1,10 +1,14 @@
 """Tests for measuring the loop flows one room at a time."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import HVACMode
 
-from custom_components.sat.loop_measurement import LoopMeasurement
+from custom_components.sat.loop_measurement import (
+    LoopMeasurement,
+    async_restore_interrupted,
+    loop_measurement_store,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant, ServiceCall
@@ -56,3 +60,33 @@ async def test_each_loop_is_measured_against_the_base(hass: HomeAssistant) -> No
         assert state is not None
         assert state.state == HVACMode.HEAT
         assert state.attributes["temperature"] == 22
+
+
+async def test_an_interrupted_measurement_is_put_back_at_the_next_start(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    hass.states.async_set("climate.a", HVACMode.OFF, {"temperature": 30})
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def record(call: ServiceCall) -> None:
+        calls.append((call.service, dict(call.data)))
+
+    hass.services.async_register("climate", "set_hvac_mode", record)
+    hass.services.async_register("climate", "set_temperature", record)
+
+    store = loop_measurement_store(hass, "entry")
+    hass_storage[store.key] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": store.key,
+        "data": {"rooms": {"climate.a": {"mode": "heat", "temperature": 22}}},
+    }
+
+    assert await async_restore_interrupted(hass, store)
+
+    assert calls == [
+        ("set_hvac_mode", {"entity_id": "climate.a", "hvac_mode": HVACMode.HEAT}),
+        ("set_temperature", {"entity_id": "climate.a", "temperature": 22}),
+    ]
+    assert store.key not in hass_storage
+    assert not await async_restore_interrupted(hass, store)

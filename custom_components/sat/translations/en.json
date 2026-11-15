@@ -724,6 +724,12 @@
       },
       "boiler_efficiency": {
         "name": "Estimated boiler efficiency"
+      },
+      "heat_need": {
+        "name": "Heat need"
+      },
+      "heat_loss": {
+        "name": "Heat loss of the house"
       }
     },
     "button": {

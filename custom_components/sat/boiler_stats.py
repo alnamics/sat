@@ -8,8 +8,8 @@ The hot water cooling detector separates cylinder temperature drops that start r
 heating demand ends, when a combi boiler swings its diverter valve and the pump overrun pulls
 heating water through the cylinder coil, from the drops of tapping hot water.
 
-Gas and degree days are also kept per day, so a week that burns clearly more gas per degree day
-than the weeks before it stands out: an open window, a closed loop or a dirty heat exchanger.
+The heating gas of each day is also kept against that day's weather (see energy_signature), so a
+week that burns clearly more than the weeks before explain stands out.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
+from .energy_signature import EnergySignature
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -46,12 +47,6 @@ TOTALS = (
     "degree_days",
     "gas_cost",
 )
-HISTORY_DAYS = 60
-RECENT_DAYS = 7
-REFERENCE_DAYS = 28
-# Below these the weather was too mild for gas per degree day to mean much
-RECENT_MINIMUM_DEGREE_DAYS = 15.0
-REFERENCE_MINIMUM_DEGREE_DAYS = 40.0
 
 
 def boiler_stats_store(hass: HomeAssistant, entry_id: str) -> Store[dict[str, Any]]:
@@ -71,10 +66,7 @@ class BoilerStats:
         self._reference: float | None = None
         self._events: deque[tuple[float, bool]] = deque()
 
-        # Completed days as (date, gas m³, degree days), and the day being counted
-        self._days: deque[tuple[str, float, float]] = deque(maxlen=HISTORY_DAYS)
-        self._day: str | None = None
-        self._day_start: tuple[float, float] | None = None
+        self.signature = EnergySignature()
 
     async def async_initialize(self, hass: HomeAssistant, entry_id: str) -> None:
         if self._store is not None:
@@ -87,25 +79,7 @@ class BoilerStats:
         for key in TOTALS:
             if isinstance(value := data.get(key), int | float):
                 self.totals[key] = float(value)
-        self._load_days(data)
-
-    def _load_days(self, data: dict[str, Any]) -> None:
-        days = data.get("days")
-        if isinstance(days, list):
-            for item in days:
-                if (
-                    isinstance(item, list)
-                    and len(item) == 3  # noqa: PLR2004
-                    and isinstance(item[0], str)
-                    and isinstance(item[1], int | float)
-                    and isinstance(item[2], int | float)
-                ):
-                    self._days.append((item[0], float(item[1]), float(item[2])))
-
-        day, start = data.get("day"), data.get("day_start")
-        if isinstance(day, str) and isinstance(start, list) and len(start) == 2:  # noqa: PLR2004
-            self._day = day
-            self._day_start = (float(start[0]), float(start[1]))
+        self.signature.load(data.get("signature"))
 
     def update(
         self,
@@ -116,6 +90,7 @@ class BoilerStats:
         heat_kw: float | None,
         gas_m3_per_hour: float | None,
         outdoor: float | None,
+        indoor: float | None = None,
         hot_water_temperature: float | None = None,
         heating_stopped_at: float | None = None,
         day: str | None = None,
@@ -130,6 +105,7 @@ class BoilerStats:
             self.totals["starts"] += 1
         self._flame = flame
 
+        heating_gas = 0.0
         if flame and dt > 0:
             self.totals["burn_hours"] += dt / SECONDS_PER_HOUR
             if heat_kw is not None:
@@ -139,12 +115,14 @@ class BoilerStats:
                 gas = gas_m3_per_hour * dt / SECONDS_PER_HOUR
                 self.totals["gas_m3"] += gas
                 self.totals["gas_cost"] += gas * max(0.0, gas_price)
+                if not hot_water:
+                    heating_gas = gas
 
         if outdoor is not None and dt > 0:
             self.totals["degree_days"] += max(0.0, DEGREE_DAY_BASE - outdoor) * dt / SECONDS_PER_DAY
 
         if day is not None:
-            self._track_day(day)
+            self.signature.update(dt, day, heating_gas=heating_gas, indoor=indoor, outdoor=outdoor)
 
         self._track_hot_water(
             now,
@@ -160,44 +138,12 @@ class BoilerStats:
             self._store.async_delay_save(self._data, 1)
 
     def _data(self) -> dict[str, Any]:
-        return {
-            **self.totals,
-            "days": [list(item) for item in self._days],
-            "day": self._day,
-            "day_start": None if self._day_start is None else list(self._day_start),
-        }
-
-    def _track_day(self, day: str) -> None:
-        current = (self.totals["gas_m3"], self.totals["degree_days"])
-        if self._day is None or self._day_start is None:
-            self._day, self._day_start = day, current
-            return
-        if day == self._day:
-            return
-
-        gas = current[0] - self._day_start[0]
-        degree_days = current[1] - self._day_start[1]
-        self._days.append((self._day, gas, degree_days))
-        self._day, self._day_start = day, current
+        return {**self.totals, "signature": self.signature.to_dict()}
 
     @property
-    def gas_per_degree_day_ratio(self) -> float | None:
-        """Gas per degree day of the last week against the four weeks before it."""
-        days = list(self._days)
-        if len(days) < RECENT_DAYS + REFERENCE_DAYS // 2:
-            return None
-
-        recent = days[-RECENT_DAYS:]
-        reference = days[-(RECENT_DAYS + REFERENCE_DAYS) : -RECENT_DAYS]
-        recent_dd = sum(item[2] for item in recent)
-        reference_dd = sum(item[2] for item in reference)
-        if recent_dd < RECENT_MINIMUM_DEGREE_DAYS or reference_dd < REFERENCE_MINIMUM_DEGREE_DAYS:
-            return None
-
-        reference_rate = sum(item[1] for item in reference) / reference_dd
-        if reference_rate <= 0:
-            return None
-        return round(sum(item[1] for item in recent) / recent_dd / reference_rate, 2)
+    def gas_use_ratio(self) -> float | None:
+        """Heating gas of the last week against what the weeks before predict for its weather."""
+        return self.signature.ratio
 
     def _track_hot_water(
         self,

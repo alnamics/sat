@@ -14,6 +14,8 @@ AVERAGING_HOURS = 24.0
 # Ignore the first hours after a start, so a warm afternoon reading cannot stop the heating
 MINIMUM_AVERAGING_HOURS = 6.0
 MAXIMUM_STEP_SECONDS = 600.0
+# After this long without readings the average says nothing about today, so it starts over
+RESET_GAP_SECONDS = 3600.0
 HYSTERESIS = 2.0
 
 
@@ -39,8 +41,19 @@ class WarmWeatherShutdown:
     def attributes(self) -> dict[str, object]:
         return {"warm_weather_shutdown": self._active, "outside_temperature_mean": self.mean}
 
+    def restore(self, mean: float, *, active: bool) -> None:
+        """Continue from the average and state saved shortly before a restart."""
+        self._mean = mean
+        self._hours = MINIMUM_AVERAGING_HOURS
+        self._active = active
+
     def update(self, now: float, outdoor: float | None, forecast: float | None = None) -> bool:
         """Feed the outside temperature and the forecast mean of the next hours."""
+        if self._last_update is not None and now - self._last_update > RESET_GAP_SECONDS:
+            self._mean = None
+            self._hours = 0.0
+            self._active = False
+
         dt = (
             0.0 if self._last_update is None else min(now - self._last_update, MAXIMUM_STEP_SECONDS)
         )

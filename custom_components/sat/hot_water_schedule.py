@@ -51,16 +51,35 @@ class HotWaterSchedule:
             ),
         }
 
-    def target(self, now: datetime, *, comfort: bool | None, temperature: float | None) -> float:
-        """Return the hot water setpoint for this moment (local time)."""
-        if self._boost(now, temperature):
-            return LEGIONELLA_TEMPERATURE
+    def restore_last_boost(self, week: object) -> None:
+        """Take the week of the last boost back from its attribute form, such as 2026-W47."""
+        if not isinstance(week, str):
+            return
+        year, _, number = week.partition("-W")
+        if year.isdigit() and number.isdigit():
+            self._last_boost_week = (int(year), int(number))
+
+    def target(
+        self,
+        now: datetime,
+        *,
+        comfort: bool | None,
+        temperature: float | None,
+        maximum: float = LEGIONELLA_TEMPERATURE,
+    ) -> float:
+        """Return the hot water setpoint for this moment (local time).
+
+        A boiler that cannot heat hot water to 60 °C is boosted to its own maximum.
+        """
+        boost = min(LEGIONELLA_TEMPERATURE, maximum)
+        if self._boost(now, temperature, boost):
+            return boost
 
         if comfort is False and self._plan.eco_temperature is not None:
             return self._plan.eco_temperature
         return self._plan.comfort_temperature
 
-    def _boost(self, now: datetime, temperature: float | None) -> bool:
+    def _boost(self, now: datetime, temperature: float | None, boost: float) -> bool:
         weekday = self._plan.legionella_weekday
         if weekday is None:
             return False
@@ -79,7 +98,7 @@ class HotWaterSchedule:
         if (
             temperature is not None
             and self._boost_reached is None
-            and temperature >= LEGIONELLA_TEMPERATURE - LEGIONELLA_REACHED_MARGIN
+            and temperature >= boost - LEGIONELLA_REACHED_MARGIN
         ):
             self._boost_reached = now
 

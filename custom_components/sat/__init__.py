@@ -39,6 +39,7 @@ from .const import (
 from .coordinator_factory import SatDataUpdateCoordinatorFactory
 from .flame import flame_store
 from .heat_budget import heat_budget_store
+from .loop_measurement import loop_measurement_store
 from .minimum_setpoint import minimum_setpoint_store
 from .mqtt import mqtt_store
 from .mqtt.ems import SatEmsMqttCoordinator
@@ -158,6 +159,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: SatConfigEntry) -> None
     await heat_budget_store(hass, entry.entry_id).async_remove()
     await boiler_stats_store(hass, entry.entry_id).async_remove()
     await boiler_diagnostics_store(hass, entry.entry_id).async_remove()
+    await loop_measurement_store(hass, entry.entry_id).async_remove()
 
     mqtt_coordinators = {
         MODE_MQTT_EMS: SatEmsMqttCoordinator,

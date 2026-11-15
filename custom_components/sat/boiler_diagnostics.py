@@ -2,14 +2,15 @@
 
 * low water pressure, which ends in a lockout if nobody tops the system up;
 * water pressure that keeps falling over days, a leak or a failing expansion vessel, raised
-  long before the pressure is low;
+  long before the pressure is low (corrected for the water temperature, see pressure_trend);
 * a fault the boiler reports, with its manufacturer code;
-* a heat exchanger that gets dirty: in a settled space heating burn the flue gas of a clean
-  condensing boiler runs a few kelvin above the return water, and the gap grows as deposits build.
-  Burns with flue gas above 90 °C do not condense and are left out;
+* a heat exchanger that gets dirty: in a settled space heating burn near minimum power the flue
+  gas of a clean condensing boiler runs a few kelvin above the return water, and the gap grows
+  as deposits build. At higher power the gap is larger by design, so only burns near the minimum
+  count, and burns with flue gas above 90 °C do not condense and are left out;
 * flow water hotter than a screed floor should get;
-* a large flow/return spread in settled burns, which means too little water moves (closed
-  loops, a blocked filter or air);
+* on underfloor heating, a large flow/return spread in settled burns, which means too little
+  water moves (closed loops, a blocked filter or air). Radiators run such spreads by design;
 * a boiler service that is due;
 * gas use per degree day clearly above the weeks before.
 """
@@ -17,13 +18,13 @@
 from __future__ import annotations
 
 import calendar
-from collections import deque
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
+from .pressure_trend import PressureTrend
 
 if TYPE_CHECKING:
     from datetime import date
@@ -36,9 +37,7 @@ MAXIMUM_STEP_SECONDS = 300.0
 LOW_PRESSURE = 0.8
 PRESSURE_RECOVERED = 0.9
 LOW_PRESSURE_SECONDS = 600.0
-# Daily minimum pressures; a fall of 0.05 bar a week over at least four days is a leak
-PRESSURE_HISTORY_DAYS = 14
-PRESSURE_TREND_MINIMUM_DAYS = 4
+# A fall of 0.05 bar a week over at least four days is a leak
 PRESSURE_FALLING_PER_DAY = -0.007
 PRESSURE_STEADY_PER_DAY = -0.003
 PRESSURE_FALLING_MINIMUM_DROP = 0.1
@@ -68,18 +67,6 @@ def boiler_diagnostics_store(hass: HomeAssistant, entry_id: str) -> Store[dict[s
     return Store(hass, 1, f"{DOMAIN}.{entry_id}.boiler_diagnostics")
 
 
-def pressure_trend(minima: list[float]) -> float | None:
-    """Least squares slope of daily pressures, in bar per day."""
-    count = len(minima)
-    if count < PRESSURE_TREND_MINIMUM_DAYS:
-        return None
-    mean_x = (count - 1) / 2
-    mean_y = sum(minima) / count
-    numerator = sum((x - mean_x) * (y - mean_y) for x, y in enumerate(minima))
-    denominator = sum((x - mean_x) ** 2 for x in range(count))
-    return numerator / denominator
-
-
 def add_months(day: date, months: int) -> date:
     month = day.month - 1 + months
     year = day.year + month // 12
@@ -99,6 +86,7 @@ class BoilerDiagnostics:
         entry_id: str,
         title: str,
         *,
+        underfloor: bool = False,
         screed_limit: float | None = None,
         last_service: date | None = None,
         service_interval_months: int = 12,
@@ -106,6 +94,7 @@ class BoilerDiagnostics:
         self._hass = hass
         self._entry_id = entry_id
         self._title = title
+        self._underfloor = underfloor
         self._screed_limit = screed_limit
         self._service_due = (
             None if last_service is None else add_months(last_service, service_interval_months)
@@ -114,9 +103,7 @@ class BoilerDiagnostics:
         self._last_update: float | None = None
 
         self._low_pressure_since: float | None = None
-        self._pressure_day: str | None = None
-        self._pressure_minimum: float | None = None
-        self._pressure_days: deque[float] = deque(maxlen=PRESSURE_HISTORY_DAYS)
+        self._pressure = PressureTrend()
 
         self._fault_since: float | None = None
         self._gap: float | None = None
@@ -132,9 +119,7 @@ class BoilerDiagnostics:
         self._store = boiler_diagnostics_store(self._hass, self._entry_id)
         if (data := await self._store.async_load()) is None:
             return
-        days = data.get("pressure_days")
-        if isinstance(days, list):
-            self._pressure_days.extend(float(v) for v in days if isinstance(v, int | float))
+        self._pressure.load(data.get("pressure"))
 
     @property
     def flue_return_gap(self) -> float | None:
@@ -142,7 +127,7 @@ class BoilerDiagnostics:
 
     @property
     def pressure_trend_per_week(self) -> float | None:
-        trend = pressure_trend(list(self._pressure_days))
+        trend = self._pressure.per_day
         return None if trend is None else round(trend * 7, 3)
 
     @property
@@ -168,21 +153,30 @@ class BoilerDiagnostics:
         flow: float | None = None,
         heating_burn: bool = False,
         gas_use_ratio: float | None = None,
+        near_minimum_power: bool = True,
+        system_temperature: float | None = None,
+        hot_water: bool = False,
     ) -> None:
         dt = (
             0.0 if self._last_update is None else min(now - self._last_update, MAXIMUM_STEP_SECONDS)
         )
         self._last_update = now
 
-        self._update_pressure(now, pressure, today)
+        self._update_low_pressure(now, pressure)
+        if pressure is not None and today is not None and not hot_water:
+            self._update_pressure_trend(dt, today, pressure, system_temperature)
         self._update_fault(now, fault=fault, fault_code=fault_code)
         self._update_fouling(
-            dt, exhaust=exhaust, return_temperature=return_temperature, settled=settled_heating_burn
+            dt,
+            exhaust=exhaust,
+            return_temperature=return_temperature,
+            settled=settled_heating_burn and near_minimum_power,
         )
         self._update_screed(now, flow=flow, heating_burn=heating_burn)
-        self._update_low_flow(
-            now, flow=flow, return_temperature=return_temperature, settled=settled_heating_burn
-        )
+        if self._underfloor:
+            self._update_low_flow(
+                now, flow=flow, return_temperature=return_temperature, settled=settled_heating_burn
+            )
 
         if self._service_due is not None and today is not None:
             if today >= self._service_due:
@@ -202,7 +196,7 @@ class BoilerDiagnostics:
             elif gas_use_ratio < GAS_USE_NORMAL:
                 self._set("gas_use_increased", active=False)
 
-    def _update_pressure(self, now: float, pressure: float | None, today: date | None) -> None:
+    def _update_low_pressure(self, now: float, pressure: float | None) -> None:
         # Low water pressure, with a margin before clearing
         if pressure is not None and pressure < LOW_PRESSURE:
             if self._low_pressure_since is None:
@@ -217,40 +211,27 @@ class BoilerDiagnostics:
             self._low_pressure_since = None
             self._set("low_water_pressure", active=False)
 
-        if pressure is None or today is None:
+    def _update_pressure_trend(
+        self, dt: float, today: date, pressure: float, temperature: float | None
+    ) -> None:
+        if not self._pressure.update(dt, today.isoformat(), pressure, temperature):
             return
 
-        # The lowest pressure of each day, when the system is coolest, shows a slow loss
-        day = today.isoformat()
-        if day != self._pressure_day:
-            if self._pressure_day is not None and self._pressure_minimum is not None:
-                self._pressure_days.append(self._pressure_minimum)
-                self._evaluate_pressure_trend()
-                if self._store is not None:
-                    self._store.async_delay_save(
-                        lambda: {"pressure_days": list(self._pressure_days)}, 1
-                    )
-            self._pressure_day = day
-            self._pressure_minimum = pressure
-        elif self._pressure_minimum is None or pressure < self._pressure_minimum:
-            self._pressure_minimum = pressure
+        if self._store is not None:
+            self._store.async_delay_save(lambda: {"pressure": self._pressure.to_dict()}, 1)
 
-    def _evaluate_pressure_trend(self) -> None:
-        days = list(self._pressure_days)
-        trend = pressure_trend(days)
-        if trend is None:
-            return
-        if (
+        trend, latest = self._pressure.per_day, self._pressure.latest
+        if trend is None or latest is None:
+            # Too few days, or a fresh start after a top-up
+            self._set("pressure_falling", active=False)
+        elif (
             trend <= PRESSURE_FALLING_PER_DAY
-            and max(days) - days[-1] >= PRESSURE_FALLING_MINIMUM_DROP
+            and self._pressure.drop >= PRESSURE_FALLING_MINIMUM_DROP
         ):
             self._set(
                 "pressure_falling",
                 active=True,
-                placeholders={
-                    "per_week": f"{-trend * 7:.2f}",
-                    "pressure": f"{days[-1]:.2f}",
-                },
+                placeholders={"per_week": f"{-trend * 7:.2f}", "pressure": f"{latest:.2f}"},
             )
         elif trend >= PRESSURE_STEADY_PER_DAY:
             self._set("pressure_falling", active=False)
