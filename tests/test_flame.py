@@ -668,3 +668,28 @@ def test_the_stuck_off_timeout_never_drops_below_the_default() -> None:
     assert Flame(boiler_anti_cycling_seconds=60).STUCK_OFF_SECONDS == Flame.STUCK_OFF_SECONDS
     assert Flame(boiler_anti_cycling_seconds=600).STUCK_OFF_SECONDS == 660
     assert Flame().STUCK_OFF_SECONDS == Flame.STUCK_OFF_SECONDS
+
+
+@pytest.mark.parametrize("cycles", [1, 3], ids=["thin_history", "full_history"])
+def test_hot_water_after_a_long_heating_wait_is_not_stuck_off(
+    freezer: FrozenDateTimeFactory, cycles: int
+) -> None:
+    flame = Flame()
+    for _ in range(cycles):
+        run_cycle(flame, freezer, 300)
+
+    # Heating demand without flame while the boiler waits out its anti-cycling time
+    for _ in range(60):
+        freezer.tick(timedelta(seconds=10))
+        flame.update(boiler_state(False, status=BoilerStatus.ANTI_CYCLING))
+
+    # A tap opens; the burner lights for hot water a few seconds later
+    flame.update(boiler_state(False, hot_water=True))
+    freezer.tick(timedelta(seconds=5))
+    flame.update(boiler_state(False, hot_water=True))
+    assert flame.health_status != FlameStatus.STUCK_OFF
+
+    # A hot water request that never lights is still caught
+    freezer.tick(timedelta(seconds=130))
+    flame.update(boiler_state(False, hot_water=True))
+    assert flame.health_status == FlameStatus.STUCK_OFF

@@ -123,6 +123,7 @@ class Flame:
         self._flame_on_monotonic: float | None = None
         self._flame_off_monotonic: float | None = None
         self._demand_since_monotonic: float | None = None
+        self._hot_water_since_monotonic: float | None = None
         self._demand_ended_monotonic: float | None = None
         self._waiting_for_flame_since_monotonic: float | None = None
         self._waited_for_flame_seconds: float = 0.0
@@ -471,6 +472,13 @@ class Flame:
         elif self._demand_since_monotonic is None:
             self._demand_since_monotonic = now
 
+        # A hot water request can only be late since it began, not since a heating demand that
+        # was already waiting (a boiler in anti-cycling keeps its heating demand)
+        if not domestic_hot_water_active:
+            self._hot_water_since_monotonic = None
+        elif self._hot_water_since_monotonic is None:
+            self._hot_water_since_monotonic = now
+
         # A Remeha keeps its CH mode bit on while it waits to relight, and relights only once the
         # flow has cooled below the setpoint, so the wait for the flame starts there
         if state.flame_active:
@@ -501,7 +509,14 @@ class Flame:
             else 0.0
         )
         last_off_seconds = (
-            (now - max(self._flame_off_monotonic, self._demand_since_monotonic or 0.0))
+            (
+                now
+                - max(
+                    self._flame_off_monotonic,
+                    self._demand_since_monotonic or 0.0,
+                    self._hot_water_since_monotonic or 0.0,
+                )
+            )
             if (not state.flame_active and self._flame_off_monotonic is not None)
             else 0.0
         )
