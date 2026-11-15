@@ -230,6 +230,7 @@ async def test_failed_setup_raises_a_repair_issue_after_retrying(
     issue = ir.async_get(hass).async_get_issue(DOMAIN, f"setup_failed_{entry.entry_id}")
     assert issue is not None
     assert issue.severity is ir.IssueSeverity.ERROR
+    assert issue.config_entry_id == entry.entry_id
 
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()

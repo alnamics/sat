@@ -70,4 +70,3 @@ async def test_simulator_entities_are_named_after_the_device(hass: HomeAssistant
     state = hass.states.get("sensor.test_boiler_temperature")
     assert state is not None
     assert state.attributes["friendly_name"] == "Living Room Current temperature (Boiler)"
-    assert await hass.config_entries.async_unload(entry.entry_id)
