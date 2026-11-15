@@ -72,109 +72,61 @@ class SatBinarySensorInfo:
     def __init__(
         self,
         device_class: BinarySensorDeviceClass | None,
-        friendly_name_format: str,
         status_sources: list[str],
     ) -> None:
         self.device_class = device_class
         self.status_sources = status_sources
-        self.friendly_name_format = friendly_name_format
 
 
 BINARY_SENSOR_INFO: dict[str, SatBinarySensorInfo] = {
-    DATA_MASTER_CH_ENABLED: SatBinarySensorInfo(
-        None, "Thermostat Central Heating {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_MASTER_DHW_ENABLED: SatBinarySensorInfo(
-        None, "Thermostat Hot Water {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_MASTER_COOLING_ENABLED: SatBinarySensorInfo(
-        None, "Thermostat Cooling {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_MASTER_OTC_ENABLED: SatBinarySensorInfo(
-        None, "Thermostat Outside Temperature Correction {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_MASTER_CH2_ENABLED: SatBinarySensorInfo(
-        None, "Thermostat Central Heating 2 {}", [BOILER, THERMOSTAT]
-    ),
+    DATA_MASTER_CH_ENABLED: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_MASTER_DHW_ENABLED: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_MASTER_COOLING_ENABLED: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_MASTER_OTC_ENABLED: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_MASTER_CH2_ENABLED: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
     DATA_SLAVE_FAULT_IND: SatBinarySensorInfo(
-        BinarySensorDeviceClass.PROBLEM, "Boiler Fault {}", [BOILER, THERMOSTAT]
+        BinarySensorDeviceClass.PROBLEM, [BOILER, THERMOSTAT]
     ),
-    DATA_SLAVE_CH_ACTIVE: SatBinarySensorInfo(
-        BinarySensorDeviceClass.HEAT, "Boiler Central Heating {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_DHW_ACTIVE: SatBinarySensorInfo(
-        BinarySensorDeviceClass.HEAT, "Boiler Hot Water {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_FLAME_ON: SatBinarySensorInfo(
-        BinarySensorDeviceClass.HEAT, "Boiler Flame {}", [BOILER, THERMOSTAT]
-    ),
+    DATA_SLAVE_CH_ACTIVE: SatBinarySensorInfo(BinarySensorDeviceClass.HEAT, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_DHW_ACTIVE: SatBinarySensorInfo(BinarySensorDeviceClass.HEAT, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_FLAME_ON: SatBinarySensorInfo(BinarySensorDeviceClass.HEAT, [BOILER, THERMOSTAT]),
     DATA_SLAVE_COOLING_ACTIVE: SatBinarySensorInfo(
-        BinarySensorDeviceClass.COLD, "Boiler Cooling {}", [BOILER, THERMOSTAT]
+        BinarySensorDeviceClass.COLD, [BOILER, THERMOSTAT]
     ),
-    DATA_SLAVE_CH2_ACTIVE: SatBinarySensorInfo(
-        BinarySensorDeviceClass.HEAT, "Boiler Central Heating 2 {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_DIAG_IND: SatBinarySensorInfo(
-        BinarySensorDeviceClass.PROBLEM, "Boiler Diagnostics {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_DHW_PRESENT: SatBinarySensorInfo(
-        None, "Boiler Hot Water Present {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_CONTROL_TYPE: SatBinarySensorInfo(
-        None, "Boiler Control Type {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_COOLING_SUPPORTED: SatBinarySensorInfo(
-        None, "Boiler Cooling Support {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_DHW_CONFIG: SatBinarySensorInfo(
-        None, "Boiler Hot Water Configuration {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_MASTER_LOW_OFF_PUMP: SatBinarySensorInfo(
-        None, "Boiler Pump Commands Support {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_SLAVE_CH2_PRESENT: SatBinarySensorInfo(
-        None, "Boiler Central Heating 2 Present {}", [BOILER, THERMOSTAT]
-    ),
+    DATA_SLAVE_CH2_ACTIVE: SatBinarySensorInfo(BinarySensorDeviceClass.HEAT, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_DIAG_IND: SatBinarySensorInfo(BinarySensorDeviceClass.PROBLEM, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_DHW_PRESENT: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_CONTROL_TYPE: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_COOLING_SUPPORTED: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_DHW_CONFIG: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_MASTER_LOW_OFF_PUMP: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_SLAVE_CH2_PRESENT: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
     DATA_SLAVE_SERVICE_REQ: SatBinarySensorInfo(
-        BinarySensorDeviceClass.PROBLEM, "Boiler Service Required {}", [BOILER, THERMOSTAT]
+        BinarySensorDeviceClass.PROBLEM, [BOILER, THERMOSTAT]
     ),
-    DATA_SLAVE_REMOTE_RESET: SatBinarySensorInfo(
-        None, "Boiler Remote Reset Support {}", [BOILER, THERMOSTAT]
-    ),
+    DATA_SLAVE_REMOTE_RESET: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
     DATA_SLAVE_LOW_WATER_PRESS: SatBinarySensorInfo(
-        BinarySensorDeviceClass.PROBLEM, "Boiler Low Water Pressure {}", [BOILER, THERMOSTAT]
+        BinarySensorDeviceClass.PROBLEM, [BOILER, THERMOSTAT]
     ),
     DATA_SLAVE_GAS_FAULT: SatBinarySensorInfo(
-        BinarySensorDeviceClass.PROBLEM, "Boiler Gas Fault {}", [BOILER, THERMOSTAT]
+        BinarySensorDeviceClass.PROBLEM, [BOILER, THERMOSTAT]
     ),
     DATA_SLAVE_AIR_PRESS_FAULT: SatBinarySensorInfo(
-        BinarySensorDeviceClass.PROBLEM, "Boiler Air Pressure Fault {}", [BOILER, THERMOSTAT]
+        BinarySensorDeviceClass.PROBLEM, [BOILER, THERMOSTAT]
     ),
     DATA_SLAVE_WATER_OVERTEMP: SatBinarySensorInfo(
-        BinarySensorDeviceClass.PROBLEM, "Boiler Water Over-temperature {}", [BOILER, THERMOSTAT]
+        BinarySensorDeviceClass.PROBLEM, [BOILER, THERMOSTAT]
     ),
-    DATA_REMOTE_TRANSFER_DHW: SatBinarySensorInfo(
-        None, "Remote Hot Water Setpoint Transfer Support {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_REMOTE_TRANSFER_MAX_CH: SatBinarySensorInfo(
-        None, "Remote Maximum Central Heating Setpoint Write Support {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_REMOTE_RW_DHW: SatBinarySensorInfo(
-        None, "Remote Hot Water Setpoint Write Support {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_REMOTE_RW_MAX_CH: SatBinarySensorInfo(
-        None, "Remote Central Heating Setpoint Write Support {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_ROVRD_MAN_PRIO: SatBinarySensorInfo(
-        None, "Remote Override Manual Change Priority {}", [BOILER, THERMOSTAT]
-    ),
-    DATA_ROVRD_AUTO_PRIO: SatBinarySensorInfo(
-        None, "Remote Override Program Change Priority {}", [BOILER, THERMOSTAT]
-    ),
-    OTGW_GPIO_A_STATE: SatBinarySensorInfo(None, "Gateway GPIO A {}", [OTGW]),
-    OTGW_GPIO_B_STATE: SatBinarySensorInfo(None, "Gateway GPIO B {}", [OTGW]),
-    OTGW_IGNORE_TRANSITIONS: SatBinarySensorInfo(None, "Gateway Ignore Transitions {}", [OTGW]),
-    OTGW_OVRD_HB: SatBinarySensorInfo(None, "Gateway Override High Byte {}", [OTGW]),
+    DATA_REMOTE_TRANSFER_DHW: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_REMOTE_TRANSFER_MAX_CH: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_REMOTE_RW_DHW: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_REMOTE_RW_MAX_CH: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_ROVRD_MAN_PRIO: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    DATA_ROVRD_AUTO_PRIO: SatBinarySensorInfo(None, [BOILER, THERMOSTAT]),
+    OTGW_GPIO_A_STATE: SatBinarySensorInfo(None, [OTGW]),
+    OTGW_GPIO_B_STATE: SatBinarySensorInfo(None, [OTGW]),
+    OTGW_IGNORE_TRANSITIONS: SatBinarySensorInfo(None, [OTGW]),
+    OTGW_OVRD_HB: SatBinarySensorInfo(None, [OTGW]),
 }
 
 
@@ -204,8 +156,6 @@ async def async_setup_entry(
 
 
 class SatBinarySensor(SatEntity, BinarySensorEntity):
-    _attr_has_entity_name = False
-
     _attr_should_poll = False
 
     def __init__(
@@ -229,12 +179,10 @@ class SatBinarySensor(SatEntity, BinarySensorEntity):
         self._config_entry = config_entry
         self._attr_unique_id = f"{config_entry.entry_id}-{source}-{key}"
         self._attr_device_class = info.device_class
+        self._attr_translation_key = key
 
-        friendly_name_format = info.friendly_name_format
-        if TRANSLATE_SOURCE[source] is not None:
-            friendly_name_format = f"{info.friendly_name_format} ({TRANSLATE_SOURCE[source]})"
-
-        self._attr_name = friendly_name_format.format(config_entry.data.get(CONF_NAME))
+        if (source_name := TRANSLATE_SOURCE[source]) is not None:
+            self._attr_translation_placeholders = {"source": source_name}
 
     @override
     @property
