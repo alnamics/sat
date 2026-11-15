@@ -145,6 +145,7 @@ from .helpers import convert_time_str_to_seconds, float_value, is_state_stale, s
 from .hot_water_schedule import HotWaterPlan, HotWaterSchedule
 from .loop_measurement import (
     LoopMeasurement,
+    async_load_interrupted,
     async_restore_interrupted,
     loop_measurement_store,
 )
@@ -525,6 +526,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self.loop_measurement: LoopMeasurement | None = None
         self._loop_measurement_task: asyncio.Task[None] | None = None
         self._loop_measurement_result: dict[str, Any] | None = None
+        self._interrupted_rooms: dict[str, dict[str, Any]] = {}
 
     def async_track_coordinator_data(self) -> None:
         """Track changes in the coordinator's boiler temperature and trigger the heating loop."""
@@ -658,6 +660,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._window_sensor_handle = None
 
         if self._loop_measurement_task is not None:
+            if self.loop_measurement is not None:
+                self.loop_measurement.abandoned = True
             self._loop_measurement_task.cancel()
             self._loop_measurement_task = None
 
@@ -1596,6 +1600,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._run_guarded("monitors", self._update_monitors)
             self._run_guarded("warm weather", self._update_warm_weather)
             await self._async_run_guarded("hot water", self._async_control_hot_water)
+            await self._async_run_guarded(
+                "loop measurement restore", self._async_retry_interrupted_measurement
+            )
 
             # No need to do anything if we are not on, or while something else drives the boiler
             if (
@@ -2113,7 +2120,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     async def async_measure_loops(self) -> None:
         """Measure the water flow of each loop, one room at a time."""
-        if self._measuring_loops:
+        if self._measuring_loops or self._interrupted_rooms:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="loop_measurement_running"
             )
@@ -2167,9 +2174,19 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self.async_write_ha_state()
 
     async def _async_restore_interrupted_measurement(self) -> None:
+        """Load the record of an interrupted measurement; the control loop restores from it."""
         if self.loop_monitor is not None:
-            await async_restore_interrupted(
-                self.hass, loop_measurement_store(self.hass, self._config_entry.entry_id)
+            self._interrupted_rooms = await async_load_interrupted(
+                loop_measurement_store(self.hass, self._config_entry.entry_id)
+            )
+
+    async def _async_retry_interrupted_measurement(self) -> None:
+        # Room thermostats on a radio network can take minutes to become available after a start
+        if self._interrupted_rooms and not self._measuring_loops:
+            self._interrupted_rooms = await async_restore_interrupted(
+                self.hass,
+                loop_measurement_store(self.hass, self._config_entry.entry_id),
+                self._interrupted_rooms,
             )
 
     def _update_monitors(self) -> None:

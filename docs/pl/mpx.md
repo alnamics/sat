@@ -126,7 +126,7 @@ Przy trzech z nich warto wyjaśnić, jak unikają fałszywych alarmów:
 
 Akcja `sat.measure_loops` (Narzędzia deweloperskie → Akcje) mierzy przepływ wody w każdej pętli grzewczej. Wyłącza wszystkie termostaty pokojowe i uruchamia palnik na mocy minimalnej (do Twojej maksymalnej temperatury zadanej), żeby zmierzyć przepływ bazowy pętli bez siłownika. Potem otwiera pokoje po jednym (temperatura zadana 30 °C) i mierzy przyrost. Każdy krok czeka czas otwarcia zaworów (6 minut, jeśli nie jest ustawiony) plus 5 minut i zbiera 10 ustabilizowanych próbek, więc trwa około 15 minut na pokój. Termostaty wracają do poprzednich ustawień, a wynik przychodzi jako powiadomienie i w atrybucie `loop_measurement`. SAT musi być w trybie grzania; wyłączenie go przerywa pomiar. W trakcie pomiaru nie korzystaj z ciepłej wody.
 
-Ustawienia termostatów są zapisywane, zanim cokolwiek zostanie zmienione. Jeśli Home Assistant zatrzyma się w środku pomiaru, przy następnym starcie termostaty wrócą do zapisanych ustawień.
+Ustawienia termostatów są zapisywane, zanim cokolwiek zostanie zmienione. Jeśli Home Assistant zatrzyma się w środku pomiaru, termostaty zostają tak, jak są, i wracają do zapisanych ustawień po następnym starcie, gdy tylko każdy z nich znów będzie dostępny (termostaty Z-Wave potrafią potrzebować kilku minut). Nowy pomiar czeka, aż to się skończy.
 
 ## Po restarcie
 

@@ -24,7 +24,12 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_TEMPERATURE,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 
@@ -53,9 +58,19 @@ async def _async_call(hass: HomeAssistant, service: str, data: dict[str, Any]) -
     await hass.services.async_call(CLIMATE_DOMAIN, service, data, blocking=True)
 
 
-async def _async_restore(hass: HomeAssistant, saved: dict[str, dict[str, Any]]) -> None:
-    """Put the room thermostats back to their saved mode and target."""
+async def _async_restore(
+    hass: HomeAssistant, saved: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Put the room thermostats back to their saved mode and target.
+
+    Return the ones that could not be restored, such as thermostats that are not available yet.
+    """
+    remaining: dict[str, dict[str, Any]] = {}
     for entity_id, values in saved.items():
+        state = hass.states.get(entity_id)
+        if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            remaining[entity_id] = values
+            continue
         try:
             await _async_call(
                 hass,
@@ -68,23 +83,42 @@ async def _async_restore(hass: HomeAssistant, saved: dict[str, dict[str, Any]]) 
                     SERVICE_SET_TEMPERATURE,
                     {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: temperature},
                 )
-        except (ValueError, KeyError, HomeAssistantError) as error:
-            _LOGGER.warning("Could not restore %s after the loop measurement: %s", entity_id, error)
+        except (ValueError, KeyError) as error:
+            _LOGGER.warning("Cannot restore %s after the loop measurement: %s", entity_id, error)
+        except HomeAssistantError as error:
+            _LOGGER.debug("Restoring %s failed, trying again later: %s", entity_id, error)
+            remaining[entity_id] = values
+    return remaining
 
 
-async def async_restore_interrupted(hass: HomeAssistant, store: Store[dict[str, Any]]) -> bool:
-    """Restore the thermostats of a measurement that Home Assistant stopped in the middle."""
+async def async_load_interrupted(store: Store[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Return the thermostat settings of a measurement that was interrupted, if any."""
     data = await store.async_load()
     saved = data.get("rooms") if isinstance(data, dict) else None
-    if not isinstance(saved, dict) or not saved:
-        return False
+    if not isinstance(saved, dict):
+        return {}
+    return {
+        entity_id: values
+        for entity_id, values in saved.items()
+        if isinstance(entity_id, str) and isinstance(values, dict)
+    }
 
-    _LOGGER.warning(
-        "A loop measurement was interrupted; putting the room thermostats back as they were."
-    )
-    await _async_restore(hass, saved)
-    await store.async_remove()
-    return True
+
+async def async_restore_interrupted(
+    hass: HomeAssistant, store: Store[dict[str, Any]], saved: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Restore what can be restored now and keep the rest on record for the next try."""
+    remaining = await _async_restore(hass, saved)
+    if len(remaining) < len(saved):
+        _LOGGER.warning(
+            "A loop measurement was interrupted; put %d room thermostat(s) back as they were.",
+            len(saved) - len(remaining),
+        )
+    if remaining:
+        await store.async_save({"rooms": remaining})
+    else:
+        await store.async_remove()
+    return remaining
 
 
 @dataclass
@@ -125,6 +159,8 @@ class LoopMeasurement:
         self._settle = settle_seconds
         self.step: str | None = None
         self.result = MeasurementResult()
+        # Set when Home Assistant stops or the entry unloads during the run
+        self.abandoned = False
 
     @property
     def running(self) -> bool:
@@ -133,7 +169,8 @@ class LoopMeasurement:
     async def async_run(self) -> MeasurementResult:
         saved: dict[str, dict[str, Any]] = {}
         for entity_id in self._rooms:
-            if (state := self._hass.states.get(entity_id)) is not None:
+            state = self._hass.states.get(entity_id)
+            if state is not None and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                 saved[entity_id] = {
                     "mode": state.state,
                     "temperature": state.attributes.get(ATTR_TEMPERATURE),
@@ -165,10 +202,15 @@ class LoopMeasurement:
                 await self._set_mode(entity_id, HVACMode.OFF)
         finally:
             self.step = None
-            await _async_restore(self._hass, saved)
-            # Only a restore that ran to its end clears the record
-            if self._store is not None:
-                await self._store.async_remove()
+            # When Home Assistant stops, the thermostats may already be going away; the record
+            # stays and the next start puts them back
+            if not self.abandoned:
+                remaining = await _async_restore(self._hass, saved)
+                if self._store is not None:
+                    if remaining:
+                        await self._store.async_save({"rooms": remaining})
+                    else:
+                        await self._store.async_remove()
 
         return self.result
 

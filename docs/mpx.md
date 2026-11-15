@@ -126,7 +126,7 @@ Three of them deserve a word on how they avoid false alarms:
 
 The `sat.measure_loops` action (Developer tools → Actions) measures the water flow of each heating loop. It turns all room thermostats off and runs the burner at minimum power (up to your maximum setpoint) to measure the base flow of the loops without an actuator. Then it opens one room at a time (target 30 °C) and measures the rise. Each step waits the valve opening time (6 minutes when none is set) plus 5 minutes and takes 10 settled samples, so it takes about 15 minutes per room. The thermostats are put back as they were, and the result arrives as a notification and in the `loop_measurement` attribute. SAT must be in heat mode; turning it off stops the measurement. Avoid using hot water while it runs.
 
-How the thermostats were set is saved before anything is changed. If Home Assistant stops in the middle, the next start puts them back from that record.
+How the thermostats were set is saved before anything is changed. If Home Assistant stops in the middle, the thermostats are left as they are and put back from that record after the next start, as soon as each one is available again (Z-Wave thermostats can take minutes). A new measurement waits until that is done.
 
 ## After a restart
 

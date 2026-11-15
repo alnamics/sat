@@ -1,11 +1,14 @@
 """Tests for measuring the loop flows one room at a time."""
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from homeassistant.components.climate import HVACMode
 
 from custom_components.sat.loop_measurement import (
     LoopMeasurement,
+    async_load_interrupted,
     async_restore_interrupted,
     loop_measurement_store,
 )
@@ -79,14 +82,58 @@ async def test_an_interrupted_measurement_is_put_back_at_the_next_start(
         "version": 1,
         "minor_version": 1,
         "key": store.key,
-        "data": {"rooms": {"climate.a": {"mode": "heat", "temperature": 22}}},
+        "data": {
+            "rooms": {
+                "climate.a": {"mode": "heat", "temperature": 22},
+                "climate.b": {"mode": "heat", "temperature": 23},
+            }
+        },
     }
 
-    assert await async_restore_interrupted(hass, store)
+    saved = await async_load_interrupted(store)
+    assert set(saved) == {"climate.a", "climate.b"}
 
+    # climate.b is not available yet, as Z-Wave thermostats right after a start
+    remaining = await async_restore_interrupted(hass, store, saved)
     assert calls == [
         ("set_hvac_mode", {"entity_id": "climate.a", "hvac_mode": HVACMode.HEAT}),
         ("set_temperature", {"entity_id": "climate.a", "temperature": 22}),
     ]
-    assert store.key not in hass_storage
-    assert not await async_restore_interrupted(hass, store)
+    assert set(remaining) == {"climate.b"}
+    assert set(await async_load_interrupted(store)) == {"climate.b"}
+
+    hass.states.async_set("climate.b", HVACMode.OFF, {"temperature": 30})
+    assert await async_restore_interrupted(hass, store, remaining) == {}
+    assert ("set_temperature", {"entity_id": "climate.b", "temperature": 23}) in calls
+    assert await async_load_interrupted(store) == {}
+
+
+async def test_a_measurement_stopped_by_home_assistant_keeps_its_record(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("climate.a", HVACMode.HEAT, {"temperature": 22})
+
+    async def set_mode(call: ServiceCall) -> None:
+        hass.states.async_set(call.data["entity_id"], call.data["hvac_mode"], {"temperature": 30})
+
+    async def set_temperature(_call: ServiceCall) -> None:
+        return
+
+    hass.services.async_register("climate", "set_hvac_mode", set_mode)
+    hass.services.async_register("climate", "set_temperature", set_temperature)
+
+    store = loop_measurement_store(hass, "entry")
+    measurement = LoopMeasurement(
+        hass, ["climate.a"], valve_seconds=3600, sample=lambda: None, store=store
+    )
+    task = hass.async_create_task(measurement.async_run())
+    await hass.async_block_till_done(wait_background_tasks=False)
+    await asyncio.sleep(0)
+    assert measurement.running
+
+    measurement.abandoned = True
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert await async_load_interrupted(store) == {"climate.a": {"mode": "heat", "temperature": 22}}
