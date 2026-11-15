@@ -18,10 +18,10 @@
       "hostname": "otgw"
     }
   ],
-  "documentation": "https://github.com/bellini666/SAT",
+  "documentation": "https://github.com/alnamics/sat/blob/mpx/docs/mpx.md",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/bellini666/SAT/issues",
+  "issue_tracker": "https://github.com/alnamics/sat/issues",
   "loggers": [
     "pyotgw"
   ],

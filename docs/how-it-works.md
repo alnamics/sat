@@ -46,6 +46,13 @@ The low water temperature it runs at is the **overshoot protection value**, whic
 
 The on/off thermostat (switch, valve or input_boolean) always works this way, since it can't set a water temperature.
 
+## Heat budget (MPX)
+
+> [!WARNING]
+> Part of this fork's AI-written, unverified additions. See [MPX additions](mpx.md).
+
+For screed underfloor heating behind an oversized boiler, PWM still lights the boiler several times an hour. The heat budget replaces the duty cycle with an energy balance: SAT learns how many watts the house loses per degree of indoor-outdoor difference, works out the heat the next hour needs from the target, the outside temperature, the forecast and the sun, and burns that heat in one block at minimum power. A slow floor does not notice the difference, but the boiler starts a few times less per hour. When the house needs more than the minimum power, control goes back to the heating curve and the boiler's modulation. Details in [MPX additions](mpx.md#heat-budget).
+
 ## Calibration
 
 The overshoot protection value is the water temperature your boiler settles at when it runs at its lowest power. SAT measures it like this:
@@ -67,6 +74,10 @@ With an OpenTherm Gateway, SAT gives control back to the thermostat wired to it 
 - A sensor SAT needs has been missing for 10 minutes
 
 It takes control again once everything is back.
+
+## Monitoring (MPX)
+
+This fork also keeps running totals (starts, burner hours, heat, gas, cost, degree days), estimates the boiler efficiency and the water flow, watches the room loops and raises repair issues for falling pressure, a dirty heat exchanger, an overheated floor and more. See [MPX additions](mpx.md#monitoring).
 
 ## Further reading
 

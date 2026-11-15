@@ -4,6 +4,8 @@ Open the integration page and click **Configure**. Settings are in three menus: 
 
 The defaults suit most homes.
 
+Many settings in [Advanced](#advanced) belong to this fork's AI-written, unverified additions: the boiler settings from *Cut-short burns* on, the heat budget, warm weather shutdown, hot water schedule, presence, window detection, the screed limit, service, gas price and energy content, and the condensing boiler setting. They are explained together in [MPX additions](mpx.md). At their defaults SAT behaves as upstream SAT v2.
+
 ## General
 
 - **PID Controller Version**: Classic, Improved or Adaptive (default). Adaptive tunes itself. Classic and Improved use the Automatic Gains Value below.
