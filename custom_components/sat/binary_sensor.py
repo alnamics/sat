@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.components.climate import HVACAction, HVACMode
-from homeassistant.const import ATTR_ENTITY_ID, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    EntityCategory,
+)
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.start import async_at_start
@@ -104,6 +110,7 @@ class SatSynchroSensor:
 
 class SatControlSetpointSynchroSensor(SatSynchroSensor, SatClimateEntity, BinarySensorEntity):
     _attr_translation_key = "control_setpoint_synchro"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(
@@ -135,6 +142,7 @@ class SatControlSetpointSynchroSensor(SatSynchroSensor, SatClimateEntity, Binary
 
 class SatRelativeModulationSynchroSensor(SatSynchroSensor, SatClimateEntity, BinarySensorEntity):
     _attr_translation_key = "relative_modulation_synchro"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(
@@ -168,6 +176,7 @@ class SatRelativeModulationSynchroSensor(SatSynchroSensor, SatClimateEntity, Bin
 
 class SatCentralHeatingSynchroSensor(SatSynchroSensor, SatClimateEntity, BinarySensorEntity):
     _attr_translation_key = "central_heating_synchro"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(
@@ -244,6 +253,7 @@ class SatHeatingControlSensor(SatClimateEntity, BinarySensorEntity):
 
 class SatBoilerHealthSensor(SatEntity, BinarySensorEntity):
     _attr_translation_key = "boiler_health"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry) -> None:
@@ -273,6 +283,7 @@ class SatBoilerHealthSensor(SatEntity, BinarySensorEntity):
 
 class SatFlameHealthSensor(SatEntity, BinarySensorEntity):
     _attr_translation_key = "flame_health"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry) -> None:

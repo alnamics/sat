@@ -4,7 +4,12 @@ import logging
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.const import UnitOfPower, UnitOfTemperature, UnitOfVolumeFlowRate
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfPower,
+    UnitOfTemperature,
+    UnitOfVolumeFlowRate,
+)
 
 from .const import (
     CONF_MAXIMUM_CONSUMPTION,
@@ -132,6 +137,7 @@ class SatCurrentConsumptionSensor(SatEntity, SensorEntity):
 
 class SatHeatingCurveSensor(SatClimateEntity, SensorEntity):
     _attr_translation_key = "heating_curve"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -156,6 +162,7 @@ class SatHeatingCurveSensor(SatClimateEntity, SensorEntity):
 
 class SatErrorValueSensor(SatClimateEntity, SensorEntity):
     _attr_translation_key = "error_value"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.TEMPERATURE_DELTA
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -181,6 +188,7 @@ class SatErrorValueSensor(SatClimateEntity, SensorEntity):
 
 class SatManufacturerSensor(SatEntity, SensorEntity):
     _attr_translation_key = "boiler_manufacturer"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry) -> None:
         super().__init__(coordinator, config_entry)
