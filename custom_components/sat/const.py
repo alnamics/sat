@@ -79,6 +79,21 @@ CONF_HEAT_LOSS_COEFFICIENT = "heat_loss_coefficient"
 CONF_WEATHER_FORECAST_ENTITY_ID = "weather_forecast_entity_id"
 CONF_COMFORT_SCHEDULE_ENTITY_ID = "comfort_schedule_entity_id"
 CONF_SETBACK_TEMPERATURE = "setback_temperature"
+CONF_WARM_WEATHER_SHUTDOWN = "warm_weather_shutdown_temperature"
+CONF_HOT_WATER_SCHEDULE_ENTITY_ID = "hot_water_schedule_entity_id"
+CONF_HOT_WATER_COMFORT_TEMPERATURE = "hot_water_comfort_temperature"
+CONF_HOT_WATER_ECO_TEMPERATURE = "hot_water_eco_temperature"
+CONF_LEGIONELLA_DAY = "legionella_day"
+CONF_LEGIONELLA_TIME = "legionella_time"
+CONF_PRESENCE_ENTITY_IDS = "presence_entity_ids"
+CONF_PROXIMITY_ENTITY_ID = "proximity_entity_id"
+CONF_RETURN_DISTANCE = "return_distance"
+CONF_WINDOW_DETECTION = "window_detection"
+CONF_SCREED_MAXIMUM_TEMPERATURE = "screed_maximum_temperature"
+CONF_LAST_SERVICE_DATE = "last_service_date"
+CONF_SERVICE_INTERVAL = "service_interval"
+CONF_GAS_PRICE = "gas_price"
+LEGIONELLA_OFF = "off"
 
 HEAT_BUDGET_OFF = "off"
 HEAT_BUDGET_SHADOW = "shadow"
@@ -177,6 +192,23 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_WEATHER_FORECAST_ENTITY_ID: None,
     CONF_COMFORT_SCHEDULE_ENTITY_ID: None,
     CONF_SETBACK_TEMPERATURE: 0.0,
+    # 0 keeps central heating on whatever the weather
+    CONF_WARM_WEATHER_SHUTDOWN: 0.0,
+    CONF_HOT_WATER_SCHEDULE_ENTITY_ID: None,
+    # 0 leaves the hot water temperature to the boiler
+    CONF_HOT_WATER_COMFORT_TEMPERATURE: 0.0,
+    CONF_HOT_WATER_ECO_TEMPERATURE: 0.0,
+    CONF_LEGIONELLA_DAY: LEGIONELLA_OFF,
+    CONF_LEGIONELLA_TIME: "03:00:00",
+    CONF_PRESENCE_ENTITY_IDS: [],
+    CONF_PROXIMITY_ENTITY_ID: None,
+    CONF_RETURN_DISTANCE: 0.0,
+    CONF_WINDOW_DETECTION: False,
+    # Flow water above this for 3 minutes raises a repair issue (underfloor only, 0 = off)
+    CONF_SCREED_MAXIMUM_TEMPERATURE: 55.0,
+    CONF_LAST_SERVICE_DATE: None,
+    CONF_SERVICE_INTERVAL: 12,
+    CONF_GAS_PRICE: 0.0,
     CONF_SIMULATED_WARMING_UP: "00:00:15",
     CONF_WINDOW_MINIMUM_OPEN_TIME: "00:00:15",
     CONF_ACTIVITY_TEMPERATURE: 10,
@@ -200,6 +232,7 @@ OVERSHOOT_PROTECTION_SETPOINT = {
 
 # Services
 SERVICE_RESET_INTEGRAL = "reset_integral"
+SERVICE_MEASURE_LOOPS = "measure_loops"
 SERVICE_PULSE_WIDTH_MODULATION = "pulse_width_modulation"
 
 

@@ -1,10 +1,11 @@
 """Tests for the boiler repair issues."""
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.helpers import issue_registry as ir
 
-from custom_components.sat.boiler_diagnostics import BoilerDiagnostics
+from custom_components.sat.boiler_diagnostics import BoilerDiagnostics, add_months
 from custom_components.sat.const import DOMAIN
 
 if TYPE_CHECKING:
@@ -46,3 +47,83 @@ async def test_low_water_pressure_raises_an_issue(hass: HomeAssistant) -> None:
     run(diagnostics, 0.5, pressure=0.6)
 
     assert ir.async_get(hass).async_get_issue(DOMAIN, "low_water_pressure_entry")
+
+
+async def test_a_slowly_falling_pressure_raises_an_issue(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    start = date(2026, 11, 1)
+    for day in range(7):
+        diagnostics.update(
+            day * 86400.0,
+            pressure=1.3 - day * 0.02,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=None,
+            settled_heating_burn=False,
+            today=start + timedelta(days=day),
+        )
+
+    assert diagnostics.pressure_trend_per_week is not None
+    assert diagnostics.pressure_trend_per_week < -0.1
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "pressure_falling_entry")
+
+
+async def test_flow_water_too_hot_for_the_screed(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT", screed_limit=55)
+    for second in range(0, 600, 30):
+        diagnostics.update(
+            float(second),
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=None,
+            settled_heating_burn=False,
+            flow=58.0,
+            heating_burn=True,
+        )
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "screed_overheat_entry")
+
+
+async def test_too_little_water_flow(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    for second in range(0, 600, 30):
+        diagnostics.update(
+            float(second),
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=25.0,
+            settled_heating_burn=True,
+            flow=48.0,
+            heating_burn=True,
+        )
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "low_water_flow_entry")
+
+
+async def test_service_and_gas_use_issues(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT", last_service=date(2025, 11, 1))
+    diagnostics.update(
+        0.0,
+        pressure=1.5,
+        fault=False,
+        fault_code=None,
+        exhaust=None,
+        return_temperature=None,
+        settled_heating_burn=False,
+        today=date(2026, 11, 15),
+        gas_use_ratio=1.4,
+    )
+
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "boiler_service_due_entry")
+    assert registry.async_get_issue(DOMAIN, "gas_use_increased_entry")
+
+
+def test_add_months_keeps_the_end_of_the_month() -> None:
+    assert add_months(date(2026, 1, 31), 1) == date(2026, 2, 28)
+    assert add_months(date(2026, 11, 15), 12) == date(2027, 11, 15)

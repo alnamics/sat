@@ -23,6 +23,7 @@ from homeassistant.helpers import (
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .boiler_diagnostics import boiler_diagnostics_store
 from .boiler_stats import boiler_stats_store
 from .climate import SatClimate
 from .config_flow import SatFlowHandler
@@ -156,6 +157,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: SatConfigEntry) -> None
     await overshoot_learner_store(hass, entry.entry_id).async_remove()
     await heat_budget_store(hass, entry.entry_id).async_remove()
     await boiler_stats_store(hass, entry.entry_id).async_remove()
+    await boiler_diagnostics_store(hass, entry.entry_id).async_remove()
 
     mqtt_coordinators = {
         MODE_MQTT_EMS: SatEmsMqttCoordinator,

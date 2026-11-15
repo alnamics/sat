@@ -77,6 +77,9 @@ OVERLOAD_EXIT = 0.85
 OVERLOAD_ENTER_SECONDS = 2 * 3600.0
 OVERLOAD_EXIT_SECONDS = 3600.0
 OVERLOAD_ROOM_DEFICIT = 0.2
+# A hot water reheat this close to the next period starts that period's block at once,
+# while the boiler is still warm, instead of lighting it again a little later
+PIGGYBACK_SHARE = 1 / 3
 # A target this much higher starts a new period at once; this much lower ends a recovery
 TARGET_RAISE_RESTART = 0.5
 RECOVERY_CANCEL_DROP = 0.2
@@ -242,6 +245,8 @@ class HeatBudget:
         self._block_started: float | None = None
         self._block_active = False
         self._last_block_end: float | None = None
+        self._hot_water_seen = False
+        self._piggybacks = 0
         self._planned_on = 0.0
         self._effective_target: float | None = None
         self._target_seen: float | None = None
@@ -324,6 +329,7 @@ class HeatBudget:
             "preheat_hours_per_k": round(self._preheat.theta[0], 2),
             "learning_samples": self._learner.updates,
             "heat_budget_overloaded": self._overloaded,
+            "hot_water_piggybacks": self._piggybacks,
         }
 
     # ------------------------------------------------------------- the update
@@ -372,6 +378,21 @@ class HeatBudget:
         if raised and not self._block_active:
             self._period_end = None
 
+        # Right after a hot water reheat the boiler is warm: bring the next block forward
+        hot_water_ended = self._hot_water_seen and not inputs.hot_water_active
+        self._hot_water_seen = inputs.hot_water_active
+        if (
+            hot_water_ended
+            and not self._block_active
+            and self._period_end is not None
+            and self._period_end - now <= self._period * PIGGYBACK_SHARE
+            and self._may_start(now)
+        ):
+            self._period_end = None
+            piggyback = True
+        else:
+            piggyback = False
+
         if self._period_end is None or now >= self._period_end:
             self._plan_period(now)
 
@@ -379,6 +400,8 @@ class HeatBudget:
             self._block_active = True
             self._block_started = now
             self._block_delivered = 0.0
+            if piggyback:
+                self._piggybacks += 1
 
     @property
     def overloaded(self) -> bool:

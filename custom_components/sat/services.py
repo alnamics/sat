@@ -4,7 +4,12 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import service
 
-from .const import DOMAIN, SERVICE_PULSE_WIDTH_MODULATION, SERVICE_RESET_INTEGRAL
+from .const import (
+    DOMAIN,
+    SERVICE_MEASURE_LOOPS,
+    SERVICE_PULSE_WIDTH_MODULATION,
+    SERVICE_RESET_INTEGRAL,
+)
 
 
 @callback
@@ -25,4 +30,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         entity_domain=CLIMATE_DOMAIN,
         schema={vol.Required("enabled"): cv.boolean},
         func="async_set_pulse_width_modulation",
+    )
+
+    service.async_register_platform_entity_service(
+        hass,
+        DOMAIN,
+        SERVICE_MEASURE_LOOPS,
+        entity_domain=CLIMATE_DOMAIN,
+        schema=None,
+        func="async_measure_loops",
     )
