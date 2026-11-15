@@ -367,6 +367,9 @@
     "esphome_device_not_found": {
       "message": "ESPHome device {device_id} is not a main device in the device registry."
     },
+    "migration_mqtt_device_missing": {
+      "message": "Cannot migrate: MQTT device {device} no longer exists."
+    },
     "mqtt_unavailable": {
       "message": "MQTT is not available."
     },
