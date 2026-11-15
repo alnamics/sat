@@ -1,11 +1,13 @@
 # Smart Autotune Thermostat v2 — MPX edition
 
+[![hacs][hacs-badge]][hacs-url]
+[![release][release-badge]][release-url]
 ![build][build-badge]
 
 > [!WARNING]
 > **Experimental, AI-written, unverified code. Use at your own risk.**
 >
-> The additions in this fork (versions ending in `-mpx`, such as `5.2.0.4`) were written by
+> The additions in this fork (versions with a fourth number, such as `5.2.0.5`) were written by
 > [Claude](https://claude.ai), an AI model by Anthropic, in a conversation with the fork's owner.
 > They pass the automated test suite (unit tests, ruff, ty, hassfest), but **they have not been
 > reviewed by a person or run on a real boiler for any length of time**. They control a gas
@@ -61,9 +63,24 @@ The additions were developed against an OTGW in serial mode. The other connectio
 
 ## Installation
 
-1. **Make a backup** of Home Assistant, and note your current SAT settings.
-2. Copy `custom_components/sat` from the [`mpx` branch][mpx-branch] into your `custom_components` folder, replacing an existing SAT. The domain is still `sat`, so existing entries keep their settings.
-3. Restart Home Assistant. A new install is added under **Settings → Devices & services → Add integration → Smart Autotune Thermostat**; the [setup guide][setup] walks through each step.
+**Make a backup** of Home Assistant first, and note your current SAT settings.
+
+### With HACS
+
+1. If SAT or SAT v2 is already installed through HACS, open it in HACS and choose **⋮ → Remove**. This removes the files, not your SAT entry and its settings. Do not restart yet.
+2. In HACS choose **⋮ → Custom repositories**, add `https://github.com/alnamics/sat` with the type **Integration**.
+3. Open **Smart Autotune Thermostat v2 (MPX)** in HACS and choose **Download**.
+4. Restart Home Assistant.
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=alnamics&repository=sat&category=integration)
+
+The integration domain is still `sat`, so an existing entry keeps its settings and the MPX edition takes the place of the SAT you had. HACS can hold only one of them at a time.
+
+### By hand
+
+Copy `custom_components/sat` from the [latest release][release-url] (the `sat.zip` file holds its contents) into your `custom_components` folder, replacing an existing SAT, and restart Home Assistant.
+
+A new install is then added under **Settings → Devices & services → Add integration → Smart Autotune Thermostat**; the [setup guide][setup] walks through each step.
 
 ### Rolling it out safely
 
@@ -74,7 +91,7 @@ The additions were developed against an OTGW in serial mode. The other connectio
 
 ### Going back
 
-Copy the original SAT v2 over `custom_components/sat` and restart. There is no config entry migration in this fork; the extra options are ignored and the extra entities become orphaned (remove them under **Settings → Entities**).
+In HACS remove the MPX edition and download SAT v2 again (or copy the original over `custom_components/sat` by hand), then restart. There is no config entry migration in this fork; the extra options are ignored and the extra entities become orphaned (remove them under **Settings → Entities**).
 
 ## Documentation
 
@@ -90,11 +107,14 @@ SAT is the work of [Alex Wijnholds](https://github.com/Alexwijn) and [Thiago Bel
 
 <!-- Badges -->
 
-[build-badge]: https://img.shields.io/github/actions/workflow/status/alnamics/sat/pytest.yml?branch=mpx&style=for-the-badge
+[hacs-url]: https://hacs.xyz/docs/faq/custom_repositories/
+[hacs-badge]: https://img.shields.io/badge/hacs-custom-orange.svg?style=for-the-badge
+[release-badge]: https://img.shields.io/github/v/release/alnamics/sat?style=for-the-badge
+[build-badge]: https://img.shields.io/github/actions/workflow/status/alnamics/sat/pytest.yml?branch=main&style=for-the-badge
 
 <!-- References -->
 
-[mpx-branch]: https://github.com/alnamics/sat/tree/mpx
+[release-url]: https://github.com/alnamics/sat/releases
 [mpx]: docs/mpx.md
 [setup]: docs/setup.md
 [options]: docs/options.md

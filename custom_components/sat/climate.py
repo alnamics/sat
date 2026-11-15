@@ -1906,9 +1906,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     def _modulation_capped(self) -> bool:
         """Return True while SAT holds the burner at its minimum modulation."""
+        # Geminox boilers are never sent less than 10 %, so they are not at their minimum then
         return (
             self._coordinator.supports_relative_modulation_management
             and self.relative_modulation_value == MINIMUM_RELATIVE_MODULATION
+            and not isinstance(self._coordinator.manufacturer, Geminox)
         )
 
     def _gas_use(self) -> float | None:
@@ -2023,7 +2025,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     async def _async_control_hot_water(self) -> None:
         schedule = self.hot_water_schedule
-        if schedule is None:
+        # A setpoint sent into an outage would be lost and not sent again
+        if schedule is None or not self._coordinator.online:
             return
 
         comfort: bool | None = None
@@ -2208,10 +2211,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         # What the boiler reports while SAT holds it at minimum power is its zero point
         reading = float_value(coordinator.relative_modulation_value)
-        if settled and reading is not None and self._modulation_capped():
-            self._modulation_scale.observe_minimum(
-                reading, coordinator.minimum_relative_modulation_value
-            )
+        if settled and reading is not None:
+            minimum_level = coordinator.minimum_relative_modulation_value
+            self._modulation_scale.observe(reading, minimum_level)
+            if self._modulation_capped():
+                self._modulation_scale.observe_minimum(reading, minimum_level)
 
         heat = self._known_heating_power() if flame else None
         gas = None
