@@ -29,7 +29,7 @@ async def async_get_config_entry_diagnostics(
         "climate": {
             "hvac_mode": climate.hvac_mode,
             "preset_mode": climate.preset_mode,
-            "target_temperature": climate.target_temperature,
+            "target_temperature": climate.native_target_temperature,
             "setpoint": climate.setpoint,
             "control_problems": climate.control_problems,
             "errors": [asdict(error) for error in climate.errors],

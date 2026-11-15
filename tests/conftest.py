@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry, assert_setup_component
+from pytest_homeassistant.common import MockConfigEntry, assert_setup_component
 
 from custom_components.sat.const import DOMAIN
 from custom_components.sat.fake import SatFakeCoordinator
@@ -21,9 +21,10 @@ if TYPE_CHECKING:
     from custom_components.sat.climate import SatClimate
 
 
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
-    """Load the custom integrations from this repository in every test."""
+@pytest.fixture
+def hass_config_dir(hass_tmp_config_dir: str) -> str:
+    """Keep files Home Assistant writes, such as blueprints, out of the repository."""
+    return hass_tmp_config_dir
 
 
 @pytest.fixture

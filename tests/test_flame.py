@@ -6,7 +6,7 @@ from time import time
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.sat.boiler import BoilerState
 from custom_components.sat.const import DOMAIN, BoilerStatus, FlameStatus, PWMStatus

@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING
 
 from homeassistant.helpers import device_registry as dr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.sat.const import DOMAIN
 from tests.const import DEFAULT_USER_DATA
@@ -24,7 +24,7 @@ async def test_entities_are_named_after_the_device(hass: HomeAssistant) -> None:
     )
     assert device is not None
     assert device.name == "Living Room"
-    assert device.suggested_area is None
+    assert device.area_id is None
 
     state = hass.states.get("climate.living_room")
     assert state is not None

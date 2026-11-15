@@ -9,7 +9,7 @@ import pytest
 from homeassistant.components import persistent_notification
 from homeassistant.components.climate import HVACMode
 from homeassistant.const import STATE_UNAVAILABLE
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.sat.config_flow import SatFlowHandler
 from custom_components.sat.const import DOMAIN

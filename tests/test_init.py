@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.sat.const import DOMAIN
 from tests.const import DEFAULT_USER_DATA

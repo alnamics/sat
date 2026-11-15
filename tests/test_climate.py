@@ -7,7 +7,7 @@ import pytest
 from homeassistant.components.climate import PRESET_AWAY, HVACMode
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.sat.config_flow import SatFlowHandler
 from custom_components.sat.const import (
@@ -342,7 +342,7 @@ async def test_thermostat_without_a_setpoint_keeps_the_target(hass: HomeAssistan
     hass.states.async_set("climate.thermostat", HVACMode.OFF, {"temperature": None})
     await hass.async_block_till_done()
 
-    assert climate.target_temperature == 21.0
+    assert climate.native_target_temperature == 21.0
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -382,6 +382,20 @@ async def test_control_loop_applies_an_error_change_from_inside_the_sample_time(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+async def test_climate_uses_no_deprecated_members(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    entry = await setup_rooms(hass)
+    climate = entry.runtime_data.climate
+    await entry.runtime_data.coordinator.async_set_boiler_temperature(40)
+    await climate.async_set_target_temperature(21.0)
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+    await climate.async_control_heating_loop()
+
+    assert "deprecated SatClimate." not in caplog.text
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_steady_error_keeps_the_integral(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -416,7 +430,7 @@ async def test_inside_sensor_reporting_the_same_value_is_not_stale(
         await hass.async_block_till_done()
         await climate.async_control_heating_loop()
 
-    assert climate.current_temperature == 20.9
+    assert climate.native_current_temperature == 20.9
     assert climate.pid.integral != 0
     assert await hass.config_entries.async_unload(entry.entry_id)
 

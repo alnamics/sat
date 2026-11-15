@@ -223,7 +223,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._pre_custom_temperature: float | None = None
         self._pre_activity_temperature: float | None = None
 
-        self._attr_temperature_unit = unit
+        self._attr_native_temperature_unit = unit
         self._attr_hvac_mode = None
         self._attr_preset_mode = PRESET_NONE
         self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
@@ -325,9 +325,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         # Update a heating curve if outside temperature is available
         outside_temperature = self.current_outside_temperature
-        if outside_temperature is not None and self.target_temperature is not None:
+        if outside_temperature is not None and self.native_target_temperature is not None:
             self.areas.heating_curves.update(outside_temperature)
-            self.heating_curve.update(self.target_temperature, outside_temperature)
+            self.heating_curve.update(self.native_target_temperature, outside_temperature)
 
         self.async_on_remove(async_at_started(self.hass, self._async_started))
 
@@ -479,7 +479,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 self._attr_hvac_mode = HVACMode(restored.hvac_mode)
 
             if restored.target_temperature is not None:
-                self._attr_target_temperature = float(restored.target_temperature)
+                self._attr_native_target_temperature = float(restored.target_temperature)
 
             if self.preset_modes is not None and restored.preset_mode in self.preset_modes:
                 self._attr_preset_mode = restored.preset_mode
@@ -495,14 +495,17 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self.pwm.restore(old_state)
             self.pid.restore(old_state)
 
-            if self.target_temperature is None:
+            if self.native_target_temperature is None:
                 if old_state.attributes.get(ATTR_TEMPERATURE) is None:
-                    self._attr_target_temperature = float(self._presets[PRESET_HOME])
+                    self._attr_native_target_temperature = float(self._presets[PRESET_HOME])
                     _LOGGER.warning(
-                        "Undefined target temperature, falling back to %s", self.target_temperature
+                        "Undefined target temperature, falling back to %s",
+                        self.native_target_temperature,
                     )
                 else:
-                    self._attr_target_temperature = float(old_state.attributes[ATTR_TEMPERATURE])
+                    self._attr_native_target_temperature = float(
+                        old_state.attributes[ATTR_TEMPERATURE]
+                    )
 
             if self.hvac_mode is None:
                 self._attr_hvac_mode = HVACMode(old_state.state)
@@ -535,18 +538,18 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             if self._rooms is None:
                 await self._async_update_rooms_from_climates()
 
-            if self.target_temperature is None:
-                self._attr_target_temperature = float(self._presets[PRESET_HOME])
+            if self.native_target_temperature is None:
+                self._attr_native_target_temperature = float(self._presets[PRESET_HOME])
                 _LOGGER.info(
                     "Nothing to restore, starting at the home temperature %s",
-                    self.target_temperature,
+                    self.native_target_temperature,
                 )
 
             if self.hvac_mode is None:
                 self._attr_hvac_mode = self._default_hvac_mode
 
         if self._attr_preset_mode != PRESET_NONE and self._pre_custom_temperature is None:
-            self._pre_custom_temperature = self.target_temperature
+            self._pre_custom_temperature = self.native_target_temperature
 
         self.async_write_ha_state()
 
@@ -591,7 +594,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     def extra_restore_state_data(self) -> SatClimateExtraStoredData:
         return SatClimateExtraStoredData(
             self.hvac_mode,
-            self.target_temperature,
+            self.native_target_temperature,
             self._attr_preset_mode,
             self._pre_custom_temperature,
         )
@@ -659,15 +662,15 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         if current_temperature is not None and self._thermal_comfort:
             current_temperature = SummerSimmer.index(current_temperature, self.current_humidity)
 
-        self._attr_current_temperature = current_temperature
+        self._attr_native_current_temperature = current_temperature
 
     @property
     def error(self) -> float:
         """Return the error value."""
-        if self.target_temperature is None or self.current_temperature is None:
+        if self.native_target_temperature is None or self.native_current_temperature is None:
             return 0
 
-        return round(self.target_temperature - self.current_temperature, 2)
+        return round(self.native_target_temperature - self.native_current_temperature, 2)
 
     @property
     def current_outside_temperature(self) -> float | None:
@@ -798,8 +801,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             problems.append("gateway_offline")
 
         if (
-            self.current_temperature is None
-            or self.target_temperature is None
+            self.native_current_temperature is None
+            or self.native_target_temperature is None
             or self.current_outside_temperature is None
         ):
             problems.append("inputs_missing")
@@ -995,7 +998,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 self._window_sensor_handle = asyncio.create_task(
                     asyncio.sleep(self._window_minimum_open_time)
                 )
-                self._pre_activity_temperature = self.target_temperature or self.min_temp
+                self._pre_activity_temperature = self.native_target_temperature or self.min_temp
 
                 await self._window_sensor_handle
                 await self.async_set_preset_mode(PRESET_ACTIVITY)
@@ -1036,9 +1039,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         max_error = self.max_error
 
         # Make sure we use the latest heating curve value
-        if self.target_temperature is not None:
+        if self.native_target_temperature is not None:
             self.areas.heating_curves.update(outside_temperature)
-            self.heating_curve.update(self.target_temperature, outside_temperature)
+            self.heating_curve.update(self.native_target_temperature, outside_temperature)
 
         # Update the PID controller with the maximum error
         if not reset:
@@ -1047,10 +1050,13 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             )
 
             # Calculate an optimal heating curve when we are in the deadband
-            if self.target_temperature is not None and -DEADBAND <= max_error.value <= DEADBAND:
+            if (
+                self.native_target_temperature is not None
+                and -DEADBAND <= max_error.value <= DEADBAND
+            ):
                 self.heating_curve.autotune(
                     setpoint=self.requested_setpoint,
-                    target_temperature=self.target_temperature,
+                    target_temperature=self.native_target_temperature,
                     outside_temperature=outside_temperature,
                 )
 
@@ -1232,8 +1238,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             outside_temperature = self.current_outside_temperature
             if (
-                self.current_temperature is None
-                or self.target_temperature is None
+                self.native_current_temperature is None
+                or self.native_target_temperature is None
                 or outside_temperature is None
             ):
                 if self._inputs_missing_since is None:
@@ -1275,7 +1281,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             # An outside source that goes stale fires no state change
             self.areas.heating_curves.update(outside_temperature)
-            self.heating_curve.update(self.target_temperature, outside_temperature)
+            self.heating_curve.update(self.native_target_temperature, outside_temperature)
 
             # Control the heating through the coordinator
             await self._coordinator.async_control_heating_loop(pwm_state=self.pwm.state)
@@ -1331,10 +1337,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             if (
                 self._push_setpoint_to_thermostat
-                and self._coordinator.control_thermostat_setpoint != self.target_temperature
+                and self._coordinator.control_thermostat_setpoint != self.native_target_temperature
             ):
                 await self._coordinator.async_set_control_thermostat_setpoint(
-                    self.target_temperature
+                    self.native_target_temperature
                 )
 
             # Apply an error change that arrived inside the sample time,
@@ -1476,7 +1482,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         else:
             # Save the current target temperature if the preset mode is being set for the first time
             if self._attr_preset_mode == PRESET_NONE:
-                self._pre_custom_temperature = self.target_temperature
+                self._pre_custom_temperature = self.native_target_temperature
 
             # Set the preset mode and target temperature
             self._attr_preset_mode = preset_mode
@@ -1503,11 +1509,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self, temperature: float, *, cascade: bool = True
     ) -> None:
         """Set the temperature setpoint for all main climates."""
-        if self.target_temperature == temperature:
+        if self.native_target_temperature == temperature:
             return
 
         # Set the new target temperature
-        self._attr_target_temperature = temperature
+        self._attr_native_target_temperature = temperature
 
         if cascade:
             # Set the target temperature for each main climate

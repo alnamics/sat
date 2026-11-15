@@ -4,7 +4,7 @@ from homeassistant.components.valve import DOMAIN as VALVE_DOMAIN
 from homeassistant.components.valve import ValveState
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_CLOSE_VALVE, SERVICE_OPEN_VALVE, STATE_ON
 from homeassistant.helpers import entity_registry
-from pytest_homeassistant_custom_component.common import async_mock_service
+from pytest_homeassistant.common import async_mock_service
 
 from custom_components.sat.coordinator import DeviceState
 from custom_components.sat.switch import SatSwitchCoordinator

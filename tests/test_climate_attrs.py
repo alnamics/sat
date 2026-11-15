@@ -12,7 +12,7 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, STATE_UNAVAILABLE
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.sat.const import (
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
@@ -51,12 +51,12 @@ async def setup_climate(
 async def test_inside_sensor_change_updates_current_temperature(hass: HomeAssistant) -> None:
     entry = await setup_climate(hass)
     climate = entry.runtime_data.climate
-    assert climate.current_temperature == 20.9
+    assert climate.native_current_temperature == 20.9
 
     hass.states.async_set(INSIDE, "21.4")
     await hass.async_block_till_done()
 
-    assert climate.current_temperature == 21.4
+    assert climate.native_current_temperature == 21.4
     state = hass.states.get(climate.entity_id)
     assert state is not None
     assert state.attributes["current_temperature"] == 21.4
@@ -70,7 +70,7 @@ async def test_unavailable_inside_sensor_clears_current_temperature(hass: HomeAs
     hass.states.async_set(INSIDE, STATE_UNAVAILABLE)
     await hass.async_block_till_done()
 
-    assert climate.current_temperature is None
+    assert climate.native_current_temperature is None
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -80,13 +80,13 @@ async def test_humidity_change_updates_thermal_comfort_temperature(hass: HomeAss
     )
     climate = entry.runtime_data.climate
     assert climate.current_humidity == 50.0
-    assert climate.current_temperature == SummerSimmer.index(20.9, 50.0)
+    assert climate.native_current_temperature == SummerSimmer.index(20.9, 50.0)
 
     hass.states.async_set(HUMIDITY, "80")
     await hass.async_block_till_done()
 
     assert climate.current_humidity == 80.0
-    assert climate.current_temperature == SummerSimmer.index(20.9, 80.0)
+    assert climate.native_current_temperature == SummerSimmer.index(20.9, 80.0)
     state = hass.states.get(climate.entity_id)
     assert state is not None
     assert state.attributes["current_humidity"] == 80.0
@@ -121,13 +121,13 @@ async def test_stale_inside_sensor_clears_current_temperature(
 ) -> None:
     entry = await setup_climate(hass, options={CONF_SENSOR_MAX_VALUE_AGE: "00:10:00"})
     climate = entry.runtime_data.climate
-    assert climate.current_temperature == 20.9
+    assert climate.native_current_temperature == 20.9
 
     freezer.tick(timedelta(minutes=11))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
-    assert climate.current_temperature is None
+    assert climate.native_current_temperature is None
     state = hass.states.get(climate.entity_id)
     assert state is not None
     assert state.attributes["current_temperature"] is None

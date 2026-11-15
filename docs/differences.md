@@ -42,7 +42,7 @@ The integration domain is still `sat`, so SAT v2 replaces the original in place.
 
 ## Platform
 
-- Requires Home Assistant 2026.10 or newer and `pyotgw>=2.2.3`.
+- Requires Home Assistant 2026.11 or newer and `pyotgw>=2.2.3`.
 - Modern tooling: dependencies managed with `uv`, linting and formatting with `ruff` (all rules), and type checking with `ty`.
 - Fully typed code.
 - 223 tests, up from 7, all run in CI along with hassfest and HACS validation.

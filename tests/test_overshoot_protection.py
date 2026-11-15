@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, override
 
 import pytest
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.sat.const import (
     CONF_MANUFACTURER,

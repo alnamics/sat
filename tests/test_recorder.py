@@ -7,8 +7,8 @@ from homeassistant.components.climate import HVACMode
 from homeassistant.components.recorder import get_instance, history
 from homeassistant.core import State
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.components.recorder.common import (
+from pytest_homeassistant.common import MockConfigEntry
+from pytest_homeassistant.components.recorder.common import (
     async_wait_recording_done,
 )
 
@@ -17,14 +17,12 @@ from tests.const import DEFAULT_USER_DATA
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from pytest_homeassistant_custom_component.typing import RecorderInstanceContextManager
+    from pytest_homeassistant.typing import RecorderInstanceContextManager
 
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(
-    recorder_mock: RecorderInstanceContextManager, enable_custom_integrations: None
-) -> None:
-    """Start the recorder before Home Assistant and the custom integrations."""
+def auto_recorder(recorder_mock: RecorderInstanceContextManager) -> None:
+    """Start the recorder before Home Assistant."""
 
 
 async def test_volatile_climate_attributes_are_not_recorded(hass: HomeAssistant) -> None:

@@ -6,7 +6,8 @@ dependencies = ["pyotgw>=2.2.3"]
 
 [dependency-groups]
 dev = [
-  "pytest-homeassistant-custom-component>=0.13.371",
+  "pytest-homeassistant>=2026.11.1",
+  "aiohasupervisor>=0.8.1",
   "aiohttp-cors>=0.8.1",
   "aiodiscover>=3.3.2",
   "aiodhcpwatcher>=1.2.7",
@@ -22,6 +23,8 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Let Home Assistant install its httpx alias before respx is imported.
+addopts = "-p no:respx"
 
 [tool.ruff]
 required-version = ">=0.17.0"
