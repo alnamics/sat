@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > This page describes SAT v2 by bellini666 against the original SAT. The AI-written additions of
-> this fork (`-mpx` versions) are listed separately in [MPX additions](mpx.md).
+> this fork are listed separately in [MPX additions](mpx.md).
 
 SAT v2 is a fork of [Alexwijn/SAT](https://github.com/Alexwijn/SAT) by [Alex Wijnholds](https://github.com/Alexwijn), branched from upstream commit [`7d43560`](https://github.com/Alexwijn/SAT/commit/7d43560). The [commit history](https://github.com/bellini666/SAT/compare/7d43560...main) has every change.
 

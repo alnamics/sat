@@ -40,3 +40,22 @@ def test_a_few_readings_are_not_enough() -> None:
     scale.observe_minimum(16.0, 16.0)
 
     assert scale.reading_at_minimum == 0.0
+
+
+def test_a_lowest_reading_at_the_minimum_level_is_a_share_of_the_maximum() -> None:
+    scale = ModulationScale()
+
+    # This boiler is never capped by SAT; it idles at 16 %, its own minimum level
+    for index in range(80):
+        scale.observe(16.0 + index % 7, 16.0)
+
+    assert scale.reading_at_minimum == 16.0
+
+
+def test_a_reading_below_the_minimum_level_is_a_share_of_the_range() -> None:
+    scale = ModulationScale()
+
+    for index in range(80):
+        scale.observe(float(index % 30), 16.0)
+
+    assert scale.reading_at_minimum == 0.0

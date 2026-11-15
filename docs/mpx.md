@@ -5,7 +5,7 @@
 > person or run for long on a real boiler. It passes the automated tests; that is all that is
 > known. Use it at your own risk, turn features on one at a time and watch the boiler.
 
-This page lists what the `-mpx` versions of this fork add to [SAT v2](https://github.com/bellini666/SAT). The settings themselves are in [Options](options.md#advanced-mpx-additions) (System Configuration → Advanced); this page explains what they do and how they fit together.
+This page lists what this fork (versions with a fourth number, such as 5.2.0.5) adds to [SAT v2](https://github.com/bellini666/SAT). The settings themselves are in [Options](options.md#advanced-mpx-additions) (System Configuration → Advanced); this page explains what they do and how they fit together.
 
 **Defaults.** With every new option at its default SAT controls the boiler exactly as upstream SAT v2. What runs regardless are the totals, the efficiency and flow estimates, the loop monitor and the repair issues: they read the boiler and raise issues, but do not control anything. A failure in any of them is logged once and the heating control carries on without it.
 
