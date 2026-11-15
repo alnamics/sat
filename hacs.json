@@ -1,8 +1,6 @@
 {
   "hacs": "1.6.0",
   "render_readme": true,
-  "zip_release": true,
-  "filename": "sat.zip",
   "homeassistant": "2026.11.0",
   "name": "Smart Autotune Thermostat v2 (MPX)"
 }

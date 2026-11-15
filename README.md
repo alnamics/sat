@@ -1,7 +1,6 @@
 # Smart Autotune Thermostat v2 — MPX edition
 
 [![hacs][hacs-badge]][hacs-url]
-[![release][release-badge]][release-url]
 ![build][build-badge]
 
 > [!WARNING]
@@ -69,7 +68,7 @@ The additions were developed against an OTGW in serial mode. The other connectio
 
 1. If SAT or SAT v2 is already installed through HACS, open it in HACS and choose **⋮ → Remove**. This removes the files, not your SAT entry and its settings. Do not restart yet.
 2. In HACS choose **⋮ → Custom repositories**, add `https://github.com/alnamics/sat` with the type **Integration**.
-3. Open **Smart Autotune Thermostat v2 (MPX)** in HACS and choose **Download**.
+3. Open **Smart Autotune Thermostat v2 (MPX)** in HACS and choose **Download**. While the fork has no releases, HACS installs the latest state of the `main` branch and shows its commit as the version.
 4. Restart Home Assistant.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=alnamics&repository=sat&category=integration)
@@ -78,7 +77,7 @@ The integration domain is still `sat`, so an existing entry keeps its settings a
 
 ### By hand
 
-Copy `custom_components/sat` from the [latest release][release-url] (the `sat.zip` file holds its contents) into your `custom_components` folder, replacing an existing SAT, and restart Home Assistant.
+Download the repository (**Code → Download ZIP** on [GitHub][repository]), copy its `custom_components/sat` folder into your `custom_components` folder, replacing an existing SAT, and restart Home Assistant.
 
 A new install is then added under **Settings → Devices & services → Add integration → Smart Autotune Thermostat**; the [setup guide][setup] walks through each step.
 
@@ -109,12 +108,11 @@ SAT is the work of [Alex Wijnholds](https://github.com/Alexwijn) and [Thiago Bel
 
 [hacs-url]: https://hacs.xyz/docs/faq/custom_repositories/
 [hacs-badge]: https://img.shields.io/badge/hacs-custom-orange.svg?style=for-the-badge
-[release-badge]: https://img.shields.io/github/v/release/alnamics/sat?style=for-the-badge
 [build-badge]: https://img.shields.io/github/actions/workflow/status/alnamics/sat/pytest.yml?branch=main&style=for-the-badge
 
 <!-- References -->
 
-[release-url]: https://github.com/alnamics/sat/releases
+[repository]: https://github.com/alnamics/sat
 [mpx]: docs/mpx.md
 [setup]: docs/setup.md
 [options]: docs/options.md
