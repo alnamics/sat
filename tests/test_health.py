@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from unittest.mock import PropertyMock, patch
 
 from homeassistant.components.climate import HVACAction, HVACMode
 from homeassistant.config_entries import ConfigEntryState
@@ -369,6 +370,10 @@ async def test_a_boiler_with_heating_disabled_is_idle(hass: HomeAssistant) -> No
     await coordinator.async_set_heater_state(DeviceState.OFF)
     assert coordinator.device_status == BoilerStatus.IDLE
 
+    # Heating enabled but no flame: the boiler waits out its anti-cycling time
     await coordinator.async_set_heater_state(DeviceState.ON)
-    assert coordinator.device_status == BoilerStatus.ANTI_CYCLING
+    with patch.object(
+        type(coordinator), "flame_active", new_callable=PropertyMock, return_value=False
+    ):
+        assert coordinator.device_status == BoilerStatus.ANTI_CYCLING
     assert await hass.config_entries.async_unload(entry.entry_id)
