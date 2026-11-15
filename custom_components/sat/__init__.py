@@ -104,6 +104,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SatConfigEntry) -> bool:
                 hass,
                 DOMAIN,
                 issue_id,
+                config_entry_id=entry.entry_id,
                 is_fixable=False,
                 severity=ir.IssueSeverity.ERROR,
                 translation_key="setup_failed",
@@ -147,7 +148,6 @@ async def async_release_control(entry: SatConfigEntry) -> None:
 
 async def async_remove_entry(hass: HomeAssistant, entry: SatConfigEntry) -> None:
     hass.data.get(DOMAIN, {}).pop(f"setup_failed_{entry.entry_id}", None)
-    ir.async_delete_issue(hass, DOMAIN, f"setup_failed_{entry.entry_id}")
     await minimum_setpoint_store(hass, entry.entry_id).async_remove()
     await flame_store(hass, entry.entry_id).async_remove()
 

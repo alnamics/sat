@@ -231,6 +231,11 @@ async def test_failed_setup_raises_a_repair_issue_after_retrying(
     assert issue is not None
     assert issue.severity is ir.IssueSeverity.ERROR
 
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"setup_failed_{entry.entry_id}") is None
+
 
 async def test_successful_setup_clears_the_repair_issue(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data=DEFAULT_USER_DATA)
