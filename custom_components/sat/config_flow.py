@@ -1395,15 +1395,12 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
         """Add warm weather, hot water, presence, window, service and cost settings."""
 
         def number(minimum: float, maximum: float, step: float, unit: str | None = None) -> Any:  # noqa: ANN401
-            return selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=minimum,
-                    max=maximum,
-                    step=step,
-                    unit_of_measurement=unit,
-                    mode=selector.NumberSelectorMode.BOX,
-                )
+            config = selector.NumberSelectorConfig(
+                min=minimum, max=maximum, step=step, mode=selector.NumberSelectorMode.BOX
             )
+            if unit is not None:
+                config["unit_of_measurement"] = unit
+            return selector.NumberSelector(config)
 
         def optional(key: str) -> vol.Optional:
             return vol.Optional(key, description={"suggested_value": options.get(key)})

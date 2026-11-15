@@ -69,7 +69,7 @@ class CurveAdvisor:
             need = heat_loss_kw_per_k * (target - outdoor)
             spread = (
                 need * 60 / (WATER_HEAT_KJ_PER_LITRE_K * water_flow_lpm)
-                if water_flow_lpm
+                if water_flow_lpm is not None and water_flow_lpm > 0
                 else DEFAULT_SPREAD
             )
             flow = target + need / transfer + spread / 2
