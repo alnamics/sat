@@ -3,6 +3,8 @@
 [![hacs][hacs-badge]][hacs-url]
 ![build][build-badge]
 
+🇵🇱 [Polska wersja](README.pl.md)
+
 > [!WARNING]
 > **Experimental, AI-written, unverified code. Use at your own risk.**
 >
@@ -16,9 +18,7 @@
 > here is endorsed by the authors of SAT.
 >
 > **Kod eksperymentalny, napisany przez AI i niesprawdzony. Używasz na własne ryzyko.**
-> Zmiany w tym forku napisał Claude (model AI firmy Anthropic). Przechodzą testy automatyczne,
-> ale nikt ich nie sprawdził ręcznie ani nie testował długo na prawdziwym kotle. Sterują kotłem
-> gazowym: zrób kopię zapasową, obserwuj kocioł po instalacji i miej pod ręką oryginał.
+> Polski opis: [README.pl.md](README.pl.md).
 
 SAT is a smart thermostat for Home Assistant that controls your boiler.
 

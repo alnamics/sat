@@ -1,5 +1,7 @@
 # Options
 
+🇵🇱 [Polska wersja](pl/options.md)
+
 Open the integration page and click **Configure**. Settings are in three menus: [General](#general), [Presets](#presets) and [System Configuration](#system-configuration). Some settings only appear when they apply to your setup.
 
 The defaults suit most homes.

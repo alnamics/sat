@@ -1,5 +1,7 @@
 # Setup
 
+🇵🇱 [Polska wersja](pl/setup.md)
+
 Add SAT under **Settings → Devices & services → Add integration** and search for "Smart Autotune Thermostat". If SAT finds an OpenTherm Gateway or EMS-ESP on your network or MQTT broker, it also shows up there as a discovered device.
 
 The setup asks for:

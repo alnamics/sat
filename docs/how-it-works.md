@@ -1,5 +1,7 @@
 # How SAT works
 
+🇵🇱 [Polska wersja](pl/how-it-works.md)
+
 SAT decides how hot the water going to your radiators or floor should be, then tells the boiler. Three parts work together: a heating curve, room feedback and low-load control.
 
 ## Heating curve

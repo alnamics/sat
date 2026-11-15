@@ -1,5 +1,7 @@
 # Differences from the original SAT
 
+🇵🇱 [Polska wersja](pl/differences.md)
+
 > [!NOTE]
 > This page describes SAT v2 by bellini666 against the original SAT. The AI-written additions of
 > this fork are listed separately in [MPX additions](mpx.md).

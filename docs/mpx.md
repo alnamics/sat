@@ -1,5 +1,7 @@
 # MPX additions
 
+🇵🇱 [Polska wersja](pl/mpx.md)
+
 > [!WARNING]
 > Everything on this page was written by Claude, an AI model, and has not been reviewed by a
 > person or run for long on a real boiler. It passes the automated tests; that is all that is
@@ -43,7 +45,7 @@ Screed is slow: it stores hours of heat. It does not matter to the room whether 
 
 The heat and gas totals, the water flow and the heat budget need the burner's heat output. SAT takes it from the boiler's maximum capacity and minimum modulation level when it reports them (OpenTherm), otherwise from the **Minimum** and **Maximum Consumption** settings. When neither is known, the heat and gas totals stay at zero rather than being made up; the heat budget still works, counting in units of the minimum power.
 
-OpenTherm defines the relative modulation as a share of the range between minimum and maximum power, but many boilers report a share of the maximum and read, say, 16 % at their minimum. Taken as a share of the range that would nearly double the power at the minimum. So SAT learns what the boiler reads while it is held at minimum modulation in settled burns and counts from there. Until it has seen such burns it assumes the OpenTherm meaning.
+OpenTherm defines the relative modulation as a share of the range between minimum and maximum power, but many boilers report a share of the maximum and read, say, 16 % at their minimum. Taken as a share of the range that would nearly double the power at the minimum. So SAT learns what the boiler reads while it is held at minimum modulation in settled burns and counts from there. A boiler whose lowest reading over many burns equals its own minimum modulation level is recognised too. Until it has seen such burns it assumes the OpenTherm meaning.
 
 ## Heat budget
 
