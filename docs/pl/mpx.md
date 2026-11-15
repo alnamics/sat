@@ -53,14 +53,15 @@ OpenTherm definiuje modulację względną jako udział w zakresie między mocą 
 
 **Model.** Co godzinę SAT zapisuje ciepło spalone na ogrzewanie, różnicę temperatur wewnątrz i na zewnątrz, nasłonecznienie i zmianę temperatury wewnętrznej. Z bieżącej doby takich godzin dopasowuje metodą rekurencyjnych najmniejszych kwadratów równanie *ciepło + S × słońce = H × (wewnątrz − na zewnątrz) × godziny + ciepło zmagazynowane*: H to straty ciepła domu (W/K), S to ciepło, które daje pełne słońce. Doba uśrednia ciepło, które wylewka magazynuje i oddaje. Godzina zmierzona co najmniej w połowie jest przeskalowana do pełnej, krótsza jest pomijana, a okno przetrwa restart. Pierwsze dopasowanie następuje po 20 godzinach danych, a budżet jest gotowy po dwunastu dopasowaniach, czyli mniej więcej półtorej doby po włączeniu (`heat_budget_ready`). Z ustawionym na stałe **Heat loss of the house** jest gotowy od razu.
 
-**Rozdzielanie ciepła.** Ciepło potrzebne na następny okres to *H × (temperatura zadana − zewnętrzna) − S × słońce*, plus powolna korekta PI błędu temperatury w pokoju (wzmocnienie 2 K na K, całkowanie przez 8 godzin, najwyżej ±1,5 K, dopiero gdy budżet jest gotowy). Z prognozą pogody temperatura zewnętrzna to wartość zmierzona plus trend z prognozy na najbliższe 3 godziny (najwyżej ±5 K), więc prognoza, która jest cieplejsza albo zimniejsza od Twojego czujnika, nie zafałszowuje ilości ciepła. To ciepło jest spalane w jednym bloku na mocy minimalnej:
+**Rozdzielanie ciepła.** Ciepło potrzebne na następny okres to *H × (temperatura zadana − zewnętrzna) − S × słońce*, plus korekta PI błędu temperatury w pokoju, liczona jako przesunięcie temperatury zewnętrznej: 8 K na każdy kelwin błędu w pokoju oraz człon całkujący 1 K na 1,5 kelwinogodziny (najwyżej ±8 K), który przejmuje to, w czym model się myli. Człon całkujący działa tylko w zakresie 0,5 °C od temperatury zadanej i dopiero gdy budżet jest gotowy, więc zmiana temperatury zadanej go nie rozkręca. W symulacji temperatura zadana przesunięta o 1 °C jest osiągana po około 6–8 godzinach. Z prognozą pogody temperatura zewnętrzna to wartość zmierzona plus trend z prognozy na najbliższe 3 godziny (najwyżej ±5 K), więc prognoza, która jest cieplejsza albo zimniejsza od Twojego czujnika, nie zafałszowuje ilości ciepła. To ciepło jest spalane w jednym bloku na mocy minimalnej:
 
 - jeden blok na **Heat budget period** (60 minut: mniej więcej jeden zapłon na godzinę);
 - potrzeba mniejsza niż **Heat budget minimum burn** przechodzi na następny okres (`heat_credit_kwh`), tak samo jak to, czego blok nie zdążył dostarczyć, do wysokości jednego okresu na mocy minimalnej;
 - pobór ciepłej wody nie skraca bloku: blok trwa, aż dostarczy swoje ciepło;
 - dwa palenia przerwane przez kocioł z powodu przegrzania kończą blok;
 - dogrzanie ciepłej wody w ostatniej tercji okresu od razu rozpoczyna następny blok, póki kocioł jest ciepły (`hot_water_piggybacks`);
-- przerwa krótsza niż czas antytaktowania nie jest warta zapłonu, więc blok trwa dalej.
+- przerwa krótsza niż czas antytaktowania nie jest warta zapłonu, więc blok trwa dalej;
+- pokój cieplejszy o ponad 0,7 °C od temperatury zadanej nie dostaje ciepła: trwający blok się kończy i nic nie przechodzi na później (`heat_budget_room_too_warm`).
 
 Dopóki budżet nie jest gotowy, działa zwykłe sterowanie z własnym ustawieniem Force PWM. Gdy jest gotowy, SAT zawsze używa cykli przy małym obciążeniu, tak jak przy Force PWM.
 

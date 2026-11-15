@@ -252,3 +252,41 @@ def test_the_day_window_is_saved_and_restored() -> None:
     hour = _Hour(1.2, 20.0, 0.1, 3600.0, 21.9, 22.0, 1_763_200_000.0)
     assert _Hour.from_list(hour.to_list()) == hour
     assert _Hour.from_list([1.0, "x"]) is None
+
+
+def test_a_room_well_above_its_target_gets_no_heat() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.12)
+    budget.update(inputs(1000))
+    assert budget.status == PWMStatus.ON
+
+    # The target is lowered by a degree while a block runs
+    budget.update(inputs(1030, target=21.0, flame_active=True))
+
+    assert budget.status == PWMStatus.OFF
+    assert budget.attributes["heat_need_kw"] == 0
+    assert budget.attributes["heat_budget_room_too_warm"] is True
+    burn(budget, 1060, 2 * 3600, target=21.0)
+    assert budget.status == PWMStatus.OFF
+
+
+def test_a_lower_target_is_reached_within_hours() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.12)
+
+    # Two nodes: the screed takes the burner heat, the rooms lose 0.12 kW/K against 5 °C outside
+    room, screed, now, flame = 22.0, 22.0 + 0.12 * 17 / 0.65, 0.0, False
+    lowest = room
+    while now < 34 * 3600:
+        target = 22.0 if now < 10 * 3600 else 21.0
+        budget.update(
+            inputs(now, indoor=round(room, 1), target=target, outdoor=5.0, flame_active=flame)
+        )
+        flame = budget.status == PWMStatus.ON
+        floor = 0.65 * (screed - room)
+        screed += ((MINIMUM_POWER if flame else 0) - floor) * (30 / 3600) / 2.4
+        room += (floor - 0.12 * (room - 5.0)) * (30 / 3600) / 2.5
+        if now >= 20 * 3600:
+            assert abs(room - 21.0) < 0.25
+        lowest = min(lowest, room)
+        now += 30
+
+    assert lowest > 20.75

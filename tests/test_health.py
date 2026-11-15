@@ -16,6 +16,7 @@ from custom_components.sat.const import (
     CONF_MODE,
     CONF_MQTT_TOPIC,
     DOMAIN,
+    MINIMUM_SETPOINT,
     MODE_MQTT_OPENTHERM,
 )
 from custom_components.sat.coordinator import DeviceState
@@ -324,4 +325,34 @@ async def test_the_control_setpoint_stays_within_the_maximum_setpoint(
     state = hass.states.get("binary_sensor.mock_title_control_setpoint_synchro")
     assert state is not None
     assert state.state == STATE_OFF
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_control_setpoint_synchro_ignores_the_idle_setpoint(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry = await setup_heating(hass)
+    climate = entry.runtime_data.climate
+    coordinator = entry.runtime_data.coordinator
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+
+    # SAT asks for no heat and the boiler answers with its own lowest setpoint
+    climate._setpoint = MINIMUM_SETPOINT
+    coordinator._setpoint = 25.0
+    climate.async_write_ha_state()
+    freezer.tick(timedelta(seconds=61))
+    climate.async_write_ha_state()
+    state = hass.states.get("binary_sensor.mock_title_control_setpoint_synchro")
+    assert state is not None
+    assert state.state == STATE_OFF
+
+    # A setpoint SAT does ask for and the boiler does not have is a problem
+    climate._setpoint = 42.0
+    coordinator._setpoint = 30.0
+    climate.async_write_ha_state()
+    freezer.tick(timedelta(seconds=61))
+    climate.async_write_ha_state()
+    state = hass.states.get("binary_sensor.mock_title_control_setpoint_synchro")
+    assert state is not None
+    assert state.state == STATE_ON
     assert await hass.config_entries.async_unload(entry.entry_id)

@@ -20,6 +20,7 @@ from homeassistant.helpers.start import async_at_start
 
 from .const import (
     CONF_WINDOW_SENSORS,
+    MINIMUM_SETPOINT,
     BoilerStatus,
     FlameStatus,
 )
@@ -135,8 +136,11 @@ class SatControlSetpointSynchroSensor(SatSynchroSensor, SatClimateEntity, Binary
         climate_setpoint = self._climate.setpoint
         coordinator_setpoint = self._coordinator.setpoint
         if climate_setpoint is not None and coordinator_setpoint is not None:
+            # At the idle setpoint SAT asks for no heat, and a boiler answers with its own
+            # lowest setpoint rather than echoing it, so only a real request is compared
             self._attr_is_on = self.state_delayed(
-                condition=round(climate_setpoint, 1) != round(coordinator_setpoint, 1)
+                condition=climate_setpoint > MINIMUM_SETPOINT
+                and round(climate_setpoint, 1) != round(coordinator_setpoint, 1)
             )
 
 

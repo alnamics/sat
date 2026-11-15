@@ -54,10 +54,16 @@ SOLAR_GAIN_BOUNDS = (0.0, 3.0)
 # Before anything is learned an 87 m² flat loses roughly this much per kelvin
 DEFAULT_HEAT_LOSS_KW_PER_K = 0.12
 
-# Room error correction: a proportional part in kelvin per kelvin and a slow integral
-PROPORTIONAL_GAIN = 2.0
-INTEGRAL_HOURS = 8.0
-INTEGRAL_LIMIT_K = 1.5
+# Room error correction, in kelvin of outside temperature per kelvin of room error. The
+# proportional part brings the room back in hours rather than days; the integral takes up what
+# the model gets wrong (free heat, a heat loss that is off) and only works close to the target,
+# so a change of target does not wind it up
+PROPORTIONAL_GAIN = 8.0
+INTEGRAL_HOURS = 1.5
+INTEGRAL_LIMIT_K = 8.0
+INTEGRAL_BAND_K = 0.5
+# A room this far above its target gets no heat at all
+SURPLUS_STOP_K = 0.7
 
 # The heat released now reaches the rooms over the next hours, so that is the outdoor
 # temperature that matters
@@ -263,6 +269,7 @@ class HeatBudget:
         self._store: Store[dict[str, Any]] | None = None
         self._last_update: float | None = None
         self._integral = 0.0
+        self._surplus = False
         self._credit = 0.0
         self._need = 0.0
 
@@ -368,6 +375,7 @@ class HeatBudget:
             "preheat_hours_per_k": round(self._preheat.theta[0], 2),
             "learning_samples": self._learner.updates,
             "heat_budget_overloaded": self._overloaded,
+            "heat_budget_room_too_warm": self._surplus,
             "hot_water_piggybacks": self._piggybacks,
         }
 
@@ -404,6 +412,12 @@ class HeatBudget:
         )
 
         self._track_overload(now, step, target - indoor)
+
+        # A room that is too warm is owed nothing, and a running block has done enough
+        if self._surplus:
+            self._credit = min(self._credit, 0.0)
+            self._block_target = 0.0
+            self._end_block(now)
 
         if self._block_active:
             self._block_delivered += delivered
@@ -493,12 +507,20 @@ class HeatBudget:
         # (and only once the heat loss is known, or it soaks up the learning error)
         saturated_high = need >= self._minimum_power and error > 0
         saturated_low = need <= 0 and error < 0
-        if self.ready and not saturated_high and not saturated_low:
+        if (
+            self.ready
+            and not saturated_high
+            and not saturated_low
+            and abs(error) <= INTEGRAL_BAND_K
+        ):
             self._integral += (
                 error * min(dt, MAXIMUM_STEP_SECONDS) / (INTEGRAL_HOURS * SECONDS_PER_HOUR)
             )
             self._integral = min(max(self._integral, -INTEGRAL_LIMIT_K), INTEGRAL_LIMIT_K)
 
+        self._surplus = error <= -SURPLUS_STOP_K
+        if self._surplus:
+            return 0.0
         return max(0.0, need)
 
     # -------------------------------------------------------------- dispatch

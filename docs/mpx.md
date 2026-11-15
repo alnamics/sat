@@ -53,14 +53,15 @@ OpenTherm defines the relative modulation as a share of the range between minimu
 
 **The model.** Each hour SAT records the heat burned for space heating, the indoor-outdoor temperature difference, the sun and the change of the indoor temperature. Over a running day of such hours it fits, with recursive least squares, *heat + S × sun = H × (indoor − outdoor) × hours + stored heat*: H is the heat loss of the house (W/K), S the heat the sun brings in full sun. A day evens out the heat the screed stores and gives back. An hour measured at least half is scaled to the whole hour, a shorter one is left out, and the window survives restarts. The first fit comes after 20 hours of data and the budget counts as ready after twelve fits, so about a day and a half after it is switched on (`heat_budget_ready`). With a fixed **Heat loss of the house** it is ready at once.
 
-**The dispatch.** The heat the next period needs is *H × (target − outdoor) − S × sun*, plus a slow PI correction on the room error (gain 2 K per K, integral over 8 hours, at most ±1.5 K, only once the budget is ready). With a weather forecast, the outdoor temperature is the measured one plus the forecast's trend over the next 3 hours (at most ±5 K), so a forecast that runs warmer or colder than your sensor does not bias the heat. That heat is burned in one block at minimum power:
+**The dispatch.** The heat the next period needs is *H × (target − outdoor) − S × sun*, plus a PI correction on the room error, counted as a shift of the outside temperature: 8 K per kelvin of room error, and an integral of 1 K per 1.5 kelvin-hours (at most ±8 K) that takes up what the model gets wrong. The integral only works within 0.5 °C of the target and once the budget is ready, so a change of target does not wind it up. In the simulation a target moved by 1 °C is reached in about 6 to 8 hours. With a weather forecast, the outdoor temperature is the measured one plus the forecast's trend over the next 3 hours (at most ±5 K), so a forecast that runs warmer or colder than your sensor does not bias the heat. That heat is burned in one block at minimum power:
 
 - one block per **Heat budget period** (60 minutes: about one ignition an hour);
 - a need smaller than the **Heat budget minimum burn** is carried into the next period (`heat_credit_kwh`), as is what a block could not deliver, up to one period at minimum power;
 - a hot water request does not shorten a block: it runs on until its heat is delivered;
 - two burns the boiler cuts out by overheating end a block;
 - a hot water reheat in the last third of a period starts the next block right away, while the boiler is warm (`hot_water_piggybacks`);
-- a pause shorter than the anti-cycling time is not worth an ignition, so the block runs on.
+- a pause shorter than the anti-cycling time is not worth an ignition, so the block runs on;
+- a room more than 0.7 °C above its target gets no heat: the running block ends and nothing is carried over (`heat_budget_room_too_warm`).
 
 Until the budget is ready the normal control runs, with its own Force PWM setting. Once ready, SAT always uses low-load cycles, as Force PWM does.
 
