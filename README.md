@@ -91,7 +91,7 @@ A new install is then added under **Settings → Devices & services → Add inte
 
 ### Going back
 
-In HACS remove the MPX edition and download SAT v2 again (or copy the original over `custom_components/sat` by hand), then restart. There is no config entry migration in this fork; the extra options are ignored and the extra entities become orphaned (remove them under **Settings → Entities**).
+In HACS remove the MPX edition and download SAT v2 again (or copy the original over `custom_components/sat` by hand), then restart. This fork adds no config entry migration of its own, so SAT v2 5.2.0 or newer loads the entry again; an older SAT cannot, because Home Assistant does not load an entry saved by a newer version. The extra options are ignored and the extra entities become orphaned (remove them under **Settings → Entities**).
 
 ## Documentation
 
