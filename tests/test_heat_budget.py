@@ -196,3 +196,20 @@ def test_a_warm_room_never_hands_over() -> None:
     burn(budget, 0, 6 * 3600, outdoor=-15.0)
 
     assert not budget.overloaded
+
+
+def test_a_hot_water_reheat_brings_the_next_block_forward() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.1)
+    budget.update(inputs(1000))
+    on_time = budget.duty_cycle[0]
+
+    # Let the block finish, then reheat hot water late in the period
+    now = burn(budget, 1030, on_time + 600)
+    assert budget.status == PWMStatus.OFF
+    late = 1000 + 3600 - 900
+    burn(budget, now, late - now)
+    budget.update(inputs(late, hot_water_active=True, flame_active=True))
+    budget.update(inputs(late + 300, hot_water_active=False))
+
+    assert budget.status == PWMStatus.ON
+    assert budget.attributes["hot_water_piggybacks"] == 1

@@ -55,6 +55,7 @@ from .const import (
     CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
     CONF_GAS_ENERGY_CONTENT,
+    CONF_GAS_PRICE,
     CONF_HEAT_BUDGET_MINIMUM_BURN,
     CONF_HEAT_BUDGET_MODE,
     CONF_HEAT_BUDGET_PERIOD,
@@ -63,11 +64,17 @@ from .const import (
     CONF_HEATING_MODE,
     CONF_HEATING_SYSTEM,
     CONF_HOME_TEMPERATURE,
+    CONF_HOT_WATER_COMFORT_TEMPERATURE,
+    CONF_HOT_WATER_ECO_TEMPERATURE,
+    CONF_HOT_WATER_SCHEDULE_ENTITY_ID,
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
     CONF_INSIDE_SENSOR_ENTITY_ID,
     CONF_INTEGRAL,
     CONF_KEEP_HEATING_IN_PWM_OFF,
+    CONF_LAST_SERVICE_DATE,
     CONF_LEARN_OVERSHOOT_PROTECTION,
+    CONF_LEGIONELLA_DAY,
+    CONF_LEGIONELLA_TIME,
     CONF_MANUFACTURER,
     CONF_MAXIMUM_CONSUMPTION,
     CONF_MAXIMUM_RELATIVE_MODULATION,
@@ -81,13 +88,18 @@ from .const import (
     CONF_OUTSIDE_SENSOR_ENTITY_ID,
     CONF_OVERSHOOT_PROTECTION,
     CONF_PID_CONTROLLER_VERSION,
+    CONF_PRESENCE_ENTITY_IDS,
     CONF_PROPORTIONAL,
+    CONF_PROXIMITY_ENTITY_ID,
     CONF_PUSH_SETPOINT_TO_THERMOSTAT,
     CONF_PWM_SHORT_BURNS_THRESHOLD,
     CONF_RADIATORS,
+    CONF_RETURN_DISTANCE,
     CONF_ROOMS,
     CONF_SAMPLE_TIME,
+    CONF_SCREED_MAXIMUM_TEMPERATURE,
     CONF_SENSOR_MAX_VALUE_AGE,
+    CONF_SERVICE_INTERVAL,
     CONF_SETBACK_TEMPERATURE,
     CONF_SIMULATED_COOLING,
     CONF_SIMULATED_HEATING,
@@ -100,7 +112,9 @@ from .const import (
     CONF_THERMAL_COMFORT,
     CONF_THERMOSTAT,
     CONF_VALVE_OPENING_TIME,
+    CONF_WARM_WEATHER_SHUTDOWN,
     CONF_WEATHER_FORECAST_ENTITY_ID,
+    CONF_WINDOW_DETECTION,
     CONF_WINDOW_MINIMUM_OPEN_TIME,
     CONF_WINDOW_SENSORS,
     DOMAIN,
@@ -112,6 +126,7 @@ from .const import (
     HEATING_SYSTEM_HEAT_PUMP,
     HEATING_SYSTEM_RADIATORS,
     HEATING_SYSTEM_UNDERFLOOR,
+    LEGIONELLA_OFF,
     MAXIMUM_SETPOINT,
     MINIMUM_SETPOINT,
     MODE_ESPHOME,
@@ -1106,9 +1121,16 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
                 errors["base"] = "calibration_timeout"
             else:
                 # A cleared optional entity is left out of the input, which would keep the old one
-                for key in (CONF_WEATHER_FORECAST_ENTITY_ID, CONF_COMFORT_SCHEDULE_ENTITY_ID):
-                    if self.config_entry.data.get(CONF_MODE) != MODE_SWITCH:
+                if self.config_entry.data.get(CONF_MODE) != MODE_SWITCH:
+                    for key in (
+                        CONF_WEATHER_FORECAST_ENTITY_ID,
+                        CONF_COMFORT_SCHEDULE_ENTITY_ID,
+                        CONF_HOT_WATER_SCHEDULE_ENTITY_ID,
+                        CONF_PROXIMITY_ENTITY_ID,
+                        CONF_LAST_SERVICE_DATE,
+                    ):
                         advanced.setdefault(key, None)
+                    advanced.setdefault(CONF_PRESENCE_ENTITY_IDS, [])
                 return await self.update_options(_user_input)
 
         options = await self.get_options()
@@ -1348,6 +1370,7 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
                     mode=selector.NumberSelectorMode.BOX,
                 )
             )
+            self._add_extra_options(advanced, options)
         advanced[
             vol.Required(
                 CONF_CALIBRATION_FLAME_TIMEOUT, default=options[CONF_CALIBRATION_FLAME_TIMEOUT]
@@ -1365,6 +1388,101 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             step_id="system_configuration",
             data_schema=vol.Schema(schema),
             errors=errors,
+        )
+
+    @staticmethod
+    def _add_extra_options(advanced: dict[Marker, Any], options: dict[str, Any]) -> None:
+        """Add warm weather, hot water, presence, window, service and cost settings."""
+
+        def number(minimum: float, maximum: float, step: float, unit: str | None = None) -> Any:  # noqa: ANN401
+            return selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=minimum,
+                    max=maximum,
+                    step=step,
+                    unit_of_measurement=unit,
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
+
+        def optional(key: str) -> vol.Optional:
+            return vol.Optional(key, description={"suggested_value": options.get(key)})
+
+        advanced[
+            vol.Required(CONF_WARM_WEATHER_SHUTDOWN, default=options[CONF_WARM_WEATHER_SHUTDOWN])
+        ] = number(0, 25, 0.5, "°C")
+        advanced[optional(CONF_HOT_WATER_SCHEDULE_ENTITY_ID)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="schedule")
+        )
+        advanced[
+            vol.Required(
+                CONF_HOT_WATER_COMFORT_TEMPERATURE,
+                default=options[CONF_HOT_WATER_COMFORT_TEMPERATURE],
+            )
+        ] = number(0, 65, 1, "°C")
+        advanced[
+            vol.Required(
+                CONF_HOT_WATER_ECO_TEMPERATURE, default=options[CONF_HOT_WATER_ECO_TEMPERATURE]
+            )
+        ] = number(0, 65, 1, "°C")
+        advanced[vol.Required(CONF_LEGIONELLA_DAY, default=options[CONF_LEGIONELLA_DAY])] = (
+            selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    mode=SelectSelectorMode.DROPDOWN,
+                    options=[
+                        selector.SelectOptionDict(value=LEGIONELLA_OFF, label="Off"),
+                        *(
+                            selector.SelectOptionDict(value=str(index), label=name)
+                            for index, name in enumerate(
+                                (
+                                    "Monday",
+                                    "Tuesday",
+                                    "Wednesday",
+                                    "Thursday",
+                                    "Friday",
+                                    "Saturday",
+                                    "Sunday",
+                                )
+                            )
+                        ),
+                    ],
+                )
+            )
+        )
+        advanced[vol.Required(CONF_LEGIONELLA_TIME, default=options[CONF_LEGIONELLA_TIME])] = (
+            selector.TimeSelector()
+        )
+        advanced[optional(CONF_PRESENCE_ENTITY_IDS)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=[
+                    "person",
+                    "device_tracker",
+                    "zone",
+                    "group",
+                    "binary_sensor",
+                    "input_boolean",
+                ],
+                multiple=True,
+            )
+        )
+        advanced[optional(CONF_PROXIMITY_ENTITY_ID)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor")
+        )
+        advanced[vol.Required(CONF_RETURN_DISTANCE, default=options[CONF_RETURN_DISTANCE])] = (
+            number(0, 200, 1, "km")
+        )
+        advanced[vol.Required(CONF_WINDOW_DETECTION, default=options[CONF_WINDOW_DETECTION])] = bool
+        advanced[
+            vol.Required(
+                CONF_SCREED_MAXIMUM_TEMPERATURE, default=options[CONF_SCREED_MAXIMUM_TEMPERATURE]
+            )
+        ] = number(0, 70, 1, "°C")
+        advanced[optional(CONF_LAST_SERVICE_DATE)] = selector.DateSelector()
+        advanced[vol.Required(CONF_SERVICE_INTERVAL, default=options[CONF_SERVICE_INTERVAL])] = (
+            number(1, 36, 1, "months")
+        )
+        advanced[vol.Required(CONF_GAS_PRICE, default=options[CONF_GAS_PRICE])] = number(
+            0, 50, 0.01
         )
 
     async def update_options(self, _user_input: dict[str, Any]) -> ConfigFlowResult:

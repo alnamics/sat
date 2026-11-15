@@ -16,6 +16,7 @@ from homeassistant.const import (
 
 from .const import (
     CONF_GAS_ENERGY_CONTENT,
+    CONF_GAS_PRICE,
     CONF_MAXIMUM_CONSUMPTION,
     CONF_MINIMUM_CONSUMPTION,
     CONF_MODE,
@@ -91,6 +92,8 @@ async def async_setup_entry(
         or coordinator.supports_relative_modulation_management
     ):
         _async_add_entities([SatTotalSensor(coordinator, _config_entry, climate, "gas_m3")])
+        if float(_config_entry.options.get(CONF_GAS_PRICE) or 0) > 0:
+            _async_add_entities([SatGasCostSensor(coordinator, _config_entry, climate)])
 
     if climate.loop_monitor is not None:
         _async_add_entities(
@@ -418,6 +421,31 @@ class SatTotalSensor(SatClimateEntity, SensorEntity):
     def _update_attrs(self) -> None:
         value = self._climate.boiler_stats.totals[self._key]
         self._attr_native_value = int(value) if self._key == "starts" else round(value, 4)
+
+
+class SatGasCostSensor(SatClimateEntity, SensorEntity):
+    """The estimated gas cost so far, at the configured price."""
+
+    _attr_translation_key = "total_gas_cost"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry, climate: SatClimate
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
+
+        self._attr_unique_id = f"{config_entry.entry_id}-total-gas-cost"
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        self._attr_native_unit_of_measurement = self.hass.config.currency
+        await super().async_added_to_hass()
+
+    @override
+    def _update_attrs(self) -> None:
+        self._attr_native_value = round(self._climate.boiler_stats.totals["gas_cost"], 2)
 
 
 class SatHotWaterCoolingSensor(SatClimateEntity, SensorEntity):

@@ -13,3 +13,9 @@ pulse_width_modulation:
     enabled:
       required: true
       example: true
+
+measure_loops:
+  target:
+    entity:
+      domain: climate
+      integration: "sat"

@@ -267,7 +267,21 @@
               "heat_loss_coefficient": "Heat loss of the house",
               "weather_forecast_entity_id": "Weather forecast",
               "comfort_schedule_entity_id": "Comfort schedule",
-              "setback_temperature": "Setback outside the comfort schedule"
+              "setback_temperature": "Setback outside the comfort schedule",
+              "warm_weather_shutdown_temperature": "Warm weather shutdown",
+              "hot_water_schedule_entity_id": "Hot water schedule",
+              "hot_water_comfort_temperature": "Hot water temperature",
+              "hot_water_eco_temperature": "Hot water eco temperature",
+              "legionella_day": "Legionella boost day",
+              "legionella_time": "Legionella boost start",
+              "presence_entity_ids": "Presence",
+              "proximity_entity_id": "Distance to home",
+              "return_distance": "Return distance",
+              "window_detection": "Detect open windows from the temperature",
+              "screed_maximum_temperature": "Maximum flow for the screed",
+              "last_service_date": "Last boiler service",
+              "service_interval": "Service interval",
+              "gas_price": "Gas price per cubic metre"
             },
             "data_description": {
               "climate_valve_offset": "Offset to adjust the opening degree of the climate valve.",
@@ -292,7 +306,21 @@
               "heat_loss_coefficient": "Heat the house loses per degree between inside and outside, in W/K. 0 learns it.",
               "weather_forecast_entity_id": "A weather entity with an hourly forecast. The heat budget plans with the temperature of the next three hours and, when the forecast has cloud cover, learns how much the sun heats the house.",
               "comfort_schedule_entity_id": "A schedule helper that is on when the house should be at the target temperature. Outside it the heat budget lowers the target by the setback, starts the recovery early enough to be warm when the schedule turns on (learned from earlier recoveries) and stops an hour early because the screed keeps heating.",
-              "setback_temperature": "How much lower the heat budget keeps the house outside the comfort schedule. With screed floors small setbacks save little."
+              "setback_temperature": "How much lower the heat budget keeps the house outside the comfort schedule. With screed floors small setbacks save little.",
+              "warm_weather_shutdown_temperature": "Central heating switches off while the outside temperature averaged over a day is at or above this, and back on 2 °C below it (a forecast keeps it off when warm weather returns soon). Hot water keeps working. 0 keeps heating on.",
+              "hot_water_schedule_entity_id": "A schedule helper that is on in the hours hot water is used. Outside them the eco temperature applies.",
+              "hot_water_comfort_temperature": "The cylinder temperature SAT sends to the boiler; 0 leaves the hot water to the boiler.",
+              "hot_water_eco_temperature": "The cylinder temperature outside the schedule's hours; 0 uses the hot water temperature all day.",
+              "legionella_day": "Once a week the cylinder is held at 60 °C for an hour.",
+              "legionella_time": "When the weekly boost starts, best in the night.",
+              "presence_entity_ids": "People, device trackers, zones or groups. When nobody has been home for 30 minutes SAT switches to the Away preset, and back when someone returns.",
+              "proximity_entity_id": "A distance sensor (Proximity integration). Within the return distance the house counts as occupied again, so a slow floor starts warming early.",
+              "return_distance": "How close someone must be for the heating to come back; 0 waits until they are home.",
+              "window_detection": "Without contact sensors: a room temperature drop of 0.8 °C within 10 minutes switches to the Activity preset for 30 minutes.",
+              "screed_maximum_temperature": "Flow water above this for 3 minutes in space heating raises a repair issue. Underfloor heating only; 0 turns it off.",
+              "last_service_date": "A repair issue reminds you when the next service is due.",
+              "service_interval": "Months between boiler services.",
+              "gas_price": "Including distribution, in your currency. Adds an estimated gas cost sensor; 0 turns it off."
             }
           }
         }
@@ -313,6 +341,10 @@
           "description": "The state you want to force."
         }
       }
+    },
+    "measure_loops": {
+      "name": "Measure loops",
+      "description": "Measures the water flow of each heating loop by turning the room thermostats off and opening them one at a time while the burner runs at minimum power. Takes about 15 minutes per room; the thermostats are put back afterwards and the result comes as a notification."
     }
   },
   "entity": {
@@ -684,6 +716,9 @@
       },
       "loop_balance": {
         "name": "Loops to rebalance"
+      },
+      "total_gas_cost": {
+        "name": "Estimated gas cost"
       }
     },
     "button": {
@@ -707,6 +742,12 @@
     },
     "unsupported_preset_mode": {
       "message": "Preset mode {preset_mode} is not supported. Choose one of: {preset_modes}."
+    },
+    "loop_measurement_running": {
+      "message": "A loop measurement is already running."
+    },
+    "loop_measurement_unavailable": {
+      "message": "Loop measurement needs room or radiator thermostats, a boiler that takes a setpoint, and SAT in heat mode."
     }
   },
   "issues": {
@@ -725,6 +766,26 @@
     "heat_exchanger_fouling": {
       "title": "{title}: the heat exchanger may need cleaning",
       "description": "In settled heating burns the flue gas has been about {gap} K warmer than the return water over the last day. A clean condensing boiler stays within a few kelvin, so the heat exchanger or the burner may need a service."
+    },
+    "pressure_falling": {
+      "title": "{title}: water pressure keeps falling",
+      "description": "The water pressure of {title} fell by {per_week} bar a week over the last days, to {pressure} bar. Look for a leak or a failing expansion vessel before the boiler locks out."
+    },
+    "screed_overheat": {
+      "title": "{title}: flow water too hot for the floor",
+      "description": "{title} sent {flow} °C to the floor for minutes, above the {limit} °C limit. Check the boiler's maximum heating temperature."
+    },
+    "low_water_flow": {
+      "title": "{title}: too little water through the heating",
+      "description": "The flow of {title} ran {spread} K warmer than the return in settled burns. Too little water moves: check the loops, the filter and for air in the system."
+    },
+    "boiler_service_due": {
+      "title": "{title}: boiler service due",
+      "description": "The service of {title} was due on {due}."
+    },
+    "gas_use_increased": {
+      "title": "{title}: gas use went up",
+      "description": "{title} used {percent} % more gas per degree day last week than in the weeks before. Look for an open window, a closed loop or a boiler problem."
     }
   }
 }
