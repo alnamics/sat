@@ -43,6 +43,11 @@ class PresenceTracker:
     def state(self) -> Occupancy:
         return self._state
 
+    def resume_away(self, now: float) -> None:
+        """Continue an absence that began before a restart."""
+        self._state = Occupancy.AWAY
+        self._absent_since = now - AWAY_DELAY_SECONDS
+
     def update(self, now: float, *, home: bool | None, distance_km: float | None) -> Occupancy:
         if home is None:
             return self._state

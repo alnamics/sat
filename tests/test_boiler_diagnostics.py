@@ -51,18 +51,21 @@ async def test_low_water_pressure_raises_an_issue(hass: HomeAssistant) -> None:
 
 async def test_a_slowly_falling_pressure_raises_an_issue(hass: HomeAssistant) -> None:
     diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
-    start = date(2026, 11, 1)
-    for day in range(7):
-        diagnostics.update(
-            day * 86400.0,
-            pressure=1.3 - day * 0.02,
-            fault=False,
-            fault_code=None,
-            exhaust=None,
-            return_temperature=None,
-            settled_heating_burn=False,
-            today=start + timedelta(days=day),
-        )
+    start, now = date(2026, 11, 1), 0.0
+    for day in range(8):
+        for _ in range(24 * 12):
+            diagnostics.update(
+                now,
+                pressure=1.3 - day * 0.02,
+                fault=False,
+                fault_code=None,
+                exhaust=None,
+                return_temperature=None,
+                settled_heating_burn=False,
+                today=start + timedelta(days=day),
+                system_temperature=30.0,
+            )
+            now += 300
 
     assert diagnostics.pressure_trend_per_week is not None
     assert diagnostics.pressure_trend_per_week < -0.1
@@ -87,8 +90,51 @@ async def test_flow_water_too_hot_for_the_screed(hass: HomeAssistant) -> None:
     assert ir.async_get(hass).async_get_issue(DOMAIN, "screed_overheat_entry")
 
 
-async def test_too_little_water_flow(hass: HomeAssistant) -> None:
+def spread(diagnostics: BoilerDiagnostics) -> None:
+    """Ten minutes of a settled burn with the flow 23 K above the return."""
+    for second in range(0, 600, 30):
+        diagnostics.update(
+            float(second),
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=25.0,
+            settled_heating_burn=True,
+            flow=48.0,
+            heating_burn=True,
+        )
+
+
+async def test_a_wide_spread_is_normal_for_radiators(hass: HomeAssistant) -> None:
     diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    spread(diagnostics)
+
+    assert not ir.async_get(hass).async_get_issue(DOMAIN, "low_water_flow_entry")
+
+
+async def test_the_heat_exchanger_is_only_judged_near_minimum_power(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    now = 0.0
+    while now <= 8 * 3600:
+        diagnostics.update(
+            now,
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=58.0,
+            return_temperature=40.0,
+            settled_heating_burn=True,
+            near_minimum_power=False,
+        )
+        now += 60
+
+    assert diagnostics.flue_return_gap is None
+    assert not ir.async_get(hass).async_get_issue(DOMAIN, "heat_exchanger_fouling_entry")
+
+
+async def test_too_little_water_flow(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT", underfloor=True)
     for second in range(0, 600, 30):
         diagnostics.update(
             float(second),

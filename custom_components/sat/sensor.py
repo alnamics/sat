@@ -16,16 +16,13 @@ from homeassistant.const import (
 )
 
 from .const import (
-    CONF_GAS_ENERGY_CONTENT,
     CONF_GAS_PRICE,
     CONF_MAXIMUM_CONSUMPTION,
     CONF_MINIMUM_CONSUMPTION,
     CONF_MODE,
     MODE_MQTT_OPENTHERM,
-    OPTIONS_DEFAULTS,
 )
 from .entity import SatClimateEntity, SatEntity
-from .helpers import float_value
 from .serial import SatSerialCoordinator
 from .serial import sensor as serial_sensor
 from .simulator import SatSimulatorCoordinator
@@ -43,12 +40,6 @@ if TYPE_CHECKING:
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
-
-# Specific heat of water in kJ/(kg·K), with 1 kg per litre
-WATER_SPECIFIC_HEAT = 4.186
-# The flow only settles a few minutes into a burn, and a small spread is mostly sensor noise
-MINIMUM_SETTLED_BURN_SECONDS = 180
-MINIMUM_FLOW_RETURN_DIFFERENCE = 1.5
 
 
 async def async_setup_entry(
@@ -89,8 +80,16 @@ async def async_setup_entry(
         + [
             SatHotWaterCoolingSensor(coordinator, _config_entry, climate),
             SatEfficiencySensor(coordinator, _config_entry, climate),
+            SatEstimatedWaterFlowSensor(coordinator, _config_entry, climate),
         ]
     )
+    if climate.heat_budget is not None:
+        _async_add_entities(
+            [
+                SatHeatNeedSensor(coordinator, _config_entry, climate),
+                SatHeatLossSensor(coordinator, _config_entry, climate),
+            ]
+        )
     if (
         float(_config_entry.options.get(CONF_MINIMUM_CONSUMPTION) or 0) > 0
         or coordinator.supports_relative_modulation_management
@@ -114,12 +113,7 @@ async def async_setup_entry(
             float(_config_entry.options.get(CONF_MINIMUM_CONSUMPTION) or 0) > 0
             and float(_config_entry.options.get(CONF_MAXIMUM_CONSUMPTION) or 0) > 0
         ):
-            _async_add_entities(
-                [
-                    SatCurrentConsumptionSensor(coordinator, _config_entry),
-                    SatEstimatedWaterFlowSensor(coordinator, _config_entry),
-                ]
-            )
+            _async_add_entities([SatCurrentConsumptionSensor(coordinator, _config_entry)])
 
 
 class SatCurrentPowerSensor(SatEntity, SensorEntity):
@@ -327,7 +321,7 @@ class SatFlameStartsSensor(SatEntity, SensorEntity):
         self._attr_native_value = int(self._coordinator.flame.cycles_last_hour)
 
 
-class SatEstimatedWaterFlowSensor(SatEntity, SensorEntity):
+class SatEstimatedWaterFlowSensor(SatClimateEntity, SensorEntity):
     """Water flow through the heating system, from the burner power and the flow/return spread.
 
     It is measured during settled space heating burns only and holds the last value between them.
@@ -340,53 +334,72 @@ class SatEstimatedWaterFlowSensor(SatEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfVolumeFlowRate.LITERS_PER_MINUTE
     _attr_suggested_display_precision = 1
 
-    def __init__(self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry) -> None:
-        super().__init__(coordinator, config_entry)
+    def __init__(
+        self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry, climate: SatClimate
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
 
         self._attr_unique_id = f"{config_entry.entry_id}-estimated-water-flow"
-        self._minimum_consumption = float(self._config_entry.options[CONF_MINIMUM_CONSUMPTION])
-        self._maximum_consumption = float(self._config_entry.options[CONF_MAXIMUM_CONSUMPTION])
-        self._gas_energy_content = float(
-            self._config_entry.options.get(CONF_GAS_ENERGY_CONTENT)
-            or OPTIONS_DEFAULTS[CONF_GAS_ENERGY_CONTENT]
-        )
-        self._attr_extra_state_attributes = {"heat_output_kw": None, "flow_return_difference": None}
-
-    def _heat_output(self) -> float | None:
-        """Return the heat the burner delivers in kW, from the gas use the modulation implies."""
-        if (modulation := float_value(self._coordinator.relative_modulation_value)) is None:
-            return None
-
-        consumption = self._minimum_consumption + (
-            (modulation / 100) * (self._maximum_consumption - self._minimum_consumption)
-        )
-        return consumption * self._gas_energy_content
 
     @override
     def _update_attrs(self) -> None:
-        coordinator = self._coordinator
-        flow = coordinator.boiler_temperature
-        return_temperature = coordinator.return_temperature
-        on_time = coordinator.flame.latest_on_time_seconds
+        flow = self._climate.water_flow
+        self._attr_native_value = None if flow is None else round(flow, 1)
+        self._attr_extra_state_attributes = dict(self._climate.water_flow_details)
 
-        if (
-            not coordinator.flame_active
-            or coordinator.hot_water_active
-            or flow is None
-            or return_temperature is None
-            or on_time is None
-            or on_time < MINIMUM_SETTLED_BURN_SECONDS
-            or (difference := flow - return_temperature) < MINIMUM_FLOW_RETURN_DIFFERENCE
-            or (heat_output := self._heat_output()) is None
-        ):
+
+class SatHeatNeedSensor(SatClimateEntity, SensorEntity):
+    """The heat the heat budget works out for the house right now."""
+
+    _attr_translation_key = "heat_need"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry, climate: SatClimate
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
+
+        self._attr_unique_id = f"{config_entry.entry_id}-heat-need"
+
+    @override
+    def _update_attrs(self) -> None:
+        if (budget := self._climate.heat_budget) is None:
             return
-
-        # P = m · c · ΔT, so m = P / (c · ΔT), in kg/s and then l/min
-        self._attr_native_value = round(heat_output / (WATER_SPECIFIC_HEAT * difference) * 60, 1)
+        attributes = budget.attributes
+        self._attr_native_value = attributes["heat_need_kw"]
         self._attr_extra_state_attributes = {
-            "heat_output_kw": round(heat_output, 2),
-            "flow_return_difference": round(difference, 1),
+            "heat_credit_kwh": attributes["heat_credit_kwh"],
+            "heat_block_minutes": attributes["heat_block_minutes"],
         }
+
+
+class SatHeatLossSensor(SatClimateEntity, SensorEntity):
+    """The heat loss of the house per kelvin, as the heat budget learned it."""
+
+    _attr_translation_key = "heat_loss"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "W/K"
+    _attr_suggested_display_precision = 0
+    _attr_icon = "mdi:home-thermometer-outline"
+
+    def __init__(
+        self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry, climate: SatClimate
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
+
+        self._attr_unique_id = f"{config_entry.entry_id}-heat-loss"
+
+    @override
+    def _update_attrs(self) -> None:
+        if (budget := self._climate.heat_budget) is None:
+            return
+        self._attr_native_value = round(budget.heat_loss * 1000)
+        self._attr_extra_state_attributes = {"ready": budget.ready}
 
 
 TOTAL_SENSORS: dict[str, tuple[SensorDeviceClass | None, str | None, int]] = {

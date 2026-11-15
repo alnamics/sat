@@ -26,6 +26,10 @@ class TemperatureDropDetector:
     def open(self) -> bool:
         return self._open_until is not None
 
+    def resume(self, now: float) -> None:
+        """Continue a pause that began before a restart, for the full hold time."""
+        self._open_until = now + HOLD_SECONDS
+
     def update(self, now: float, temperature: float | None) -> bool:
         if temperature is not None:
             self._samples.append((now, temperature))

@@ -153,8 +153,19 @@ class LoopMonitor:
 
     @property
     def base_flow(self) -> float | None:
-        """Flow through the loops that are always open, in l/min."""
-        return round(self._theta[0], 1) if self._flow_samples >= MINIMUM_SAMPLES_PER_STATE else None
+        """Flow through the loops that were never seen closed, in l/min.
+
+        The loops without an actuator and the rooms whose valve never closed cannot be told
+        apart, so only their sum is known.
+        """
+        if self._flow_samples < MINIMUM_SAMPLES_PER_STATE:
+            return None
+
+        base = self._theta[0]
+        for index, name in enumerate(self._names):
+            if self._rooms[name].closed_samples < MINIMUM_SAMPLES_PER_STATE:
+                base += self._theta[1 + index]
+        return round(base, 1)
 
     def advice(self, name: str) -> tuple[str, int]:
         """Return ("reduce" | "increase" | "ok" | "learning", percent) for a room's rotameter."""

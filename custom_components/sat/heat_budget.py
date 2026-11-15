@@ -178,20 +178,10 @@ class _Hour:
     def from_list(cls, values: object) -> _Hour | None:
         if not isinstance(values, list) or len(values) != len(cls.__slots__):
             return None
-        if not all(value is None or isinstance(value, int | float) for value in values):
+        numbers = [float(value) for value in values if isinstance(value, int | float)]
+        if len(numbers) != len(values):
             return None
-        heat, kelvin, sun, seconds, start, end, wall = values
-        if heat is None or kelvin is None or sun is None or seconds is None:
-            return None
-        return cls(
-            float(heat),
-            float(kelvin),
-            float(sun),
-            float(seconds),
-            None if start is None else float(start),
-            None if end is None else float(end),
-            None if wall is None else float(wall),
-        )
+        return cls(*numbers)
 
 
 class _RecursiveLeastSquares:
@@ -577,6 +567,7 @@ class HeatBudget:
             self._hour.sun_hours += (inputs.solar or 0.0) * hours
             self._hour.seconds += dt
             self._hour.indoor_end = inputs.indoor
+            self._hour.wall_end = inputs.wall_time.timestamp()
 
         if now - self._hour_started < SECONDS_PER_HOUR:
             return
@@ -597,6 +588,7 @@ class HeatBudget:
             hour.seconds < MINIMUM_HOUR_COVERAGE * SECONDS_PER_HOUR
             or hour.indoor_start is None
             or hour.indoor_end is None
+            or hour.wall_end is None
         ):
             # Too little of this hour was measured; the rest of the day stays
             return
@@ -606,7 +598,6 @@ class HeatBudget:
         hour.heat_kwh *= scale
         hour.kelvin_hours *= scale
         hour.sun_hours *= scale
-        hour.wall_end = wall
         self._hours.append(hour)
         self._save()
         if len(self._hours) < LEARNING_MINIMUM_HOURS:
