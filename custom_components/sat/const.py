@@ -67,6 +67,22 @@ CONF_SENSOR_MAX_VALUE_AGE = "sensor_max_value_age"
 CONF_DEFAULT_HVAC_MODE = "default_hvac_mode"
 CONF_CALIBRATION_FLAME_TIMEOUT = "calibration_flame_timeout"
 CONF_CALIBRATION_PLATEAU_TIMEOUT = "calibration_plateau_timeout"
+CONF_PWM_SHORT_BURNS_THRESHOLD = "pwm_short_burns_threshold"
+CONF_BOILER_ANTI_CYCLING_TIME = "boiler_anti_cycling_time"
+CONF_LEARN_OVERSHOOT_PROTECTION = "learn_overshoot_protection"
+CONF_VALVE_OPENING_TIME = "valve_opening_time"
+CONF_KEEP_HEATING_IN_PWM_OFF = "keep_heating_in_pwm_off"
+CONF_HEAT_BUDGET_MODE = "heat_budget_mode"
+CONF_HEAT_BUDGET_PERIOD = "heat_budget_period"
+CONF_HEAT_BUDGET_MINIMUM_BURN = "heat_budget_minimum_burn"
+CONF_HEAT_LOSS_COEFFICIENT = "heat_loss_coefficient"
+CONF_WEATHER_FORECAST_ENTITY_ID = "weather_forecast_entity_id"
+CONF_COMFORT_SCHEDULE_ENTITY_ID = "comfort_schedule_entity_id"
+CONF_SETBACK_TEMPERATURE = "setback_temperature"
+
+HEAT_BUDGET_OFF = "off"
+HEAT_BUDGET_SHADOW = "shadow"
+HEAT_BUDGET_ON = "on"
 CONF_OVERSHOOT_PROTECTION = "overshoot_protection"
 CONF_SYNC_CLIMATES_WITH_MODE = "sync_climates_with_mode"
 CONF_SYNC_CLIMATES_WITH_PRESET = "sync_climates_with_preset"
@@ -88,6 +104,7 @@ CONF_MINIMUM_SETPOINT_ADJUSTMENT_FACTOR = "minimum_setpoint_adjustment_factor"
 
 CONF_MINIMUM_CONSUMPTION = "minimum_consumption"
 CONF_MAXIMUM_CONSUMPTION = "maximum_consumption"
+CONF_GAS_ENERGY_CONTENT = "gas_energy_content"
 
 CONF_AWAY_TEMPERATURE = "away_temperature"
 CONF_HOME_TEMPERATURE = "home_temperature"
@@ -131,6 +148,8 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_FORCE_PULSE_WIDTH_MODULATION: False,
     CONF_MINIMUM_CONSUMPTION: 0,
     CONF_MAXIMUM_CONSUMPTION: 0,
+    # Heat from one cubic metre of natural gas in a condensing boiler; propane gives about 24
+    CONF_GAS_ENERGY_CONTENT: 10.2,
     CONF_DUTY_CYCLE: "00:13:00",
     CONF_SAMPLE_TIME: "00:01:00",
     CONF_CLIMATE_VALVE_OFFSET: 0,
@@ -139,6 +158,25 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_DEFAULT_HVAC_MODE: "heat",
     CONF_CALIBRATION_FLAME_TIMEOUT: "00:10:00",
     CONF_CALIBRATION_PLATEAU_TIMEOUT: "00:40:00",
+    # Burns the boiler may cut short in one PWM on-phase before SAT ends the on-phase
+    CONF_PWM_SHORT_BURNS_THRESHOLD: 2,
+    # The boiler's own wait before relighting; 0 keeps the default stuck-off timeout
+    CONF_BOILER_ANTI_CYCLING_TIME: "00:00:00",
+    # Adjust the overshoot protection value from how PWM burns end
+    CONF_LEARN_OVERSHOOT_PROTECTION: False,
+    # How long the valve actuators of the climates take to open; 0 lights the boiler at once
+    CONF_VALVE_OPENING_TIME: "00:00:00",
+    # Leave central heating enabled at the minimum setpoint between PWM on-phases
+    CONF_KEEP_HEATING_IN_PWM_OFF: False,
+    # Dose the burner from a learned heat balance instead of flow temperatures
+    CONF_HEAT_BUDGET_MODE: "off",
+    CONF_HEAT_BUDGET_PERIOD: "60",
+    CONF_HEAT_BUDGET_MINIMUM_BURN: "00:10:00",
+    # Heat loss of the house in W/K; 0 learns it
+    CONF_HEAT_LOSS_COEFFICIENT: 0,
+    CONF_WEATHER_FORECAST_ENTITY_ID: None,
+    CONF_COMFORT_SCHEDULE_ENTITY_ID: None,
+    CONF_SETBACK_TEMPERATURE: 0.0,
     CONF_SIMULATED_WARMING_UP: "00:00:15",
     CONF_WINDOW_MINIMUM_OPEN_TIME: "00:00:15",
     CONF_ACTIVITY_TEMPERATURE: 10,

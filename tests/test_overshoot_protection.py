@@ -9,6 +9,8 @@ import pytest
 from pytest_homeassistant.common import async_fire_time_changed
 
 from custom_components.sat.const import (
+    CONF_BOILER_ANTI_CYCLING_TIME,
+    CONF_CALIBRATION_FLAME_TIMEOUT,
     CONF_MANUFACTURER,
     CONF_MAXIMUM_SETPOINT,
     HEATING_SYSTEM_RADIATORS,
@@ -22,6 +24,7 @@ from custom_components.sat.overshoot_protection import (
     CalibrationError,
     CalibrationResult,
     OvershootProtection,
+    create_overshoot_protection,
 )
 from custom_components.sat.simulator import SatSimulatorCoordinator
 
@@ -526,3 +529,19 @@ async def test_geminox_gets_the_climate_modulation_clamp(
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+@pytest.mark.parametrize(
+    ("anti_cycling", "expected"),
+    [("00:00:00", 600), ("00:05:00", 600), ("00:10:00", 720), ("00:20:00", 1320)],
+)
+def test_calibration_waits_for_the_boiler_anti_cycling_time(
+    hass: HomeAssistant, anti_cycling: str, expected: int
+) -> None:
+    protection = create_overshoot_protection(
+        Boiler(hass),
+        HEATING_SYSTEM_RADIATORS,
+        55,
+        {CONF_CALIBRATION_FLAME_TIMEOUT: "00:10:00", CONF_BOILER_ANTI_CYCLING_TIME: anti_cycling},
+    )
+    assert protection._flame_timeout == timedelta(seconds=expected)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .budget_pwm import BudgetPWM
 from .const import (
     CONF_AUTOMATIC_DUTY_CYCLE,
     CONF_AUTOMATIC_GAINS,
@@ -18,6 +19,7 @@ from .const import (
     CONF_MODE,
     CONF_PID_CONTROLLER_VERSION,
     CONF_PROPORTIONAL,
+    CONF_PWM_SHORT_BURNS_THRESHOLD,
     CONF_SAMPLE_TIME,
     HEATING_SYSTEM_UNKNOWN,
     MODE_SWITCH,
@@ -30,6 +32,8 @@ from .pwm import PWM, CycleConfig
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from .heat_budget import HeatBudget
 
 
 def create_pid_controller(config_data: Mapping[str, Any], config_options: Mapping[str, Any]) -> PID:
@@ -91,6 +95,7 @@ def create_pwm_controller(
     heating_curve: HeatingCurve,
     config_data: Mapping[str, Any],
     config_options: Mapping[str, Any],
+    heat_budget: HeatBudget | None = None,
 ) -> PWM:
     """Create and return a PWM controller instance with the given configuration options."""
     # Extract the configuration options
@@ -101,8 +106,21 @@ def create_pwm_controller(
         config_options[CONF_FORCE_PULSE_WIDTH_MODULATION]
     )
 
+    short_burns_threshold = int(config_options[CONF_PWM_SHORT_BURNS_THRESHOLD])
+
     # Extra settings
     cycles = CycleConfig(maximum_count=max_duty_cycles, maximum_time=max_cycle_time)
+
+    # The heat budget drives the blocks once it has learned the house
+    if heat_budget is not None:
+        return BudgetPWM(
+            heating_curve=heating_curve,
+            cycles=cycles,
+            automatic_duty_cycle=automatic_duty_cycle,
+            force=force,
+            short_burns_threshold=short_burns_threshold,
+            heat_budget=heat_budget,
+        )
 
     # Return a new PWM controller instance with the given configuration options
     return PWM(
@@ -110,4 +128,5 @@ def create_pwm_controller(
         cycles=cycles,
         automatic_duty_cycle=automatic_duty_cycle,
         force=force,
+        short_burns_threshold=short_burns_threshold,
     )

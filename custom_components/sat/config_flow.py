@@ -39,9 +39,11 @@ from .const import (
     CONF_AUTOMATIC_GAINS,
     CONF_AUTOMATIC_GAINS_VALUE,
     CONF_AWAY_TEMPERATURE,
+    CONF_BOILER_ANTI_CYCLING_TIME,
     CONF_CALIBRATION_FLAME_TIMEOUT,
     CONF_CALIBRATION_PLATEAU_TIMEOUT,
     CONF_CLIMATE_VALVE_OFFSET,
+    CONF_COMFORT_SCHEDULE_ENTITY_ID,
     CONF_COMFORT_TEMPERATURE,
     CONF_CYCLES_PER_HOUR,
     CONF_DEFAULT_HVAC_MODE,
@@ -52,6 +54,11 @@ from .const import (
     CONF_DYNAMIC_MINIMUM_SETPOINT,
     CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
+    CONF_GAS_ENERGY_CONTENT,
+    CONF_HEAT_BUDGET_MINIMUM_BURN,
+    CONF_HEAT_BUDGET_MODE,
+    CONF_HEAT_BUDGET_PERIOD,
+    CONF_HEAT_LOSS_COEFFICIENT,
     CONF_HEATING_CURVE_COEFFICIENT,
     CONF_HEATING_MODE,
     CONF_HEATING_SYSTEM,
@@ -59,6 +66,8 @@ from .const import (
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
     CONF_INSIDE_SENSOR_ENTITY_ID,
     CONF_INTEGRAL,
+    CONF_KEEP_HEATING_IN_PWM_OFF,
+    CONF_LEARN_OVERSHOOT_PROTECTION,
     CONF_MANUFACTURER,
     CONF_MAXIMUM_CONSUMPTION,
     CONF_MAXIMUM_RELATIVE_MODULATION,
@@ -74,10 +83,12 @@ from .const import (
     CONF_PID_CONTROLLER_VERSION,
     CONF_PROPORTIONAL,
     CONF_PUSH_SETPOINT_TO_THERMOSTAT,
+    CONF_PWM_SHORT_BURNS_THRESHOLD,
     CONF_RADIATORS,
     CONF_ROOMS,
     CONF_SAMPLE_TIME,
     CONF_SENSOR_MAX_VALUE_AGE,
+    CONF_SETBACK_TEMPERATURE,
     CONF_SIMULATED_COOLING,
     CONF_SIMULATED_HEATING,
     CONF_SIMULATED_WARMING_UP,
@@ -88,9 +99,14 @@ from .const import (
     CONF_TARGET_TEMPERATURE_STEP,
     CONF_THERMAL_COMFORT,
     CONF_THERMOSTAT,
+    CONF_VALVE_OPENING_TIME,
+    CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_MINIMUM_OPEN_TIME,
     CONF_WINDOW_SENSORS,
     DOMAIN,
+    HEAT_BUDGET_OFF,
+    HEAT_BUDGET_ON,
+    HEAT_BUDGET_SHADOW,
     HEATING_MODE_COMFORT,
     HEATING_MODE_ECO,
     HEATING_SYSTEM_HEAT_PUMP,
@@ -1089,6 +1105,10 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             ):
                 errors["base"] = "calibration_timeout"
             else:
+                # A cleared optional entity is left out of the input, which would keep the old one
+                for key in (CONF_WEATHER_FORECAST_ENTITY_ID, CONF_COMFORT_SCHEDULE_ENTITY_ID):
+                    if self.config_entry.data.get(CONF_MODE) != MODE_SWITCH:
+                        advanced.setdefault(key, None)
                 return await self.update_options(_user_input)
 
         options = await self.get_options()
@@ -1124,6 +1144,22 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
                 selector.SelectSelectorConfig(
                     mode=SelectSelectorMode.DROPDOWN,
                     options=[
+                        selector.SelectOptionDict(value="3", label="Normal (3x per hour)"),
+                        selector.SelectOptionDict(value="4", label="High (4x per hour)"),
+                    ],
+                )
+            )
+
+        # An underfloor screed stores heat for hours, so it tolerates fewer, longer cycles
+        if heating_system == HEATING_SYSTEM_UNDERFLOOR:
+            schema[
+                vol.Required(CONF_CYCLES_PER_HOUR, default=str(options[CONF_CYCLES_PER_HOUR]))
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    mode=SelectSelectorMode.DROPDOWN,
+                    options=[
+                        selector.SelectOptionDict(value="1", label="Minimal (1x per hour)"),
+                        selector.SelectOptionDict(value="2", label="Low (2x per hour)"),
                         selector.SelectOptionDict(value="3", label="Normal (3x per hour)"),
                         selector.SelectOptionDict(value="4", label="High (4x per hour)"),
                     ],
@@ -1171,12 +1207,31 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             ] = bool
 
             advanced[
+                vol.Required(
+                    CONF_LEARN_OVERSHOOT_PROTECTION,
+                    default=options[CONF_LEARN_OVERSHOOT_PROTECTION],
+                )
+            ] = bool
+
+            advanced[
                 vol.Required(CONF_MINIMUM_CONSUMPTION, default=options[CONF_MINIMUM_CONSUMPTION])
             ] = selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=8, step=0.1))
 
             advanced[
                 vol.Required(CONF_MAXIMUM_CONSUMPTION, default=options[CONF_MAXIMUM_CONSUMPTION])
             ] = selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=8, step=0.1))
+
+            advanced[
+                vol.Required(CONF_GAS_ENERGY_CONTENT, default=options[CONF_GAS_ENERGY_CONTENT])
+            ] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=30,
+                    step=0.1,
+                    unit_of_measurement="kWh/m³",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
 
         advanced[
             vol.Required(CONF_CLIMATE_VALVE_OFFSET, default=options[CONF_CLIMATE_VALVE_OFFSET])
@@ -1197,6 +1252,102 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
         advanced[vol.Required(CONF_SAMPLE_TIME, default=options[CONF_SAMPLE_TIME])] = (
             selector.TimeSelector()
         )
+        advanced[
+            vol.Required(
+                CONF_PWM_SHORT_BURNS_THRESHOLD, default=options[CONF_PWM_SHORT_BURNS_THRESHOLD]
+            )
+        ] = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=1, max=3, step=1, mode=selector.NumberSelectorMode.BOX
+            )
+        )
+        advanced[
+            vol.Required(
+                CONF_BOILER_ANTI_CYCLING_TIME, default=options[CONF_BOILER_ANTI_CYCLING_TIME]
+            )
+        ] = selector.TimeSelector()
+        advanced[
+            vol.Required(CONF_VALVE_OPENING_TIME, default=options[CONF_VALVE_OPENING_TIME])
+        ] = selector.TimeSelector()
+
+        # Only a boiler that takes a setpoint can idle with heating enabled
+        if self.config_entry.data.get(CONF_MODE) != MODE_SWITCH:
+            advanced[
+                vol.Required(
+                    CONF_KEEP_HEATING_IN_PWM_OFF, default=options[CONF_KEEP_HEATING_IN_PWM_OFF]
+                )
+            ] = bool
+
+            # Heat budget: learn the house and dose the burner in long blocks
+            advanced[
+                vol.Required(CONF_HEAT_BUDGET_MODE, default=options[CONF_HEAT_BUDGET_MODE])
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    mode=SelectSelectorMode.DROPDOWN,
+                    options=[
+                        selector.SelectOptionDict(value=HEAT_BUDGET_OFF, label="Off"),
+                        selector.SelectOptionDict(
+                            value=HEAT_BUDGET_SHADOW, label="Learn only (shadow)"
+                        ),
+                        selector.SelectOptionDict(value=HEAT_BUDGET_ON, label="On"),
+                    ],
+                )
+            )
+            advanced[
+                vol.Required(CONF_HEAT_BUDGET_PERIOD, default=str(options[CONF_HEAT_BUDGET_PERIOD]))
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    mode=SelectSelectorMode.DROPDOWN,
+                    options=[
+                        selector.SelectOptionDict(value="30", label="30 minutes"),
+                        selector.SelectOptionDict(value="60", label="60 minutes"),
+                        selector.SelectOptionDict(value="90", label="90 minutes"),
+                        selector.SelectOptionDict(value="120", label="120 minutes"),
+                    ],
+                )
+            )
+            advanced[
+                vol.Required(
+                    CONF_HEAT_BUDGET_MINIMUM_BURN,
+                    default=options[CONF_HEAT_BUDGET_MINIMUM_BURN],
+                )
+            ] = selector.TimeSelector()
+            advanced[
+                vol.Required(
+                    CONF_HEAT_LOSS_COEFFICIENT, default=options[CONF_HEAT_LOSS_COEFFICIENT]
+                )
+            ] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=600,
+                    step=5,
+                    unit_of_measurement="W/K",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
+            advanced[
+                vol.Optional(
+                    CONF_WEATHER_FORECAST_ENTITY_ID,
+                    description={"suggested_value": options[CONF_WEATHER_FORECAST_ENTITY_ID]},
+                )
+            ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="weather"))
+            advanced[
+                vol.Optional(
+                    CONF_COMFORT_SCHEDULE_ENTITY_ID,
+                    description={"suggested_value": options[CONF_COMFORT_SCHEDULE_ENTITY_ID]},
+                )
+            ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="schedule"))
+            advanced[
+                vol.Required(CONF_SETBACK_TEMPERATURE, default=options[CONF_SETBACK_TEMPERATURE])
+            ] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=3,
+                    step=0.5,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
         advanced[
             vol.Required(
                 CONF_CALIBRATION_FLAME_TIMEOUT, default=options[CONF_CALIBRATION_FLAME_TIMEOUT]
