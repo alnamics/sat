@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 SENSOR_TEMPERATURE_ID = "sensor_temperature_id"
 
 
+def is_heating_blocked(state: State) -> bool:
+    """Return True if the climate reports a reason its heating is blocked.
+
+    Better Thermostat sets `heating_blocked_by`; some of its list attributes arrive as JSON strings.
+    """
+    return state.attributes.get("heating_blocked_by") not in (None, "", "[]", [], ())
+
+
 class Area:
     def __init__(
         self,
@@ -51,9 +59,10 @@ class Area:
         if (self._hass is None) or (state := self._hass.states.get(self._entity_id)) is None:
             return None
 
-        return (
-            state if state.state not in [STATE_UNKNOWN, STATE_UNAVAILABLE, HVACMode.OFF] else None
-        )
+        if state.state in [STATE_UNKNOWN, STATE_UNAVAILABLE, HVACMode.OFF]:
+            return None
+
+        return None if is_heating_blocked(state) else state
 
     @property
     def target_temperature(self) -> float | None:

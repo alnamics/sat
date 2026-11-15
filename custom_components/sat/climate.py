@@ -55,7 +55,7 @@ from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
-from .area import SENSOR_TEMPERATURE_ID, Areas
+from .area import SENSOR_TEMPERATURE_ID, Areas, is_heating_blocked
 from .const import (
     COLD_SETPOINT,
     CONF_CLIMATE_VALVE_OFFSET,
@@ -740,6 +740,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             if state.state == HVACMode.OFF:
                 continue
 
+            if is_heating_blocked(state):
+                continue
+
             # If the thermostat reports that it is heating, we can assume the valves are open
             if state.attributes.get("hvac_action") == HVACAction.HEATING:
                 return True
@@ -938,6 +941,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             not old_state
             or new_state.state != old_state.state
             or new_attrs.get("temperature") != old_attrs.get("temperature")
+            or is_heating_blocked(new_state) != is_heating_blocked(old_state)
         ):
             self._async_control_pid(reset=True)
 
