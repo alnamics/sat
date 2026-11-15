@@ -1,6 +1,9 @@
 {
   "domain": "sat",
   "name": "Smart Autotune Thermostat v2",
+  "categories": [
+    "climate.thermostats_heating"
+  ],
   "codeowners": [
     "@bellini666",
     "@Alexwijn"
@@ -16,8 +19,12 @@
     }
   ],
   "documentation": "https://github.com/bellini666/SAT",
+  "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/bellini666/SAT/issues",
+  "loggers": [
+    "pyotgw"
+  ],
   "mqtt": [
     "ems-esp/#",
     "OTGW/value/+"
