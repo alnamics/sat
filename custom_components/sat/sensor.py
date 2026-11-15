@@ -8,6 +8,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfEnergy,
     UnitOfPower,
+    UnitOfRatio,
     UnitOfTemperature,
     UnitOfTime,
     UnitOfVolume,
@@ -85,7 +86,10 @@ async def async_setup_entry(
             SatTotalSensor(coordinator, _config_entry, climate, key)
             for key in ("starts", "burn_hours", "heating_kwh", "hot_water_kwh", "degree_days")
         ]
-        + [SatHotWaterCoolingSensor(coordinator, _config_entry, climate)]
+        + [
+            SatHotWaterCoolingSensor(coordinator, _config_entry, climate),
+            SatEfficiencySensor(coordinator, _config_entry, climate),
+        ]
     )
     if (
         float(_config_entry.options.get(CONF_MINIMUM_CONSUMPTION) or 0) > 0
@@ -421,6 +425,35 @@ class SatTotalSensor(SatClimateEntity, SensorEntity):
     def _update_attrs(self) -> None:
         value = self._climate.boiler_stats.totals[self._key]
         self._attr_native_value = int(value) if self._key == "starts" else round(value, 4)
+
+
+class SatEfficiencySensor(SatClimateEntity, SensorEntity):
+    """Estimated boiler efficiency on the gross calorific value, from the flue gas temperature.
+
+    It updates while the burner runs and holds the last value between burns; the attributes give
+    the burn-time averages for space heating and hot water.
+    """
+
+    _attr_translation_key = "boiler_efficiency"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfRatio.PERCENTAGE
+    _attr_suggested_display_precision = 1
+    _attr_icon = "mdi:leaf"
+
+    def __init__(
+        self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry, climate: SatClimate
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
+
+        self._attr_unique_id = f"{config_entry.entry_id}-boiler-efficiency"
+
+    @override
+    def _update_attrs(self) -> None:
+        efficiency = self._climate.efficiency
+        self._attr_native_value = (
+            None if efficiency.current is None else round(efficiency.current * 100, 1)
+        )
+        self._attr_extra_state_attributes = efficiency.attributes
 
 
 class SatGasCostSensor(SatClimateEntity, SensorEntity):

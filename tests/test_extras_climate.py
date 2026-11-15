@@ -99,3 +99,15 @@ async def test_a_gas_price_adds_the_cost_sensor(hass: HomeAssistant) -> None:
     assert state is not None
     assert state.attributes["unit_of_measurement"] == hass.config.currency
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_efficiency_sensor_exists(hass: HomeAssistant) -> None:
+    entry, climate, _ = await setup(hass, {})
+
+    state = hass.states.get("sensor.mock_title_estimated_boiler_efficiency")
+    assert state is not None
+    assert state.attributes["unit_of_measurement"] == "%"
+
+    climate.efficiency.update(0, flame=True, hot_water=False, exhaust=33.0, return_temperature=29)
+    assert climate.efficiency.current is not None
+    assert await hass.config_entries.async_unload(entry.entry_id)

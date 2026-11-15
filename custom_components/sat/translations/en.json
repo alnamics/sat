@@ -281,7 +281,8 @@
               "screed_maximum_temperature": "Maximum flow for the screed",
               "last_service_date": "Last boiler service",
               "service_interval": "Service interval",
-              "gas_price": "Gas price per cubic metre"
+              "gas_price": "Gas price per cubic metre",
+              "condensing_boiler": "Condensing boiler"
             },
             "data_description": {
               "climate_valve_offset": "Offset to adjust the opening degree of the climate valve.",
@@ -320,7 +321,8 @@
               "screed_maximum_temperature": "Flow water above this for 3 minutes in space heating raises a repair issue. Underfloor heating only; 0 turns it off.",
               "last_service_date": "A repair issue reminds you when the next service is due.",
               "service_interval": "Months between boiler services.",
-              "gas_price": "Including distribution, in your currency. Adds an estimated gas cost sensor; 0 turns it off."
+              "gas_price": "Including distribution, in your currency. Adds an estimated gas cost sensor; 0 turns it off.",
+              "condensing_boiler": "For the efficiency estimate of a boiler that does not report its flue gas temperature: a condensing boiler runs its flue a few kelvin above the return water. Turn off for an older non-condensing boiler, which then gets no estimate without a flue gas sensor."
             }
           }
         }
@@ -719,6 +721,9 @@
       },
       "total_gas_cost": {
         "name": "Estimated gas cost"
+      },
+      "boiler_efficiency": {
+        "name": "Estimated boiler efficiency"
       }
     },
     "button": {
