@@ -15,7 +15,7 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import (
+from pytest_homeassistant.common import (
     MockConfigEntry,
     async_fire_mqtt_message,
     async_fire_time_changed,
@@ -38,7 +38,7 @@ from tests.const import DEFAULT_USER_DATA
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
     from homeassistant.core import HomeAssistant
-    from pytest_homeassistant_custom_component.typing import MqttMockHAClient
+    from pytest_homeassistant.typing import MqttMockHAClient
 
 COMMAND_TOPIC = "OTGW/set/otgw/command"
 STORAGE_KEY = "sat_open_therm_mqtt_coordinator_otgw"

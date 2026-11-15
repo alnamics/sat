@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from homeassistant.components.climate import HVACMode
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+from pytest_homeassistant.common import MockConfigEntry, async_mock_service
 
 from custom_components.sat.const import CONF_PUSH_SETPOINT_TO_THERMOSTAT, CONF_RADIATORS, DOMAIN
 from tests.const import DEFAULT_USER_DATA

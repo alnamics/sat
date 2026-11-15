@@ -6,8 +6,8 @@ import pytest
 from homeassistant.components.climate import HVACMode
 from homeassistant.components.diagnostics import REDACTED
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_mqtt_message
-from pytest_homeassistant_custom_component.components.diagnostics import (
+from pytest_homeassistant.common import MockConfigEntry, async_fire_mqtt_message
+from pytest_homeassistant.components.diagnostics import (
     get_diagnostics_for_config_entry,
 )
 
@@ -23,7 +23,7 @@ from tests.const import DEFAULT_USER_DATA
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
+    from pytest_homeassistant.typing import ClientSessionGenerator
 
 pytestmark = pytest.mark.usefixtures("instant_mqtt_command_delay")
 

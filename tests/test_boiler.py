@@ -3,7 +3,7 @@
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.sat.boiler import BoilerTemperatureTracker
 from custom_components.sat.const import CONF_HEATING_CURVE_COEFFICIENT, DOMAIN, BoilerStatus

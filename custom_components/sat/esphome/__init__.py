@@ -271,7 +271,8 @@ class SatEspHomeCoordinator(SatDataUpdateCoordinator, SatEntityCoordinator):
 
         for unique_id in candidates:
             _LOGGER.debug("Attempting to find the unique_id of %s", unique_id)
-            if entity_id := self._entity_registry.async_get_entity_id(domain, ESPHOME_DOMAIN, unique_id):
+            entity_id = self._entity_registry.async_get_entity_id(domain, ESPHOME_DOMAIN, unique_id)
+            if entity_id is not None:
                 return entity_id
 
         return None

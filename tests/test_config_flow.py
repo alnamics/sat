@@ -6,7 +6,7 @@ import pytest
 from homeassistant.components.climate import HVACMode
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import section
-from pytest_homeassistant_custom_component.common import (
+from pytest_homeassistant.common import (
     MockConfigEntry,
     async_fire_mqtt_message,
     async_fire_time_changed,
