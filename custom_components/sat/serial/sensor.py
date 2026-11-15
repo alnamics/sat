@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import sensor
 from homeassistant.const import (
-    PERCENTAGE,
     UnitOfPower,
     UnitOfPressure,
+    UnitOfRatio,
     UnitOfTemperature,
     UnitOfTime,
     UnitOfVolume,
@@ -120,7 +120,7 @@ SENSOR_INFO: dict[str, SatSensorInfo] = {
         None, None, "Boiler OEM Fault Code {}", [BOILER, THERMOSTAT]
     ),
     DATA_COOLING_CONTROL: SatSensorInfo(
-        None, PERCENTAGE, "Cooling Control Signal {}", [BOILER, THERMOSTAT]
+        None, UnitOfRatio.PERCENTAGE, "Cooling Control Signal {}", [BOILER, THERMOSTAT]
     ),
     DATA_CONTROL_SETPOINT_2: SatSensorInfo(
         sensor.SensorDeviceClass.TEMPERATURE,
@@ -135,7 +135,7 @@ SENSOR_INFO: dict[str, SatSensorInfo] = {
         [BOILER, THERMOSTAT],
     ),
     DATA_SLAVE_MAX_RELATIVE_MOD: SatSensorInfo(
-        None, PERCENTAGE, "Boiler Maximum Relative Modulation {}", [BOILER, THERMOSTAT]
+        None, UnitOfRatio.PERCENTAGE, "Boiler Maximum Relative Modulation {}", [BOILER, THERMOSTAT]
     ),
     DATA_SLAVE_MAX_CAPACITY: SatSensorInfo(
         sensor.SensorDeviceClass.POWER,
@@ -144,7 +144,7 @@ SENSOR_INFO: dict[str, SatSensorInfo] = {
         [BOILER, THERMOSTAT],
     ),
     DATA_SLAVE_MIN_MOD_LEVEL: SatSensorInfo(
-        None, PERCENTAGE, "Boiler Minimum Modulation Level {}", [BOILER, THERMOSTAT]
+        None, UnitOfRatio.PERCENTAGE, "Boiler Minimum Modulation Level {}", [BOILER, THERMOSTAT]
     ),
     DATA_ROOM_SETPOINT: SatSensorInfo(
         sensor.SensorDeviceClass.TEMPERATURE,
@@ -154,7 +154,7 @@ SENSOR_INFO: dict[str, SatSensorInfo] = {
     ),
     DATA_REL_MOD_LEVEL: SatSensorInfo(
         None,
-        PERCENTAGE,
+        UnitOfRatio.PERCENTAGE,
         "Relative Modulation Level {}",
         [BOILER, THERMOSTAT],
     ),
