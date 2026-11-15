@@ -2340,7 +2340,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     @property
     def _heating_is_kept_on(self) -> bool:
         """Return True if the last control step left heating enabled in a PWM off-phase."""
-        return self._pwm_off_since is not None and self._keep_heating_suspended_until is None
+        return (
+            self.hvac_mode == HVACMode.HEAT
+            and self._pwm_off_since is not None
+            and self._keep_heating_suspended_until is None
+        )
 
     def _heating_kept_on_in_pwm_off(self) -> bool:
         """Return True if central heating stays enabled through this PWM off-phase."""
