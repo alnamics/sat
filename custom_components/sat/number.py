@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from . import SatConfigEntry
     from .coordinator import SatDataUpdateCoordinator
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     _hass: HomeAssistant,
