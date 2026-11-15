@@ -18,6 +18,7 @@ from custom_components.sat.const import (
     DOMAIN,
     MINIMUM_SETPOINT,
     MODE_MQTT_OPENTHERM,
+    BoilerStatus,
 )
 from custom_components.sat.coordinator import DeviceState
 from tests.const import DEFAULT_USER_DATA
@@ -355,4 +356,19 @@ async def test_control_setpoint_synchro_ignores_the_idle_setpoint(
     state = hass.states.get("binary_sensor.mock_title_control_setpoint_synchro")
     assert state is not None
     assert state.state == STATE_ON
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_boiler_with_heating_disabled_is_idle(hass: HomeAssistant) -> None:
+    entry = await setup_heating(hass)
+    coordinator = entry.runtime_data.coordinator
+
+    # The boiler answers with its own lowest setpoint while the water is warmer
+    coordinator._setpoint = 25.0
+    await coordinator.async_set_boiler_temperature(31.0)
+    await coordinator.async_set_heater_state(DeviceState.OFF)
+    assert coordinator.device_status == BoilerStatus.IDLE
+
+    await coordinator.async_set_heater_state(DeviceState.ON)
+    assert coordinator.device_status == BoilerStatus.ANTI_CYCLING
     assert await hass.config_entries.async_unload(entry.entry_id)

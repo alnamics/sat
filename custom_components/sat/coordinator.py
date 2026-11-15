@@ -230,6 +230,12 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
                 # Flame still on, but tracker inactive. We are over setpoint -> overshoot handling.
                 return BoilerStatus.OVERSHOOT_HANDLING
 
+            # With heating disabled the boiler is not waiting to relight, it is idle. Some boilers
+            # report their own lowest setpoint then instead of the one SAT sent, which alone
+            # would flip the status between idle and anti-cycling with every message
+            if not self.device_active:
+                return BoilerStatus.IDLE
+
             # Most modern boilers are in anti-cycling here.
             return BoilerStatus.ANTI_CYCLING
 
