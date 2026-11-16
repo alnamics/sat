@@ -2,7 +2,7 @@ name: Run PyTest Unit Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, mpx]
   pull_request:
 
 permissions: {}
