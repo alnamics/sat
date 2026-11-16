@@ -123,6 +123,36 @@ def test_a_fast_temperature_drop_means_an_open_window() -> None:
     assert not detector.update(3900 + 1900, 21.4)
 
 
+def test_airing_a_room_for_a_long_time_pauses_the_heating() -> None:
+    detector = TemperatureDropDetector()
+    # The room cools by a tenth every quarter of an hour while a window stays open
+    readings = [(0, 22.7), (600, 22.6), (1140, 22.5), (1680, 22.4), (2700, 22.3), (3720, 22.2)]
+    readings += [(4740, 22.1), (5820, 22.0), (7140, 21.9), (8280, 21.8), (9000, 21.9)]
+    opened = []
+    now, index, value = 0, 0, readings[0][1]
+    while now <= 12000:
+        while index < len(readings) and readings[index][0] <= now:
+            value = readings[index][1]
+            index += 1
+        if detector.update(now, value):
+            opened.append(now)
+        now += 30
+
+    assert opened
+    assert opened[0] <= 1700
+    # The pause follows the further drops and ends after the hold, two hours at most
+    assert opened[-1] - opened[0] <= 7200
+    assert not detector.open
+
+
+def test_steady_slow_cooling_is_not_a_window() -> None:
+    detector = TemperatureDropDetector()
+    # 0.4 K an hour for ten hours, as a sensor that reports tenths shows it
+    for step in range(1200):
+        temperature = round((22.0 - 0.4 * step * 30 / 3600) * 10) / 10
+        assert not detector.update(step * 30, temperature)
+
+
 def test_the_curve_advice_matches_the_house() -> None:
     advisor = CurveAdvisor()
     curve = HeatingCurve(HEATING_SYSTEM_UNDERFLOOR, 1.3)

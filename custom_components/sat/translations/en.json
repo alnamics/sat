@@ -317,7 +317,7 @@
               "presence_entity_ids": "People, device trackers, zones or groups. When nobody has been home for 30 minutes SAT switches to the Away preset, and back when someone returns.",
               "proximity_entity_id": "A distance sensor (Proximity integration). Within the return distance the house counts as occupied again, so a slow floor starts warming early.",
               "return_distance": "How close someone must be for the heating to come back; 0 waits until they are home.",
-              "window_detection": "Without contact sensors: a room temperature drop of 0.8 °C within 10 minutes switches to the Activity preset for 30 minutes.",
+              "window_detection": "Without contact sensors: a room temperature drop of 0.8 °C within 10 minutes or 0.3 °C within 30 minutes switches to the Activity preset until the room stops cooling (2 hours at most). Needs a sensor that reports tenths of a degree.",
               "screed_maximum_temperature": "Flow water above this for 3 minutes in space heating raises a repair issue. Underfloor heating only; 0 turns it off.",
               "last_service_date": "A repair issue reminds you when the next service is due.",
               "service_interval": "Months between boiler services.",
