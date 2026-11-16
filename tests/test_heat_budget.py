@@ -4,6 +4,7 @@ import math
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from typing import Any
+from unittest.mock import patch
 
 from custom_components.sat.const import PWMStatus
 from custom_components.sat.heat_budget import HeatBudget, HeatBudgetInputs, _Hour, solar_elevation
@@ -290,3 +291,46 @@ def test_a_lower_target_is_reached_within_hours() -> None:
         now += 30
 
     assert lowest > 20.75
+
+
+def test_a_lowered_target_coasts_without_heat() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.08)
+    burn(budget, 0, 1800, indoor=22.5, target=22.5, outdoor=5.0)
+
+    # The target goes down half a degree: nothing burns until the room is close to it
+    now = burn(budget, 1800, 600, indoor=22.5, target=22.0, outdoor=5.0)
+    assert budget.attributes["heat_budget_coasting"]
+    assert budget.status == PWMStatus.OFF
+    assert budget.attributes["heat_need_kw"] == 0
+
+    burn(budget, now, 600, indoor=22.2, target=22.0, outdoor=5.0)
+    assert not budget.attributes["heat_budget_coasting"]
+    assert budget.attributes["heat_need_kw"] > 0
+
+
+async def test_the_hour_being_measured_survives_a_restart() -> None:
+    saved: dict[str, Any] = {}
+
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+        def async_delay_save(self, data: Any, _delay: float) -> None:  # noqa: ANN401
+            saved.clear()
+            saved.update(data())
+
+    start = datetime.now(UTC) - timedelta(minutes=40)
+    budget = HeatBudget(heat_loss_kw_per_k=0.08)
+    with patch("custom_components.sat.heat_budget.heat_budget_store", return_value=FakeStore()):
+        await budget.async_initialize(None, "entry")  # type: ignore[arg-type]
+        for step in range(81):
+            budget.update(inputs(step * 30, wall_time=start + timedelta(seconds=step * 30)))
+
+        restored = HeatBudget(heat_loss_kw_per_k=0.08)
+        await restored.async_initialize(None, "entry")  # type: ignore[arg-type]
+
+    # The 40 minutes measured before the restart are kept and the hour ends 20 minutes later
+    assert restored._hour.seconds >= 35 * 60
+    restored.update(inputs(10_000, wall_time=datetime.now(UTC)))
+    assert restored._hour_started is not None
+    assert 10_000 - restored._hour_started >= 35 * 60

@@ -34,6 +34,12 @@ class CurveAdvisor:
     def transfer_kw_per_k(self) -> float | None:
         return None if self._samples < MINIMUM_SAMPLES else self._transfer
 
+    def restore(self, transfer_kw_per_k: float | None) -> None:
+        """Continue from the heat transfer learned before a restart."""
+        if self._samples == 0 and transfer_kw_per_k is not None and transfer_kw_per_k > 0:
+            self._transfer = transfer_kw_per_k
+            self._samples = MINIMUM_SAMPLES
+
     def update(
         self, *, heat_kw: float, flow: float, return_temperature: float, indoor: float
     ) -> None:

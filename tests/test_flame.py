@@ -397,7 +397,7 @@ def ignition_spike(flame: Flame, freezer: FrozenDateTimeFactory, pwm_off_first: 
         boiler_state(False, setpoint=40.0, flow=43.0), PWM_OFF if pwm_off_first else PWM_ON
     )
     # No hot water demand follows, so the boiler cut the burn out
-    freezer.tick(timedelta(seconds=160))
+    freezer.tick(timedelta(seconds=310))
     flame.update(boiler_state(False, setpoint=40.0, flow=40.0), PWM_OFF)
 
 
@@ -445,7 +445,7 @@ def test_a_cut_out_seen_with_the_flow_after_it_still_warns(
             flame.update(boiler_state(True, setpoint=40.0, flow=flow), PWM_ON)
             freezer.tick(timedelta(seconds=5))
         flame.update(boiler_state(False, setpoint=40.0, flow=38.4), PWM_ON)
-        freezer.tick(timedelta(seconds=160))
+        freezer.tick(timedelta(seconds=310))
         flame.update(boiler_state(False, setpoint=40.0, flow=36.0), PWM_OFF)
 
     assert "raise the overshoot protection value" in caplog.text
@@ -740,3 +740,36 @@ def test_hot_water_after_a_long_heating_wait_is_not_stuck_off(
     freezer.tick(timedelta(seconds=130))
     flame.update(boiler_state(False, hot_water=True))
     assert flame.health_status == FlameStatus.STUCK_OFF
+
+
+def test_a_cylinder_reheat_the_boiler_does_not_flag_is_told_from_the_water(
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    flame = Flame()
+    run_pwm_cycle(flame, freezer, 900)
+
+    # A heating burn stopped after 23 s, then a reheat that never sets the hot water flag
+    flame.update(boiler_state(False, setpoint=42.0, flow=33.0), PWM_ON)
+    for flow in (33.0, 38.0, 44.0, 47.0, 46.0):
+        flame.update(boiler_state(True, setpoint=42.0, flow=flow), PWM_ON)
+        freezer.tick(timedelta(seconds=5))
+    flame.update(boiler_state(False, setpoint=42.0, flow=45.0), PWM_ON)
+    freezer.tick(timedelta(seconds=140))
+    assert flame.cut_short_burn_ends != ()
+
+    flame.update(boiler_state(True, setpoint=42.0, flow=44.0), PWM_ON)
+    for flow in (48.0, 53.0, 58.0, 61.0, 63.0):
+        freezer.tick(timedelta(seconds=5))
+        flame.update(boiler_state(True, setpoint=42.0, flow=flow), PWM_ON)
+
+    assert flame.hot_water_burn
+    assert flame.cut_short_burn_ends == ()
+
+
+def test_a_heating_burn_on_a_hot_exchanger_is_heating(freezer: FrozenDateTimeFactory) -> None:
+    flame = Flame()
+    flame.update(boiler_state(False, setpoint=42.0, flow=58.0), PWM_ON)
+    for flow in range(58, 39, -1):
+        flame.update(boiler_state(True, setpoint=42.0, flow=float(flow)), PWM_ON)
+        freezer.tick(timedelta(seconds=5))
+        assert not flame.hot_water_burn

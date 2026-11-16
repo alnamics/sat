@@ -7,6 +7,7 @@ from homeassistant.helpers import issue_registry as ir
 
 from custom_components.sat.boiler_diagnostics import BoilerDiagnostics, add_months
 from custom_components.sat.const import DOMAIN
+from custom_components.sat.curve_advisor import CurveAdvisor
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -173,3 +174,15 @@ async def test_service_and_gas_use_issues(hass: HomeAssistant) -> None:
 def test_add_months_keeps_the_end_of_the_month() -> None:
     assert add_months(date(2026, 1, 31), 1) == date(2026, 2, 28)
     assert add_months(date(2026, 11, 15), 12) == date(2027, 11, 15)
+
+
+def test_the_curve_advisor_continues_after_a_restart() -> None:
+    advisor = CurveAdvisor()
+    assert advisor.transfer_kw_per_k is None
+    advisor.restore(0.625)
+    assert advisor.transfer_kw_per_k == 0.625
+    # Learning goes on from there
+    advisor.update(heat_kw=5.3, flow=36.0, return_temperature=31.0, indoor=22.0)
+    transfer = advisor.transfer_kw_per_k
+    assert transfer is not None
+    assert transfer < 0.625

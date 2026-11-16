@@ -64,9 +64,14 @@ class Flame:
     # A hot water request can end before the listener batch that first shows the flame
     HOT_WATER_LEAD_SECONDS: float = 30.0
     # Hot water demand this soon after a heating burn ended means the boiler switched over
-    HOT_WATER_TAKEOVER_SECONDS: float = 150.0
+    # (the Lumea lights for the cylinder some 150 s after it stopped the heating burn, and
+    # does not always flag it, so the reheat has to show in the water first)
+    HOT_WATER_TAKEOVER_SECONDS: float = 300.0
     # A heating burn cuts out 5 to 7 °C above its setpoint; a Remeha preheat runs ~20 °C above
     UNFLAGGED_HOT_WATER_MARGIN: float = 10.0
+    # Boilers heat to their own minimum, often 25 °C, when the setpoint is lower
+    UNFLAGGED_HOT_WATER_SETPOINT_FLOOR: float = 25.0
+    UNFLAGGED_HOT_WATER_SETTLE_SECONDS: float = 20.0
     EXPECTED_MODULATING_DUTY_RATIO_WHEN_HEATING: float = 0.60
 
     # Windows
@@ -254,6 +259,50 @@ class Flame:
     def last_cut_short_setpoint(self) -> float | None:
         return self._last_cut_short_setpoint
 
+    @property
+    def hot_water_burn(self) -> bool:
+        """Return True while the running burn heats hot water, flagged by the boiler or not."""
+        return self._is_flame_active_internal() and (
+            self._burn_hot_water or self._burn_looks_like_hot_water(monotonic())
+        )
+
+    def _burn_looks_like_hot_water(self, now: float) -> bool:
+        """Judge the running burn; the setpoint the boiler reports needs a moment to settle."""
+        return (
+            self._flame_on_monotonic is not None
+            and now - self._flame_on_monotonic >= self.UNFLAGGED_HOT_WATER_SETTLE_SECONDS
+            and self._burn_is_unflagged_hot_water()
+        )
+
+    def _burn_is_unflagged_hot_water(self) -> bool:
+        """Tell a hot water burn the boiler does not flag from the water it heats.
+
+        The water rises well above anything the boiler heats to for space heating. An exchanger
+        still hot from hot water starts a heating burn near that level, so the rise since
+        ignition has to be there too.
+        """
+        if (
+            self._burn_peak_flow is None
+            or self._burn_ignition_flow is None
+            or self._burn_highest_setpoint is None
+        ):
+            return False
+        heating_limit = max(self._burn_highest_setpoint, self.UNFLAGGED_HOT_WATER_SETPOINT_FLOOR)
+        return (
+            self._burn_peak_flow - self._burn_ignition_flow > self.UNFLAGGED_HOT_WATER_MARGIN
+            and self._burn_peak_flow > heating_limit + self.UNFLAGGED_HOT_WATER_MARGIN
+        )
+
+    def _forgive_cut_out_before_hot_water(self, now: float) -> None:
+        """Clear the cut-short mark of a burn the boiler stopped to reheat the cylinder."""
+        if (
+            self._pwm_burns_cut_short
+            and self._pwm_burns_cut_short[-1][1]
+            and now - self._pwm_burns_cut_short[-1][0] <= self.HOT_WATER_TAKEOVER_SECONDS
+        ):
+            self._pwm_burns_cut_short[-1] = (self._pwm_burns_cut_short[-1][0], False)
+            self._pending_cut_out = None
+
     def _report_cut_out(self, now: float) -> None:
         """Warn about an ignition cut-out once no hot water demand explains it."""
         if self._pending_cut_out is None:
@@ -316,15 +365,7 @@ class Flame:
             self._pwm_state_updated_monotonic = now
         if boiler_state.hot_water_active:
             self._hot_water_seen_monotonic = now
-            # A heating burn that stopped because the boiler went to reheat the cylinder was
-            # not cut short by the water being too warm
-            if (
-                self._pwm_burns_cut_short
-                and self._pwm_burns_cut_short[-1][1]
-                and now - self._pwm_burns_cut_short[-1][0] <= self.HOT_WATER_TAKEOVER_SECONDS
-            ):
-                self._pwm_burns_cut_short[-1] = (self._pwm_burns_cut_short[-1][0], False)
-                self._pending_cut_out = None
+            self._forgive_cut_out_before_hot_water(now)
 
         self._report_cut_out(now)
 
@@ -386,6 +427,8 @@ class Flame:
             ):
                 self._burn_peak_flow = boiler_state.flow_temperature
                 self._burn_peak_monotonic = now
+            if self._burn_looks_like_hot_water(now):
+                self._forgive_cut_out_before_hot_water(now)
 
             self._last_update_monotonic = now
             self._recompute_health(now)
@@ -401,17 +444,10 @@ class Flame:
             self._flame_off_monotonic = now
             # The setpoint drops to the minimum before the flame goes out, and an exchanger still
             # hot from hot water starts near its peak, so both limits need the burn's own history
-            if (
-                self._burn_peak_flow is not None
-                and self._burn_ignition_flow is not None
-                and self._burn_highest_setpoint is not None
-                and self._burn_peak_flow - self._burn_ignition_flow
-                > self.UNFLAGGED_HOT_WATER_MARGIN
-                and self._burn_peak_flow
-                > self._burn_highest_setpoint + self.UNFLAGGED_HOT_WATER_MARGIN
-            ):
+            if self._burn_is_unflagged_hot_water():
                 self._burn_hot_water = True
                 self._pwm_planned_on_seconds = None
+                self._forgive_cut_out_before_hot_water(now)
 
             self._prune_cycles_window(now)
             self._prune_median_window(now)

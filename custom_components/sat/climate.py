@@ -191,9 +191,6 @@ KEEP_HEATING_SUSPEND_SECONDS = 3600
 # A flame in the off-phase is judged after this long; a hot water burn the boiler does not flag
 # has by then heated the water well above any heating setpoint
 KEEP_HEATING_FLAME_JUDGE_SECONDS = 60
-# Boilers clamp a low heating setpoint to their own minimum, often 25 °C
-KEEP_HEATING_BOILER_MINIMUM = 25.0
-KEEP_HEATING_HOT_WATER_MARGIN = 10.0
 # The flow and return only settle a few minutes into a burn, the flue gas a few more
 SETTLED_BURN_SECONDS = 180
 DIAGNOSTIC_BURN_SECONDS = 600
@@ -674,6 +671,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._loop_measurement_task.cancel()
             self._loop_measurement_task = None
 
+        # A reload for new options must not cost the hour the heat budget was measuring
+        if self.heat_budget is not None:
+            await self._async_run_guarded("heat budget save", self.heat_budget.async_save)
+
     async def _async_started(self, _hass: HomeAssistant) -> None:
         await self._async_run_guarded(
             "loop measurement restore", self._async_restore_interrupted_measurement
@@ -850,6 +851,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         ):
             self.warm_weather.restore(mean, active=bool(attributes.get("warm_weather_shutdown")))
             self._warm_weather_was_active = self.warm_weather.active
+
+        transfer = float_value(attributes.get("floor_heat_transfer_w_per_k"))
+        if transfer is not None:
+            self.curve_advisor.restore(transfer / 1000)
 
         # Without these the preset SAT set itself would stay after the restart
         previous = attributes.get("presence_previous_preset")
@@ -1198,11 +1203,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             return MINIMUM_RELATIVE_MODULATION
 
         # Heating left enabled in an off-phase is not meant to burn, so any burn stays minimal
-        if self._heating_is_kept_on and not self._coordinator.hot_water_active:
+        if self._heating_is_kept_on and not self._coordinator.heating_hot_water:
             return MINIMUM_RELATIVE_MODULATION
 
         # The loop measurement reads the flow from the minimum power
-        if self._measuring_loops and not self._coordinator.hot_water_active:
+        if self._measuring_loops and not self._coordinator.heating_hot_water:
             return MINIMUM_RELATIVE_MODULATION
 
         return self._maximum_relative_modulation
@@ -1767,7 +1772,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             await self.areas.async_control_heating_loops()
 
             # Control our dynamic minimum setpoint (version 1)
-            if not self._coordinator.hot_water_active and self._coordinator.flame_active:
+            if not self._coordinator.heating_hot_water and self._coordinator.flame_active:
                 # Calculate the base return temperature
                 if self._coordinator.device_status == BoilerStatus.HEATING_UP:
                     self.minimum_setpoint.warming_up(self._coordinator.boiler)
@@ -1902,7 +1907,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             heating_power_kw=float(heating_power),
             minimum_power_kw=float(minimum_power),
             flame_active=coordinator.flame_active,
-            hot_water_active=coordinator.hot_water_active,
+            hot_water_active=coordinator.heating_hot_water,
             outdoor_forecast=sum(temperatures) / len(temperatures) if temperatures else None,
             outdoor_forecast_now=temperatures[0] if temperatures else None,
             solar=solar,
@@ -2207,7 +2212,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         now = monotonic()
         flame = coordinator.flame_active
-        hot_water = coordinator.hot_water_active
+        hot_water = coordinator.heating_hot_water
 
         # Heating demand ends when PWM switches off or the boiler is no longer asked to heat
         device_active = coordinator.device_active
@@ -2406,21 +2411,16 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # the on-phase flame is given time to go out first
         if (
             not self._coordinator.flame_active
-            or self._coordinator.hot_water_active
+            or self._coordinator.heating_hot_water
             or now - self._pwm_off_since <= KEEP_HEATING_FLAME_GRACE_SECONDS
         ):
             self._kept_on_flame_since = None
             return True
 
+        # A hot water burn the boiler does not flag is told by its water within a minute
         if self._kept_on_flame_since is None:
             self._kept_on_flame_since = now
         if now - self._kept_on_flame_since < KEEP_HEATING_FLAME_JUDGE_SECONDS:
-            return True
-
-        # Water far above what the boiler heats to for heating is a hot water burn it did not flag
-        flow = self._coordinator.boiler_temperature
-        heating_target = max(self._coordinator.setpoint or 0.0, KEEP_HEATING_BOILER_MINIMUM)
-        if flow is not None and flow > heating_target + KEEP_HEATING_HOT_WATER_MARGIN:
             return True
 
         self._kept_on_flame_since = None

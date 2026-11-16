@@ -48,6 +48,8 @@ FOULING_GAP = 12.0
 FOULING_CLEARED = 9.0
 FOULING_AVERAGING_HOURS = 24.0
 FOULING_MINIMUM_HOURS = 6.0
+# Burn time between two saves of the flue gas average
+GAP_SAVE_HOURS = 0.1
 # Flue gas this hot means the boiler does not condense (an older boiler, or very hot return
 # water), where a large gap is normal and says nothing about the heat exchanger
 CONDENSING_EXHAUST_LIMIT = 90.0
@@ -108,6 +110,7 @@ class BoilerDiagnostics:
         self._fault_since: float | None = None
         self._gap: float | None = None
         self._gap_hours = 0.0
+        self._gap_saved_at: float | None = None
         self._screed_hot_since: float | None = None
         self._screed_last: float | None = None
         self._low_flow_since: float | None = None
@@ -120,6 +123,16 @@ class BoilerDiagnostics:
         if (data := await self._store.async_load()) is None:
             return
         self._pressure.load(data.get("pressure"))
+        gap, hours = data.get("flue_return_gap"), data.get("flue_return_gap_hours")
+        if isinstance(gap, int | float) and isinstance(hours, int | float):
+            self._gap, self._gap_hours = float(gap), max(0.0, float(hours))
+
+    def _data(self) -> dict[str, Any]:
+        return {
+            "pressure": self._pressure.to_dict(),
+            "flue_return_gap": self._gap,
+            "flue_return_gap_hours": self._gap_hours,
+        }
 
     @property
     def flue_return_gap(self) -> float | None:
@@ -218,7 +231,7 @@ class BoilerDiagnostics:
             return
 
         if self._store is not None:
-            self._store.async_delay_save(lambda: {"pressure": self._pressure.to_dict()}, 1)
+            self._store.async_delay_save(self._data, 1)
 
         trend, latest = self._pressure.per_day, self._pressure.latest
         if trend is None or latest is None:
@@ -268,6 +281,12 @@ class BoilerDiagnostics:
             weight = min(1.0, dt / (FOULING_AVERAGING_HOURS * SECONDS_PER_HOUR))
             self._gap = gap if self._gap is None else self._gap + (gap - self._gap) * weight
             self._gap_hours += dt / SECONDS_PER_HOUR
+            # The average builds over hours of burning, so a restart must not start it again
+            if self._store is not None and (
+                self._gap_saved_at is None or self._gap_hours - self._gap_saved_at >= GAP_SAVE_HOURS
+            ):
+                self._gap_saved_at = self._gap_hours
+                self._store.async_delay_save(self._data, 1)
 
         if self._gap is not None and self._gap_hours >= FOULING_MINIMUM_HOURS:
             if self._gap > FOULING_GAP:

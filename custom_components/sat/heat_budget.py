@@ -64,6 +64,14 @@ INTEGRAL_LIMIT_K = 8.0
 INTEGRAL_BAND_K = 0.5
 # A room this far above its target gets no heat at all
 SURPLUS_STOP_K = 0.7
+# After the target is lowered the house coasts down to it; heating resumes this close to it,
+# early enough for the screed to hold the room there
+COAST_TARGET_DROP = 0.2
+COAST_END_K = 0.2
+# The hour being measured is saved this often, so a restart loses little of it
+PARTIAL_HOUR_SAVE_SECONDS = 300.0
+# A saved hour is continued when the restart took no longer than this
+PARTIAL_HOUR_MAXIMUM_GAP_SECONDS = 900.0
 
 # The heat released now reaches the rooms over the next hours, so that is the outdoor
 # temperature that matters
@@ -256,6 +264,10 @@ class HeatBudget:
         self._hours: deque[_Hour] = deque(maxlen=LEARNING_WINDOW_HOURS)
         self._hour = _Hour()
         self._hour_started: float | None = None
+        # Wall time the running hour began, and how far a restored hour already was
+        self._hour_started_wall: float | None = None
+        self._restored_hour_seconds: float | None = None
+        self._last_partial_save: float | None = None
 
         self._preheat = _RecursiveLeastSquares(
             [PREHEAT_DEFAULT_HOURS_PER_K, PREHEAT_DEFAULT_DEMAND_HOURS], [1.0, 1.0], 0.95
@@ -270,6 +282,7 @@ class HeatBudget:
         self._last_update: float | None = None
         self._integral = 0.0
         self._surplus = False
+        self._coasting = False
         self._credit = 0.0
         self._need = 0.0
 
@@ -312,7 +325,26 @@ class HeatBudget:
                 and now - hour.wall_end <= LEARNING_WINDOW_SPAN_HOURS * SECONDS_PER_HOUR
             ):
                 self._hours.append(hour)
+
+        # The hour that was being measured continues after a short restart
+        current = _Hour.from_list(data.get("current"))
+        started = data.get("current_started")
+        if (
+            current is not None
+            and current.wall_end is not None
+            and isinstance(started, int | float)
+            and 0 <= now - current.wall_end <= PARTIAL_HOUR_MAXIMUM_GAP_SECONDS
+            and 0 <= now - started < SECONDS_PER_HOUR
+        ):
+            self._hour = current
+            self._hour_started_wall = float(started)
+            self._restored_hour_seconds = now - started
         _LOGGER.debug("Loaded heat budget: H=%.3f kW/K.", self.heat_loss)
+
+    async def async_save(self) -> None:
+        """Write the learning state now, before the entry unloads."""
+        if self._store is not None:
+            await self._store.async_save(self._data_to_save())
 
     def _save(self) -> None:
         if self._store is not None:
@@ -325,6 +357,8 @@ class HeatBudget:
             "integral": self._integral,
             "demand": self._demand,
             "hours": [hour.to_list() for hour in self._hours],
+            "current": self._hour.to_list(),
+            "current_started": self._hour_started_wall,
         }
 
     # ------------------------------------------------------------- properties
@@ -376,6 +410,7 @@ class HeatBudget:
             "learning_samples": self._learner.updates,
             "heat_budget_overloaded": self._overloaded,
             "heat_budget_room_too_warm": self._surplus,
+            "heat_budget_coasting": self._coasting,
             "hot_water_piggybacks": self._piggybacks,
         }
 
@@ -402,6 +437,7 @@ class HeatBudget:
         target = self._comfort_target(inputs, inputs.target, indoor)
         self._effective_target = round(target, 2)
         self._track_recovery(inputs, target, indoor)
+        self._track_coasting(target, indoor)
 
         self._need = self._heat_need(inputs, target, indoor, outdoor, dt)
         step = min(dt, MAXIMUM_STEP_SECONDS) / SECONDS_PER_HOUR
@@ -509,6 +545,7 @@ class HeatBudget:
         saturated_low = need <= 0 and error < 0
         if (
             self.ready
+            and not self._coasting
             and not saturated_high
             and not saturated_low
             and abs(error) <= INTEGRAL_BAND_K
@@ -518,7 +555,7 @@ class HeatBudget:
             )
             self._integral = min(max(self._integral, -INTEGRAL_LIMIT_K), INTEGRAL_LIMIT_K)
 
-        self._surplus = error <= -SURPLUS_STOP_K
+        self._surplus = self._coasting or error <= -SURPLUS_STOP_K
         if self._surplus:
             return 0.0
         return max(0.0, need)
@@ -577,9 +614,17 @@ class HeatBudget:
 
     def _learn(self, inputs: HeatBudgetInputs, dt: float, delivered: float) -> None:
         now = inputs.now
+        wall = inputs.wall_time.timestamp()
         if self._hour_started is None:
-            self._hour_started = now
-            self._hour = _Hour(indoor_start=inputs.indoor)
+            if self._restored_hour_seconds is not None:
+                # Pick the saved hour up where the restart interrupted it
+                self._hour_started = now - self._restored_hour_seconds
+                self._restored_hour_seconds = None
+            else:
+                self._hour_started = now
+                self._hour_started_wall = wall
+                self._hour = _Hour(indoor_start=inputs.indoor)
+            self._last_partial_save = now
             return
 
         if dt <= MAXIMUM_STEP_SECONDS and inputs.indoor is not None and inputs.outdoor is not None:
@@ -589,14 +634,21 @@ class HeatBudget:
             self._hour.sun_hours += (inputs.solar or 0.0) * hours
             self._hour.seconds += dt
             self._hour.indoor_end = inputs.indoor
-            self._hour.wall_end = inputs.wall_time.timestamp()
+            self._hour.wall_end = wall
 
         if now - self._hour_started < SECONDS_PER_HOUR:
+            if (
+                self._last_partial_save is None
+                or now - self._last_partial_save >= PARTIAL_HOUR_SAVE_SECONDS
+            ):
+                self._last_partial_save = now
+                self._save()
             return
 
         hour, self._hour = self._hour, _Hour(indoor_start=inputs.indoor)
         self._hour_started = now
-        wall = inputs.wall_time.timestamp()
+        self._hour_started_wall = wall
+        self._last_partial_save = now
 
         # Drop the hours that fell out of the day
         while (
@@ -673,6 +725,20 @@ class HeatBudget:
         if 0 <= seconds_to_change <= self.preheat_hours(rise) * SECONDS_PER_HOUR:
             return target
         return setback_target
+
+    def _track_coasting(self, target: float, indoor: float) -> None:
+        """After the target is lowered, heat nothing until the room has come down to it."""
+        if (
+            self._target_seen is not None
+            and self._target_seen - target >= COAST_TARGET_DROP
+            and indoor > target + COAST_END_K
+        ):
+            self._coasting = True
+        elif self._coasting and (
+            indoor <= target + COAST_END_K
+            or (self._target_seen is not None and target > self._target_seen)
+        ):
+            self._coasting = False
 
     def _track_recovery(self, inputs: HeatBudgetInputs, target: float, indoor: float) -> None:
         if self._recovery is None:

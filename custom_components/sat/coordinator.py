@@ -301,6 +301,15 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         return False
 
     @property
+    def heating_hot_water(self) -> bool:
+        """Return True while the boiler heats hot water, whether it flags that or not.
+
+        Some boilers, the De Dietrich Lumea among them, reheat their cylinder without setting the
+        hot water flag. The flame tracker tells those burns from the water they heat.
+        """
+        return self.hot_water_active or self._flame.hot_water_burn
+
+    @property
     def hot_water_setpoint(self) -> float | None:
         return None
 
