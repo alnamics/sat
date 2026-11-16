@@ -610,7 +610,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         if self.hvac_mode == HVACMode.OFF:
             self._attr_hvac_action = HVACAction.OFF
-        elif not self._coordinator.device_active:
+        elif not self._coordinator.device_active or self._heating_is_kept_on:
+            # Heating left enabled through a PWM off-phase is not heating the house
             self._attr_hvac_action = HVACAction.IDLE
         else:
             self._attr_hvac_action = HVACAction.HEATING
@@ -2359,6 +2360,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             else:
                 _LOGGER.info("The house needs less than the minimum power, heat budget resumes.")
             self._budget_overloaded = overloaded
+
+    @property
+    def heating_kept_on(self) -> bool:
+        """Return True while heating stays enabled through a PWM off-phase without burning."""
+        return self._heating_is_kept_on
 
     @property
     def _heating_is_kept_on(self) -> bool:

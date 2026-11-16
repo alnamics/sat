@@ -212,6 +212,12 @@ class SatCentralHeatingSynchroSensor(SatSynchroSensor, SatClimateEntity, BinaryS
             condition=not (
                 (climate_hvac_action == HVACAction.OFF and not device_active)
                 or (climate_hvac_action == HVACAction.IDLE and not device_active)
+                # Heating kept enabled between PWM phases shows as idle on purpose
+                or (
+                    climate_hvac_action == HVACAction.IDLE
+                    and device_active
+                    and self._climate.heating_kept_on
+                )
                 or (climate_hvac_action == HVACAction.HEATING and device_active)
             )
         )

@@ -377,3 +377,24 @@ async def test_a_boiler_with_heating_disabled_is_idle(hass: HomeAssistant) -> No
     ):
         assert coordinator.device_status == BoilerStatus.ANTI_CYCLING
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_heating_kept_on_between_pwm_phases_shows_as_idle(hass: HomeAssistant) -> None:
+    entry = await setup_heating(hass)
+    climate = entry.runtime_data.climate
+    coordinator = entry.runtime_data.coordinator
+
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+    await coordinator.async_set_heater_state(DeviceState.ON)
+    climate.async_write_ha_state()
+    assert climate.hvac_action == HVACAction.HEATING
+
+    # The control loop left heating enabled through a PWM off-phase
+    climate._pwm_off_since = 1.0
+    climate.async_write_ha_state()
+    assert climate.heating_kept_on
+    assert climate.hvac_action == HVACAction.IDLE
+
+    climate._pwm_off_since = None
+    climate.async_write_ha_state()
+    assert climate.hvac_action == HVACAction.HEATING
