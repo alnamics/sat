@@ -5,8 +5,8 @@ daily, weekly and monthly values. Many boilers, the De Dietrich Lumea among them
 their own burner counters over OpenTherm.
 
 The hot water cooling detector separates cylinder temperature drops that start right after a
-heating demand ends, when a combi boiler swings its diverter valve and the pump overrun pulls
-heating water through the cylinder coil, from the drops of tapping hot water.
+heating demand begins or ends, when a combi boiler swings its diverter valve and heating water
+runs through the cylinder coil, from the drops of tapping hot water.
 
 The heating gas of each day is also kept against that day's weather (see energy_signature), so a
 week that burns clearly more than the weeks before explain stands out.
@@ -34,8 +34,8 @@ MAXIMUM_STEP_SECONDS = 300.0
 DEGREE_DAY_BASE = 18.0
 # A cylinder drop of at least this much counts as one event
 HOT_WATER_DROP = 1.5
-# A drop that starts this soon after heating stopped is blamed on the pump overrun
-AFTER_HEATING_STOP_SECONDS = 600.0
+# A drop this soon after heating started or stopped is blamed on the diverter valve
+NEAR_HEATING_CHANGE_SECONDS = 600.0
 EVENT_WINDOW_SECONDS = SECONDS_PER_DAY
 
 TOTALS = (
@@ -64,7 +64,7 @@ class BoilerStats:
         self._flame: bool | None = None
 
         self._reference: float | None = None
-        self._events: deque[tuple[float, bool]] = deque()
+        self._events: deque[tuple[float, str | None]] = deque()
 
         self.signature = EnergySignature()
 
@@ -93,6 +93,7 @@ class BoilerStats:
         indoor: float | None = None,
         hot_water_temperature: float | None = None,
         heating_stopped_at: float | None = None,
+        heating_started_at: float | None = None,
         day: str | None = None,
         gas_price: float = 0.0,
     ) -> None:
@@ -129,6 +130,7 @@ class BoilerStats:
             hot_water=hot_water,
             temperature=hot_water_temperature,
             heating_stopped_at=heating_stopped_at,
+            heating_started_at=heating_started_at,
         )
 
         if self._store is not None and (
@@ -152,6 +154,7 @@ class BoilerStats:
         hot_water: bool,
         temperature: float | None,
         heating_stopped_at: float | None,
+        heating_started_at: float | None,
     ) -> None:
         while self._events and now - self._events[0][0] > EVENT_WINDOW_SECONDS:
             self._events.popleft()
@@ -165,11 +168,17 @@ class BoilerStats:
             return
 
         if self._reference - temperature >= HOT_WATER_DROP:
-            after_heating = (
-                heating_stopped_at is not None
-                and 0 <= now - heating_stopped_at <= AFTER_HEATING_STOP_SECONDS
-            )
-            self._events.append((now, after_heating))
+            # The latest change of the heating demand within the window takes the blame
+            cause: str | None = None
+            latest = -1.0
+            for name, changed_at in (("start", heating_started_at), ("stop", heating_stopped_at)):
+                if (
+                    changed_at is not None
+                    and 0 <= now - changed_at <= NEAR_HEATING_CHANGE_SECONDS
+                    and changed_at > latest
+                ):
+                    cause, latest = name, changed_at
+            self._events.append((now, cause))
             self._reference = temperature
 
     @property
@@ -178,4 +187,13 @@ class BoilerStats:
 
     @property
     def hot_water_drops_after_heating(self) -> int:
-        return sum(1 for _, after_heating in self._events if after_heating)
+        """Drops that began right after the heating demand started or stopped."""
+        return sum(1 for _, cause in self._events if cause is not None)
+
+    @property
+    def hot_water_drops_after_heating_start(self) -> int:
+        return sum(1 for _, cause in self._events if cause == "start")
+
+    @property
+    def hot_water_drops_after_heating_stop(self) -> int:
+        return sum(1 for _, cause in self._events if cause == "stop")

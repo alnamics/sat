@@ -495,7 +495,7 @@ class SatGasCostSensor(SatClimateEntity, SensorEntity):
 
 
 class SatHotWaterCoolingSensor(SatClimateEntity, SensorEntity):
-    """Cylinder temperature drops in the last day that started right after heating stopped."""
+    """Cylinder temperature drops in the last day that began as heating started or stopped."""
 
     _attr_translation_key = "hot_water_cooling"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -513,7 +513,11 @@ class SatHotWaterCoolingSensor(SatClimateEntity, SensorEntity):
     def _update_attrs(self) -> None:
         stats = self._climate.boiler_stats
         self._attr_native_value = stats.hot_water_drops_after_heating
-        self._attr_extra_state_attributes = {"all_drops_24h": stats.hot_water_drops}
+        self._attr_extra_state_attributes = {
+            "after_heating_start": stats.hot_water_drops_after_heating_start,
+            "after_heating_stop": stats.hot_water_drops_after_heating_stop,
+            "all_drops_24h": stats.hot_water_drops,
+        }
 
 
 class SatOpenLoopsSensor(SatClimateEntity, SensorEntity):

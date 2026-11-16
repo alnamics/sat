@@ -43,3 +43,41 @@ def test_an_unknown_burner_power_counts_no_heat_or_gas() -> None:
     assert stats.totals["heating_kwh"] == 0.0
     assert stats.totals["gas_m3"] == 0.0
     assert stats.totals["burn_hours"] > 0.9
+
+
+def test_cylinder_drop_at_heating_start_is_blamed_on_heating() -> None:
+    stats = BoilerStats()
+    now = 0.0
+
+    def step(temperature: float, started: float | None, stopped: float | None) -> None:
+        nonlocal now
+        stats.update(
+            now=now,
+            flame=False,
+            hot_water=False,
+            heat_kw=None,
+            gas_m3_per_hour=None,
+            outdoor=5.0,
+            hot_water_temperature=temperature,
+            heating_started_at=started,
+            heating_stopped_at=stopped,
+        )
+        now += 60
+
+    step(50.0, None, None)
+    # Heating starts and the cylinder loses 3 K at once
+    started = now
+    step(47.0, started, None)
+    assert stats.hot_water_drops_after_heating_start == 1
+
+    # Heating stopped long ago and started long ago: a drop now is tapping
+    now += 3600
+    step(44.0, started, started + 900)
+    assert stats.hot_water_drops == 2
+    assert stats.hot_water_drops_after_heating == 1
+
+    # A drop right after the stop goes to the stop, the later of the two changes
+    stopped = now
+    step(42.0, stopped - 300, stopped)
+    assert stats.hot_water_drops_after_heating_stop == 1
+    assert stats.hot_water_drops_after_heating == 2

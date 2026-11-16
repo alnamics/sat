@@ -448,6 +448,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         monitored = [*self._radiators, *self.areas.items()]
         self.loop_monitor = LoopMonitor(monitored) if monitored else None
         self._heating_stopped_at: float | None = None
+        self._heating_started_at: float | None = None
         self._failed_monitors: set[str] = set()
         self._last_pwm_status: PWMStatus | None = None
         self._last_device_active: bool | None = None
@@ -2206,6 +2207,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._last_device_active is True and not device_active
         ):
             self._heating_stopped_at = now
+        if (
+            self._last_pwm_status not in (None, PWMStatus.ON) and self.pwm.status == PWMStatus.ON
+        ) or (self._last_device_active is False and device_active):
+            self._heating_started_at = now
         self._last_pwm_status = self.pwm.status
         self._last_device_active = device_active
 
@@ -2251,6 +2256,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             indoor=self.native_current_temperature,
             hot_water_temperature=coordinator.hot_water_temperature,
             heating_stopped_at=self._heating_stopped_at,
+            heating_started_at=self._heating_started_at,
             day=today.isoformat(),
             gas_price=self._gas_price,
         )

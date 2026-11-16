@@ -711,7 +711,7 @@
         "name": "Heating degree days"
       },
       "hot_water_cooling": {
-        "name": "Cylinder cooling after heating stops"
+        "name": "Cylinder cooling by heating"
       },
       "open_loops": {
         "name": "Open loops"
