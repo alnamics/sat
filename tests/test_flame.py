@@ -332,6 +332,26 @@ def test_a_heating_burn_the_boiler_ends_for_hot_water_is_not_cut_short(
     assert flame.health_status == FlameStatus.HEALTHY
 
 
+def test_a_spike_before_a_cylinder_reheat_does_not_warn(
+    freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    flame = Flame()
+
+    with caplog.at_level(logging.WARNING):
+        flame.update(boiler_state(False, setpoint=40.0, flow=35.0), PWM_ON)
+        for flow in (35.0, 41.0, 46.5, 44.0):
+            flame.update(boiler_state(True, setpoint=40.0, flow=flow), PWM_ON)
+            freezer.tick(timedelta(seconds=3))
+        flame.update(boiler_state(False, setpoint=40.0, flow=43.0), PWM_ON)
+        freezer.tick(timedelta(seconds=30))
+        flame.update(boiler_state(False, hot_water=True, setpoint=40.0, flow=43.0), PWM_ON)
+        freezer.tick(timedelta(seconds=300))
+        flame.update(boiler_state(False, setpoint=40.0, flow=40.0), PWM_OFF)
+
+    assert "overshoot protection" not in caplog.text
+    assert flame.last_cut_short_peak_flow is None
+
+
 def test_a_stale_pwm_state_does_not_judge_burns(
     freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -376,6 +396,9 @@ def ignition_spike(flame: Flame, freezer: FrozenDateTimeFactory, pwm_off_first: 
     flame.update(
         boiler_state(False, setpoint=40.0, flow=43.0), PWM_OFF if pwm_off_first else PWM_ON
     )
+    # No hot water demand follows, so the boiler cut the burn out
+    freezer.tick(timedelta(seconds=160))
+    flame.update(boiler_state(False, setpoint=40.0, flow=40.0), PWM_OFF)
 
 
 @pytest.mark.parametrize("pwm_off_first", [False, True], ids=["boiler_cut", "pwm_ended"])
@@ -422,6 +445,8 @@ def test_a_cut_out_seen_with_the_flow_after_it_still_warns(
             flame.update(boiler_state(True, setpoint=40.0, flow=flow), PWM_ON)
             freezer.tick(timedelta(seconds=5))
         flame.update(boiler_state(False, setpoint=40.0, flow=38.4), PWM_ON)
+        freezer.tick(timedelta(seconds=160))
+        flame.update(boiler_state(False, setpoint=40.0, flow=36.0), PWM_OFF)
 
     assert "raise the overshoot protection value" in caplog.text
     assert (flame.last_cut_short_peak_flow, flame.last_cut_short_setpoint) == (46.3, 40.0)

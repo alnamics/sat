@@ -139,6 +139,7 @@ class Flame:
         self._burn_setpoint: float | None = None
         self._last_cut_short_peak_flow: float | None = None
         self._last_cut_short_setpoint: float | None = None
+        self._pending_cut_out: tuple[float, float, float, float] | None = None
 
         # Stored states
         self._last_boiler_state: BoilerState | None = None
@@ -253,6 +254,26 @@ class Flame:
     def last_cut_short_setpoint(self) -> float | None:
         return self._last_cut_short_setpoint
 
+    def _report_cut_out(self, now: float) -> None:
+        """Warn about an ignition cut-out once no hot water demand explains it."""
+        if self._pending_cut_out is None:
+            return
+        ended, duration, peak, setpoint = self._pending_cut_out
+        if now - ended <= self.HOT_WATER_TAKEOVER_SECONDS:
+            return
+        self._pending_cut_out = None
+        self._last_cut_short_peak_flow = peak
+        self._last_cut_short_setpoint = setpoint
+        _LOGGER.warning(
+            "The boiler stopped a PWM burn after %.0fs with the flow at %.1f°C "
+            "against a %.1f°C setpoint; raise the overshoot protection value",
+            duration,
+            peak,
+            setpoint,
+        )
+        if self._store:
+            self._store.async_delay_save(self._data_to_save)
+
     @property
     def cut_short_burn_ends(self) -> tuple[float, ...]:
         return tuple(ended for ended, cut_short in self._pwm_burns_cut_short if cut_short)
@@ -303,6 +324,9 @@ class Flame:
                 and now - self._pwm_burns_cut_short[-1][0] <= self.HOT_WATER_TAKEOVER_SECONDS
             ):
                 self._pwm_burns_cut_short[-1] = (self._pwm_burns_cut_short[-1][0], False)
+                self._pending_cut_out = None
+
+        self._report_cut_out(now)
 
         if previously_active and elapsed > 0.0:
             self._on_deltas_window.append((now, elapsed))
@@ -429,11 +453,9 @@ class Flame:
                     and self._burn_peak_monotonic is not None
                     and now - self._burn_peak_monotonic <= self.IGNITION_CUT_OUT_SECONDS
                 ):
-                    self._last_cut_short_peak_flow = self._burn_peak_flow
-                    self._last_cut_short_setpoint = self._burn_setpoint
-                    _LOGGER.warning(
-                        "The boiler stopped a PWM burn after %.0fs with the flow at %.1f°C "
-                        "against a %.1f°C setpoint; raise the overshoot protection value",
+                    # Reported once it is clear the boiler did not stop for a cylinder reheat
+                    self._pending_cut_out = (
+                        now,
                         duration,
                         self._burn_peak_flow,
                         self._burn_setpoint,
