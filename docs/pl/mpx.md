@@ -61,7 +61,9 @@ OpenTherm definiuje modulację względną jako udział w zakresie między mocą 
 - dwa palenia przerwane przez kocioł z powodu przegrzania kończą blok;
 - dogrzanie ciepłej wody w ostatniej tercji okresu od razu rozpoczyna następny blok, póki kocioł jest ciepły (`hot_water_piggybacks`);
 - przerwa krótsza niż czas antytaktowania nie jest warta zapłonu, więc blok trwa dalej;
-- pokój cieplejszy o ponad 0,7 °C od temperatury zadanej nie dostaje ciepła: trwający blok się kończy i nic nie przechodzi na później (`heat_budget_room_too_warm`).
+- pokój cieplejszy o ponad 0,7 °C od temperatury zadanej nie dostaje ciepła: trwający blok się kończy i nic nie przechodzi na później (`heat_budget_room_too_warm`);
+- po obniżeniu temperatury zadanej o 0,2 °C lub więcej dom stygnie swobodnie: nic się nie pali, dopóki pokój nie zejdzie na 0,2 °C od nowego celu (`heat_budget_coasting`);
+- gdy wszystkie zawory pokojowe są zamknięte, budżet nie nalicza zaległego ciepła, więc po ich otwarciu nie odrabia czasu, w którym były zamknięte.
 
 Dopóki budżet nie jest gotowy, działa zwykłe sterowanie z własnym ustawieniem Force PWM. Gdy jest gotowy, SAT zawsze używa cykli przy małym obciążeniu, tak jak przy Force PWM.
 
@@ -86,6 +88,7 @@ Dla kotłów, które przyjmują temperaturę zadaną ciepłej wody przez OpenThe
 - **Hot water temperature** (0 = zostaw ciepłą wodę kotłowi) i **Hot water eco temperature**: z pomocnikiem harmonogramu **Hot water schedule** poza jego godzinami obowiązuje temperatura ekonomiczna. Chłodniejszy zasobnik traci mniej ciepła przez obudowę, a kocioł lepiej kondensuje, gdy go dogrzewa.
 - **Przegrzew przeciw legionelli** (Legionella boost): w wybranym dniu i o wybranej godzinie zasobnik jest nagrzewany do 60 °C (albo do własnego maksimum kotła, jeśli jest niższe) i trzymany w tej temperaturze przez godzinę; po 4 godzinach przegrzew się poddaje. Jeden przegrzew na tydzień.
 - SAT wysyła temperaturę zadaną, gdy jej wartość się zmienia, i raz po każdym starcie, więc temperatura ustawiona ręcznie zostaje do następnej zmiany. Nie sprawdza, czy kocioł ją przyjął. Atrybuty `hot_water_setpoint_sent`, `hot_water_legionella_boost` i `hot_water_last_boost_week`.
+- **Dogrzewanie bez flagi**: niektóre kotły, w tym De Dietrich Lumea, dogrzewają zasobnik bez ustawiania flagi ciepłej wody. Palenie, w którym woda wzrosła o ponad 10 °C od zapłonu i jest o ponad 10 °C cieplejsza od temperatury zadanej i od 25 °C, po 20 sekundach liczy się jako ciepła woda. Korzystają z tego utrzymanie grzania między fazami PWM, budżet ciepła, liczniki, sprawność i pomiar pętli, a palenie na ogrzewanie, które kocioł przerwał dla takiego dogrzania do 5 minut później, nie liczy się jako przerwane.
 
 ## Monitoring
 
@@ -130,7 +133,7 @@ Ustawienia termostatów są zapisywane, zanim cokolwiek zostanie zmienione. Jeś
 
 ## Po restarcie
 
-Po restarcie Home Assistanta albo zmianie opcji zachowują się: liczniki, nauczone straty ciepła z oknem dobowym, nauczony czas dogrzewania, historia ciśnienia, historia gazu, średnia do wyłączania przy cieple (jeśli restart trwał krócej niż 6 godzin), preset Away ustawiony przez obecność, preset Activity ustawiony przez wykrywanie okna (jego 30 minut liczy się od nowa), tydzień ostatniego przegrzewu przeciw legionelli i ustawienia termostatów z trwającego pomiaru pętli.
+Po restarcie Home Assistanta albo zmianie opcji zachowują się: liczniki, nauczone straty ciepła z oknem dobowym, nauczony czas dogrzewania, historia ciśnienia, historia gazu, średnia do wyłączania przy cieple (jeśli restart trwał krócej niż 6 godzin), preset Away ustawiony przez obecność, preset Activity ustawiony przez wykrywanie okna (jego 30 minut liczy się od nowa), tydzień ostatniego przegrzewu przeciw legionelli, ustawienia termostatów z trwającego pomiaru pętli, szacowany przepływ wody, różnica spaliny–powrót i oddawanie ciepła przez podłogę. Mierzona godzina budżetu ciepła jest zapisywana co 5 minut i jest kontynuowana po restarcie trwającym do 15 minut.
 
 Uczone od nowa: odczyt kotła na minimalnej modulacji, średnie i przepływy monitora pętli, przenikanie ciepła podłogi, średnie sprawności, kredyt ciepła i bieżący blok budżetu ciepła.
 

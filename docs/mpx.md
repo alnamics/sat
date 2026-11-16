@@ -51,7 +51,7 @@ OpenTherm defines the relative modulation as a share of the range between minimu
 
 `Off`, `Learn only (shadow)` or `On`. For slow emitters (screed underfloor heating) with a boiler whose minimum power is above what the house usually needs. `On` only drives underfloor heating; with radiators or a heat pump it learns as in shadow mode, because hour-long blocks would make fast emitters swing.
 
-**The model.** Each hour SAT records the heat burned for space heating, the indoor-outdoor temperature difference, the sun and the change of the indoor temperature. Over a running day of such hours it fits, with recursive least squares, *heat + S × sun = H × (indoor − outdoor) × hours + stored heat*: H is the heat loss of the house (W/K), S the heat the sun brings in full sun. A day evens out the heat the screed stores and gives back. An hour measured at least half is scaled to the whole hour, a shorter one is left out, and the window survives restarts. The first fit comes after 20 hours of data and the budget counts as ready after twelve fits, so about a day and a half after it is switched on (`heat_budget_ready`). With a fixed **Heat loss of the house** it is ready at once.
+**The model.** Each hour SAT records the heat burned for space heating, the indoor-outdoor temperature difference, the sun and the change of the indoor temperature. Over a running day of such hours it fits, with recursive least squares, *heat + S × sun = H × (indoor − outdoor) × hours + stored heat*: H is the heat loss of the house (W/K), S the heat the sun brings in full sun. A day evens out the heat the screed stores and gives back. An hour measured at least half is scaled to the whole hour, a shorter one is left out, and the window survives restarts; the hour being measured is saved every 5 minutes and continues after a restart of up to 15 minutes. The first fit comes after 20 hours of data and the budget counts as ready after twelve fits, so about a day and a half after it is switched on (`heat_budget_ready`). With a fixed **Heat loss of the house** it is ready at once.
 
 **The dispatch.** The heat the next period needs is *H × (target − outdoor) − S × sun*, plus a PI correction on the room error, counted as a shift of the outside temperature: 8 K per kelvin of room error, and an integral of 1 K per 1.5 kelvin-hours (at most ±8 K) that takes up what the model gets wrong. The integral only works within 0.5 °C of the target and once the budget is ready, so a change of target does not wind it up. In the simulation a target moved by 1 °C is reached in about 6 to 8 hours. With a weather forecast, the outdoor temperature is the measured one plus the forecast's trend over the next 3 hours (at most ±5 K), so a forecast that runs warmer or colder than your sensor does not bias the heat. That heat is burned in one block at minimum power:
 
@@ -61,7 +61,9 @@ OpenTherm defines the relative modulation as a share of the range between minimu
 - two burns the boiler cuts out by overheating end a block;
 - a hot water reheat in the last third of a period starts the next block right away, while the boiler is warm (`hot_water_piggybacks`);
 - a pause shorter than the anti-cycling time is not worth an ignition, so the block runs on;
-- a room more than 0.7 °C above its target gets no heat: the running block ends and nothing is carried over (`heat_budget_room_too_warm`).
+- a room more than 0.7 °C above its target gets no heat: the running block ends and nothing is carried over (`heat_budget_room_too_warm`);
+- after the target is lowered by 0.2 °C or more the house coasts: nothing burns until the room is within 0.2 °C of the new target (`heat_budget_coasting`);
+- while all room valves are closed no heat is owed, so reopened valves do not start a block for the time they were closed.
 
 Until the budget is ready the normal control runs, with its own Force PWM setting. Once ready, SAT always uses low-load cycles, as Force PWM does.
 
@@ -86,6 +88,7 @@ For boilers that accept a hot water setpoint over OpenTherm.
 - **Hot water temperature** (0 = leave hot water to the boiler) and **Hot water eco temperature**: with a **Hot water schedule** helper, the eco temperature applies outside its hours. A cooler cylinder loses less heat through its jacket, and the boiler condenses better while reheating it.
 - **Legionella boost**: on the chosen day and time the cylinder is heated to 60 °C (or the boiler's own maximum when that is lower) and held there for an hour, or the boost gives up after 4 hours. One boost per week.
 - SAT writes the setpoint when its value changes and once after each start, so a temperature set by hand stays until the next change. It does not check that the boiler accepted it. Attributes `hot_water_setpoint_sent`, `hot_water_legionella_boost` and `hot_water_last_boost_week`.
+- **Reheats the boiler does not flag**: some boilers, the De Dietrich Lumea among them, reheat the cylinder without setting the hot water flag. A burn whose water rises more than 10 °C since ignition and above both its setpoint and 25 °C by more than 10 °C counts as hot water after 20 seconds. Keep heating between PWM phases, the heat budget, the totals, the efficiency and the loop measurement all use this, and a heating burn the boiler stopped for such a reheat up to 5 minutes later is not counted as cut short.
 
 ## Monitoring
 
@@ -130,7 +133,7 @@ How the thermostats were set is saved before anything is changed. If Home Assist
 
 ## After a restart
 
-Kept across a restart of Home Assistant or a change of options: the totals, the learned heat loss with its day window, the learned recovery time, the pressure history, the gas history, the warm weather average (when the restart took less than 6 hours), an Away preset set by presence, an Activity preset set by the window detection (its 30 minutes start again), the week of the last legionella boost and the thermostat settings of a running loop measurement.
+Kept across a restart of Home Assistant or a change of options: the totals, the learned heat loss with its day window, the learned recovery time, the pressure history, the gas history, the warm weather average (when the restart took less than 6 hours), an Away preset set by presence, an Activity preset set by the window detection (its 30 minutes start again), the week of the last legionella boost, the thermostat settings of a running loop measurement, the estimated water flow, the flue/return gap and the floor heat transfer.
 
 Learned again: what the boiler reads at minimum modulation, the loop monitor's averages and flows, the floor's heat transfer, the efficiency averages, the heat credit and the current block of the heat budget.
 
