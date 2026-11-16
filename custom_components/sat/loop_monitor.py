@@ -28,6 +28,7 @@ OPEN_SHARE_LIMIT = 0.85
 FULL_OPEN_SHARE = 0.95
 # Flow regression: about a week of burns of memory, and samples per state before a loop counts
 FLOW_FORGETTING = 0.995
+FLOW_COVARIANCE_LIMIT = 100.0
 MINIMUM_SAMPLES_PER_STATE = 5
 MAXIMUM_STEP_SECONDS = 300.0
 
@@ -133,6 +134,12 @@ class LoopMonitor:
             [(self._p[i][j] - gain[i] * px[j]) / FLOW_FORGETTING for j in range(size)]
             for i in range(size)
         ]
+        # A loop whose valve never changes is not excited, and forgetting alone would grow its
+        # covariance without bound over the thousands of samples of a season
+        largest = max(self._p[i][i] for i in range(size))
+        if largest > FLOW_COVARIANCE_LIMIT:
+            factor = FLOW_COVARIANCE_LIMIT / largest
+            self._p = [[value * factor for value in row] for row in self._p]
         self._flow_samples += 1
 
         for name, state in zip(self._names, states, strict=True):

@@ -39,6 +39,8 @@ BUILDING_CAPACITY_KWH_PER_K = 4.0
 LEARNING_WINDOW_HOURS = 24
 LEARNING_FORGETTING = 0.99
 LEARNING_MINIMUM_UPDATES = 12
+# Covariance is kept below this many times its starting value
+COVARIANCE_LIMIT_FACTOR = 10.0
 # An hour with a gap in the data says nothing reliable about the balance
 MAXIMUM_STEP_SECONDS = 300.0
 # An hour with at least this share measured is scaled up to the full hour; a shorter one is
@@ -210,6 +212,7 @@ class _RecursiveLeastSquares:
             [variance[i] if i == j else 0.0 for j in range(size)] for i in range(size)
         ]
         self.forgetting = forgetting
+        self.limit = max(variance) * COVARIANCE_LIMIT_FACTOR
         self.updates = 0
 
     def update(self, x: list[float], y: float) -> None:
@@ -226,6 +229,12 @@ class _RecursiveLeastSquares:
             [(self.p[i][j] - gain[i] * px[j]) / self.forgetting for j in range(size)]
             for i in range(size)
         ]
+        # A parameter that is never excited (no sun without a forecast) would see its
+        # covariance grow without bound under forgetting
+        largest = max(self.p[i][i] for i in range(size))
+        if largest > self.limit:
+            factor = self.limit / largest
+            self.p = [[value * factor for value in row] for row in self.p]
         self.updates += 1
 
     def to_dict(self) -> dict[str, Any]:

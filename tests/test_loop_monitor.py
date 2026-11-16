@@ -42,6 +42,20 @@ def test_a_loop_never_seen_closed_has_no_flow() -> None:
     assert all(monitor.loop_flow(room) is None for room in ROOMS)
 
 
+def test_a_season_of_unchanged_valves_keeps_the_learning_finite() -> None:
+    monitor = LoopMonitor(ROOMS)
+    # A sample every 30 s through half a year of burns, one valve never moving
+    for step in range(200_000):
+        open_rooms = {room: room == "climate.a" or step % 7 < 4 for room in ROOMS}
+        readings = {room: RoomReading(open=open_rooms[room], temperature=21.5) for room in ROOMS}
+        monitor.update(step * 30.0, readings, 8.0 + sum(open_rooms.values()))
+
+    assert all(value <= 100.0 for row in monitor._p for value in row)
+    flow = monitor.loop_flow("climate.b")
+    assert flow is not None
+    assert abs(flow - 1.0) < 0.2
+
+
 def test_rotameter_advice_follows_room_temperatures_and_valves() -> None:
     monitor = LoopMonitor(ROOMS)
     temperatures = {"climate.a": 23.2, "climate.b": 22.0, "climate.c": 21.0, "climate.d": 22.0}
