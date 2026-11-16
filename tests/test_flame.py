@@ -311,6 +311,27 @@ def test_hot_water_burns_during_pwm_are_not_cut_short(
     assert "overshoot protection" not in caplog.text
 
 
+def test_a_heating_burn_the_boiler_ends_for_hot_water_is_not_cut_short(
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    flame = Flame()
+    run_pwm_cycle(flame, freezer, 900)
+
+    for _ in range(2):
+        # The heating burn stops after 20 s because the cylinder needs a reheat
+        flame.update(boiler_state(False, setpoint=40.0, flow=35.0), PWM_ON)
+        flame.update(boiler_state(True, setpoint=40.0, flow=35.0), PWM_ON)
+        freezer.tick(timedelta(seconds=20))
+        flame.update(boiler_state(False, setpoint=40.0, flow=36.0), PWM_ON)
+        freezer.tick(timedelta(seconds=30))
+        flame.update(boiler_state(False, hot_water=True, setpoint=40.0, flow=36.0), PWM_ON)
+        freezer.tick(timedelta(seconds=300))
+
+    assert flame.cut_short_burn_ends == ()
+    start_pwm_burn(flame)
+    assert flame.health_status == FlameStatus.HEALTHY
+
+
 def test_a_stale_pwm_state_does_not_judge_burns(
     freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
 ) -> None:

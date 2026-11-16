@@ -63,6 +63,8 @@ class Flame:
     IGNITION_CUT_OUT_SECONDS: float = 30.0
     # A hot water request can end before the listener batch that first shows the flame
     HOT_WATER_LEAD_SECONDS: float = 30.0
+    # Hot water demand this soon after a heating burn ended means the boiler switched over
+    HOT_WATER_TAKEOVER_SECONDS: float = 150.0
     # A heating burn cuts out 5 to 7 °C above its setpoint; a Remeha preheat runs ~20 °C above
     UNFLAGGED_HOT_WATER_MARGIN: float = 10.0
     EXPECTED_MODULATING_DUTY_RATIO_WHEN_HEATING: float = 0.60
@@ -293,6 +295,14 @@ class Flame:
             self._pwm_state_updated_monotonic = now
         if boiler_state.hot_water_active:
             self._hot_water_seen_monotonic = now
+            # A heating burn that stopped because the boiler went to reheat the cylinder was
+            # not cut short by the water being too warm
+            if (
+                self._pwm_burns_cut_short
+                and self._pwm_burns_cut_short[-1][1]
+                and now - self._pwm_burns_cut_short[-1][0] <= self.HOT_WATER_TAKEOVER_SECONDS
+            ):
+                self._pwm_burns_cut_short[-1] = (self._pwm_burns_cut_short[-1][0], False)
 
         if previously_active and elapsed > 0.0:
             self._on_deltas_window.append((now, elapsed))
