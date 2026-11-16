@@ -623,6 +623,7 @@ async def test_cycle_statistics_survive_a_reload(
     assert restored.sample_count_4h == 3
 
     ignition_spike(restored, freezer, pwm_off_first=False)
+    start_pwm_burn(restored)
 
     assert restored.health_status == FlameStatus.PWM_SHORT
 
