@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from unittest.mock import PropertyMock, patch
 
+import pytest
 from homeassistant.components.climate import HVACAction, HVACMode
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_OFF, STATE_ON
@@ -20,6 +21,7 @@ from custom_components.sat.const import (
     MINIMUM_SETPOINT,
     MODE_MQTT_OPENTHERM,
     BoilerStatus,
+    PWMStatus,
 )
 from custom_components.sat.coordinator import DeviceState
 from tests.const import DEFAULT_USER_DATA
@@ -398,3 +400,47 @@ async def test_heating_kept_on_between_pwm_phases_shows_as_idle(hass: HomeAssist
     climate._pwm_off_since = None
     climate.async_write_ha_state()
     assert climate.hvac_action == HVACAction.HEATING
+
+
+@pytest.mark.parametrize(
+    ("flow", "suspended"), [(60.0, False), (30.0, True)], ids=["hot_water", "heating"]
+)
+async def test_a_flame_between_pwm_phases_suspends_keep_heating_only_for_heating(
+    hass: HomeAssistant, flow: float, suspended: bool
+) -> None:
+    entry = await setup_heating(hass)
+    climate = entry.runtime_data.climate
+    coordinator = entry.runtime_data.coordinator
+    climate._keep_heating_in_pwm_off = True
+    clock = [1000.0]
+
+    with (
+        patch("custom_components.sat.climate.monotonic", side_effect=lambda: clock[0]),
+        patch.object(
+            type(climate), "pulse_width_modulation_enabled", new_callable=PropertyMock
+        ) as enabled,
+        patch.object(type(climate.pwm), "status", new_callable=PropertyMock) as status,
+        patch.object(type(coordinator), "flame_active", new_callable=PropertyMock) as flame,
+        patch.object(type(coordinator), "hot_water_active", new_callable=PropertyMock) as water,
+        patch.object(type(coordinator), "setpoint", new_callable=PropertyMock) as setpoint,
+        patch.object(
+            type(coordinator), "boiler_temperature", new_callable=PropertyMock
+        ) as boiler_temperature,
+    ):
+        enabled.return_value = True
+        status.return_value = PWMStatus.OFF
+        water.return_value = False
+        setpoint.return_value = 25.0
+        flame.return_value = False
+        boiler_temperature.return_value = 30.0
+        assert climate._heating_kept_on_in_pwm_off()
+
+        # The boiler lights well after the on-phase ended; the hot water flag never comes
+        clock[0] += 120
+        flame.return_value = True
+        boiler_temperature.return_value = flow
+        assert climate._heating_kept_on_in_pwm_off()
+        clock[0] += 90
+        assert climate._heating_kept_on_in_pwm_off() is not suspended
+
+    assert await hass.config_entries.async_unload(entry.entry_id)

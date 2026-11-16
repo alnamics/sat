@@ -188,6 +188,12 @@ INPUTS_MISSING_GRACE_PERIOD = timedelta(minutes=10)
 KEEP_HEATING_FLAME_GRACE_SECONDS = 90
 # A boiler that lit against the off-phase setpoint gets heating disabled between on-phases again
 KEEP_HEATING_SUSPEND_SECONDS = 3600
+# A flame in the off-phase is judged after this long; a hot water burn the boiler does not flag
+# has by then heated the water well above any heating setpoint
+KEEP_HEATING_FLAME_JUDGE_SECONDS = 60
+# Boilers clamp a low heating setpoint to their own minimum, often 25 °C
+KEEP_HEATING_BOILER_MINIMUM = 25.0
+KEEP_HEATING_HOT_WATER_MARGIN = 10.0
 # The flow and return only settle a few minutes into a burn, the flue gas a few more
 SETTLED_BURN_SECONDS = 180
 DIAGNOSTIC_BURN_SECONDS = 600
@@ -380,6 +386,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._keep_heating_in_pwm_off = bool(config_options.get(CONF_KEEP_HEATING_IN_PWM_OFF))
         self._pwm_off_since: float | None = None
         self._keep_heating_suspended_until: float | None = None
+        self._kept_on_flame_since: float | None = None
 
         # Create a PID controller with given configuration options
         self.pid = create_pid_controller(config_entry.data, config_options)
@@ -2398,19 +2405,32 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # A boiler that raises the off-phase setpoint to its own minimum lights against it;
         # the on-phase flame is given time to go out first
         if (
-            self._coordinator.flame_active
-            and not self._coordinator.hot_water_active
-            and now - self._pwm_off_since > KEEP_HEATING_FLAME_GRACE_SECONDS
+            not self._coordinator.flame_active
+            or self._coordinator.hot_water_active
+            or now - self._pwm_off_since <= KEEP_HEATING_FLAME_GRACE_SECONDS
         ):
-            self._keep_heating_suspended_until = now + KEEP_HEATING_SUSPEND_SECONDS
-            _LOGGER.warning(
-                "The boiler lit during a PWM off-phase with heating left enabled; "
-                "disabling heating between on-phases for the next %d minutes.",
-                KEEP_HEATING_SUSPEND_SECONDS // 60,
-            )
-            return False
+            self._kept_on_flame_since = None
+            return True
 
-        return True
+        if self._kept_on_flame_since is None:
+            self._kept_on_flame_since = now
+        if now - self._kept_on_flame_since < KEEP_HEATING_FLAME_JUDGE_SECONDS:
+            return True
+
+        # Water far above what the boiler heats to for heating is a hot water burn it did not flag
+        flow = self._coordinator.boiler_temperature
+        heating_target = max(self._coordinator.setpoint or 0.0, KEEP_HEATING_BOILER_MINIMUM)
+        if flow is not None and flow > heating_target + KEEP_HEATING_HOT_WATER_MARGIN:
+            return True
+
+        self._kept_on_flame_since = None
+        self._keep_heating_suspended_until = now + KEEP_HEATING_SUSPEND_SECONDS
+        _LOGGER.warning(
+            "The boiler lit during a PWM off-phase with heating left enabled; "
+            "disabling heating between on-phases for the next %d minutes.",
+            KEEP_HEATING_SUSPEND_SECONDS // 60,
+        )
+        return False
 
     async def async_set_heater_state(self, state: DeviceState) -> None:
         """Set the heater state, ensuring proper conditions are met."""
