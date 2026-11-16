@@ -165,6 +165,8 @@ class HeatBudgetInputs:
     comfort: bool | None = None
     next_comfort_change: datetime | None = None
     setback: float = 0.0
+    # False while no loop can take heat (all valves closed); nothing is owed then
+    heating_allowed: bool = True
 
 
 @dataclass(slots=True)
@@ -431,6 +433,15 @@ class HeatBudget:
 
         indoor, outdoor = inputs.indoor, inputs.outdoor
         if indoor is None or inputs.target is None or outdoor is None:
+            self._end_block(now)
+            return
+
+        if not inputs.heating_allowed:
+            # Closed valves: the rooms are warm enough, so no debt builds up for later
+            self._credit = min(self._credit, 0.0)
+            self._need = 0.0
+            self._block_target = 0.0
+            self._period_end = None
             self._end_block(now)
             return
 

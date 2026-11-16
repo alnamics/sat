@@ -1916,6 +1916,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             comfort=comfort,
             next_comfort_change=next_change,
             setback=self._setback_temperature,
+            heating_allowed=self._valves_open is not False,
         )
 
     def _burner_share(self) -> float | None:

@@ -426,7 +426,11 @@ async def test_a_flame_between_pwm_phases_suspends_keep_heating_only_for_heating
         patch.object(
             type(coordinator), "boiler_temperature", new_callable=PropertyMock
         ) as boiler_temperature,
+        patch.object(
+            type(coordinator), "heating_hot_water", new_callable=PropertyMock
+        ) as heating_hot_water,
     ):
+        heating_hot_water.return_value = False
         enabled.return_value = True
         status.return_value = PWMStatus.OFF
         water.return_value = False
@@ -440,6 +444,8 @@ async def test_a_flame_between_pwm_phases_suspends_keep_heating_only_for_heating
         flame.return_value = True
         boiler_temperature.return_value = flow
         assert climate._heating_kept_on_in_pwm_off()
+        # The flame tracker tells the unflagged reheat from the water within the minute
+        heating_hot_water.return_value = flow > 50
         clock[0] += 90
         assert climate._heating_kept_on_in_pwm_off() is not suspended
 

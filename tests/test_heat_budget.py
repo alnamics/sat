@@ -4,7 +4,7 @@ import math
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from custom_components.sat.const import PWMStatus
 from custom_components.sat.heat_budget import HeatBudget, HeatBudgetInputs, _Hour, solar_elevation
@@ -322,15 +322,27 @@ async def test_the_hour_being_measured_survives_a_restart() -> None:
     start = datetime.now(UTC) - timedelta(minutes=40)
     budget = HeatBudget(heat_loss_kw_per_k=0.08)
     with patch("custom_components.sat.heat_budget.heat_budget_store", return_value=FakeStore()):
-        await budget.async_initialize(None, "entry")  # type: ignore[arg-type]
+        await budget.async_initialize(MagicMock(), "entry")
         for step in range(81):
             budget.update(inputs(step * 30, wall_time=start + timedelta(seconds=step * 30)))
 
         restored = HeatBudget(heat_loss_kw_per_k=0.08)
-        await restored.async_initialize(None, "entry")  # type: ignore[arg-type]
+        await restored.async_initialize(MagicMock(), "entry")
 
     # The 40 minutes measured before the restart are kept and the hour ends 20 minutes later
     assert restored._hour.seconds >= 35 * 60
     restored.update(inputs(10_000, wall_time=datetime.now(UTC)))
     assert restored._hour_started is not None
     assert 10_000 - restored._hour_started >= 35 * 60
+
+
+def test_closed_valves_build_up_no_heat_debt() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.08)
+    now = burn(budget, 0, 2 * 3600, heating_allowed=False)
+    assert budget.status == PWMStatus.OFF
+    assert budget.attributes["heat_credit_kwh"] <= 0
+
+    # Once a loop opens the block is planned for the need from now on, not the hours before
+    burn(budget, now, 60)
+    on_time, _ = budget.duty_cycle
+    assert on_time < 3600
