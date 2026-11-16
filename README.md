@@ -95,6 +95,7 @@ In HACS remove the MPX edition and download SAT v2 again (or copy the original o
 ## Documentation
 
 - [MPX additions][mpx]: every addition of this fork, what it does, its defaults and limits
+- [Example][example]: how SAT runs an 87 m² flat with screed heating and an oversized boiler
 - [Setup][setup]: what each setup step asks for
 - [Options][options]: every setting, tab by tab
 - [How SAT works][how-it-works]: heating curve, room feedback, low-load control, heat budget and calibration
@@ -114,6 +115,7 @@ SAT is the work of [Alex Wijnholds](https://github.com/Alexwijn) and [Thiago Bel
 
 [repository]: https://github.com/alnamics/sat
 [mpx]: docs/mpx.md
+[example]: docs/example.md
 [setup]: docs/setup.md
 [options]: docs/options.md
 [how-it-works]: docs/how-it-works.md

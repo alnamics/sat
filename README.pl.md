@@ -92,6 +92,7 @@ W HACS usuń edycję MPX i pobierz ponownie SAT v2 (albo ręcznie skopiuj orygin
 ## Dokumentacja
 
 - [Dodatki MPX][mpx]: każdy dodatek tego forka, co robi, jakie ma wartości domyślne i ograniczenia
+- [Przykład][example]: jak SAT steruje mieszkaniem 87 m² z podłogówką i przewymiarowanym kotłem
 - [Konfiguracja][setup]: o co pyta każdy krok konfiguracji
 - [Opcje][options]: każde ustawienie, zakładka po zakładce
 - [Jak działa SAT][how-it-works]: krzywa grzewcza, korekta z pokoju, sterowanie przy małym obciążeniu, budżet ciepła i kalibracja
@@ -113,6 +114,7 @@ SAT to dzieło [Alexa Wijnholdsa](https://github.com/Alexwijn), [Thiago Bellinie
 
 [repository]: https://github.com/alnamics/sat
 [mpx]: docs/pl/mpx.md
+[example]: docs/pl/example.md
 [setup]: docs/pl/setup.md
 [options]: docs/pl/options.md
 [how-it-works]: docs/pl/how-it-works.md
