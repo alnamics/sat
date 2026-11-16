@@ -3,7 +3,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, override
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.const import (
     EntityCategory,
     UnitOfEnergy,
@@ -321,10 +326,11 @@ class SatFlameStartsSensor(SatEntity, SensorEntity):
         self._attr_native_value = int(self._coordinator.flame.cycles_last_hour)
 
 
-class SatEstimatedWaterFlowSensor(SatClimateEntity, SensorEntity):
+class SatEstimatedWaterFlowSensor(SatClimateEntity, RestoreSensor):
     """Water flow through the heating system, from the burner power and the flow/return spread.
 
-    It is measured during settled space heating burns only and holds the last value between them.
+    It is measured during settled space heating burns only and holds the last value between them,
+    also across a restart of Home Assistant.
     """
 
     _attr_translation_key = "estimated_water_flow"
@@ -340,11 +346,25 @@ class SatEstimatedWaterFlowSensor(SatClimateEntity, SensorEntity):
         super().__init__(coordinator, config_entry, climate)
 
         self._attr_unique_id = f"{config_entry.entry_id}-estimated-water-flow"
+        self._restored_flow: float | None = None
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        if (last := await self.async_get_last_sensor_data()) is not None and isinstance(
+            last.native_value, int | float
+        ):
+            self._restored_flow = float(last.native_value)
+        await super().async_added_to_hass()
 
     @override
     def _update_attrs(self) -> None:
         flow = self._climate.water_flow
-        self._attr_native_value = None if flow is None else round(flow, 1)
+        if flow is None:
+            # Until the first settled burn after a restart, keep the last measured flow
+            self._attr_native_value = self._restored_flow
+            return
+        self._restored_flow = None
+        self._attr_native_value = round(flow, 1)
         self._attr_extra_state_attributes = dict(self._climate.water_flow_details)
 
 

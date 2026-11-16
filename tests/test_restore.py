@@ -146,3 +146,22 @@ async def test_preset_none_after_restore_returns_to_the_custom_temperature(
     state = hass.states.get(ENTITY_ID)
     assert state is not None
     assert state.attributes["temperature"] == temperature
+
+
+async def test_the_water_flow_is_kept_across_a_restart(hass: HomeAssistant) -> None:
+    flow_id = "sensor.mock_title_estimated_water_flow"
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(flow_id, "14.8"),
+                {"native_value": 14.8, "native_unit_of_measurement": "L/min"},
+            )
+        ],
+    )
+
+    await setup_entry(hass)
+
+    state = hass.states.get(flow_id)
+    assert state is not None
+    assert float(state.state) == 14.8
