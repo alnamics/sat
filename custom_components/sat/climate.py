@@ -671,10 +671,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._loop_measurement_task.cancel()
             self._loop_measurement_task = None
 
-        # A reload for new options must not cost the hour the heat budget was measuring
-        if self.heat_budget is not None:
-            await self._async_run_guarded("heat budget save", self.heat_budget.async_save)
-
     async def _async_started(self, _hass: HomeAssistant) -> None:
         await self._async_run_guarded(
             "loop measurement restore", self._async_restore_interrupted_measurement
@@ -878,6 +874,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         ):
             self._window_detected = True
             self.window_detector.resume(monotonic())
+
+    async def async_save_learning(self) -> None:
+        """Write what was learned and counted, so a stop or a reload loses none of it."""
+        await self._async_run_guarded("totals save", self.boiler_stats.async_save)
+        if self.boiler_diagnostics is not None:
+            await self._async_run_guarded("diagnostics save", self.boiler_diagnostics.async_save)
+        if self.heat_budget is not None:
+            await self._async_run_guarded("heat budget save", self.heat_budget.async_save)
 
     async def async_stop_control(self) -> None:
         """Wait for a running control loop and stop sending boiler commands."""

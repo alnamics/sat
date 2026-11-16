@@ -139,6 +139,11 @@ class BoilerStats:
             self._last_save = now
             self._store.async_delay_save(self._data, 1)
 
+    async def async_save(self) -> None:
+        """Write the totals now; between saves a stop would lose up to ten minutes of them."""
+        if self._store is not None:
+            await self._store.async_save(self._data())
+
     def _data(self) -> dict[str, Any]:
         return {**self.totals, "signature": self.signature.to_dict()}
 

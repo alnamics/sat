@@ -148,6 +148,7 @@ async def async_release_control(entry: SatConfigEntry) -> None:
     """Hand the boiler back once the running calibration and control loop have finished."""
     await entry.runtime_data.climate.async_cancel_calibration()
     await entry.runtime_data.climate.async_stop_control()
+    await entry.runtime_data.climate.async_save_learning()
     await entry.runtime_data.coordinator.async_release_control()
 
 

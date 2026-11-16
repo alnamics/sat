@@ -127,6 +127,10 @@ class BoilerDiagnostics:
         if isinstance(gap, int | float) and isinstance(hours, int | float):
             self._gap, self._gap_hours = float(gap), max(0.0, float(hours))
 
+    async def async_save(self) -> None:
+        if self._store is not None:
+            await self._store.async_save(self._data())
+
     def _data(self) -> dict[str, Any]:
         return {
             "pressure": self._pressure.to_dict(),
