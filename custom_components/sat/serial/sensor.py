@@ -338,13 +338,18 @@ class SatOpenThermIdsSensor(SatEntity, sensor.SensorEntity):
     @override
     def _update_attrs(self) -> None:
         scan = self._scan
-        self._attr_native_value = len(scan.ids(SUPPORTED)) if scan.finished else None
+        self._attr_native_value = (
+            len(scan.ids(SUPPORTED)) if scan.finished and not scan.running else None
+        )
         self._attr_extra_state_attributes = {
-            "scan": "done" if scan.finished else ("running" if scan.running else "waiting"),
+            "scan": "running" if scan.running else ("done" if scan.finished else "not_run"),
+            "scanned_at": scan.scanned_at,
             "supported": scan.supported(),
             "data_invalid": scan.ids(INVALID),
             "unknown": scan.ids(UNKNOWN),
             "no_answer": scan.ids(NO_ANSWER),
+            "parameter_count": scan.parameter_count,
+            "parameters": {str(index): value for index, value in sorted(scan.parameters.items())},
         }
 
 

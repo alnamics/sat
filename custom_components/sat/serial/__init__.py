@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.storage import Store
+from homeassistant.util import slugify
 from pyotgw import OpenThermGateway
 from pyotgw import messages as gw_messages
 from pyotgw import vars as gw_vars
@@ -39,6 +40,7 @@ from ..coordinator import DeviceState, SatDataUpdateCoordinator
 from .id_scan import UNKNOWN, OpenThermIdScan
 
 if TYPE_CHECKING:
+    import asyncio
     import re
     from collections.abc import Callable, Mapping
     from datetime import datetime
@@ -88,8 +90,10 @@ def register_heat_exchanger_message() -> bool:
 
 register_heat_exchanger_message()
 
-# The ID scan starts once the gateway and the thermostat have settled after a start
-ID_SCAN_DELAY_SECONDS = 120.0
+
+def id_scan_store(hass: HomeAssistant, port: str) -> Store[dict[str, Any]]:
+    """Keep the last OpenTherm ID scan of the gateway on this port."""
+    return Store(hass, 1, f"{DOMAIN}.serial.{slugify(port)}.opentherm_ids")
 
 
 def listen_to_messages(
@@ -159,6 +163,7 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
 
         self.id_scan = OpenThermIdScan()
         self._id_scan_task: asyncio.Task[None] | None = None
+        self._id_scan_store: Store[dict[str, Any]] | None = None
 
     @override
     @property
@@ -364,18 +369,28 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
     async def async_setup(self) -> None:
         await self.async_connect()
 
-        if not self._simulation:
-            self._id_scan_task = self.hass.async_create_background_task(
-                self._async_scan_ids(), "SAT OpenTherm ID scan"
-            )
+        self._id_scan_store = id_scan_store(self.hass, self._port)
+        try:
+            if (data := await self._id_scan_store.async_load()) is not None:
+                self.id_scan.load(data)
+        except Exception:  # an unreadable scan only means asking again
+            _LOGGER.debug("Cannot load the last OpenTherm ID scan", exc_info=True)
 
-    async def _async_scan_ids(self, delay: float = ID_SCAN_DELAY_SECONDS) -> None:
+    def async_start_id_scan(self) -> bool:
+        """Start asking the boiler for every OpenTherm ID; False when one is already running."""
+        if self._simulation or self.id_scan.running:
+            return False
+
+        self._id_scan_task = self.hass.async_create_background_task(
+            self._async_scan_ids(), "SAT OpenTherm ID scan"
+        )
+        return True
+
+    async def _async_scan_ids(self) -> None:
         """Ask the boiler once for every readable OpenTherm ID and keep its answers."""
-        await asyncio.sleep(delay)
-
         undo = listen_to_messages(self._api, self.id_scan.observe)
         if undo is None:
-            _LOGGER.debug("Cannot listen to the gateway's messages; skipping the ID scan")
+            _LOGGER.warning("Cannot listen to the gateway's messages; the ID scan is not possible")
             return
 
         async def _ask(data_id: int) -> None:
@@ -383,12 +398,17 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
                 gw_vars.OTGW_CMD_PRIO_MSG, str(data_id), timeout=2
             )
 
+        _LOGGER.info("Scanning the OpenTherm IDs of the boiler; this takes about 10 minutes")
+        self.id_scan.running = True
+        self.async_update_listeners()
         try:
-            self.async_update_listeners()
             await self.id_scan.async_run(_ask)
         finally:
             undo()
             self.async_update_listeners()
+
+        if self._id_scan_store is not None:
+            await self._id_scan_store.async_save(self.id_scan.to_dict())
 
     @override
     async def async_will_remove_from_hass(self) -> None:

@@ -34,6 +34,7 @@ from .const import (
     DOMAIN,
     MODE_MQTT_EMS,
     MODE_MQTT_OPENTHERM,
+    MODE_SERIAL,
     SETUP_FAILED_ISSUE_DELAY,
 )
 from .coordinator_factory import SatDataUpdateCoordinatorFactory
@@ -45,6 +46,7 @@ from .mqtt import mqtt_store
 from .mqtt.ems import SatEmsMqttCoordinator
 from .mqtt.opentherm import SatOpenThermMqttCoordinator
 from .overshoot_learner import overshoot_learner_store
+from .serial import id_scan_store
 from .services import async_setup_services
 
 if TYPE_CHECKING:
@@ -161,6 +163,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: SatConfigEntry) -> None
     await boiler_stats_store(hass, entry.entry_id).async_remove()
     await boiler_diagnostics_store(hass, entry.entry_id).async_remove()
     await loop_measurement_store(hass, entry.entry_id).async_remove()
+    if entry.data.get(CONF_MODE) == MODE_SERIAL:
+        await id_scan_store(hass, entry.data[CONF_DEVICE]).async_remove()
 
     mqtt_coordinators = {
         MODE_MQTT_EMS: SatEmsMqttCoordinator,

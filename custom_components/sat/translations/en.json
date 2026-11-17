@@ -741,6 +741,9 @@
       }
     },
     "button": {
+      "scan_opentherm_ids": {
+        "name": "Scan OpenTherm IDs"
+      },
       "calibrate_overshoot_protection": {
         "name": "Calibrate overshoot protection"
       }

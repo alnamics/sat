@@ -2,6 +2,7 @@ import re
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.helpers import entity_registry as er
 from pyotgw import vars as gw_vars
 from pyotgw.messageprocessor import MessageProcessor
 from pyotgw.vars import (
@@ -208,24 +209,33 @@ async def test_the_heat_exchanger_sensor_appears_with_its_first_value(hass: Home
 
     ids = hass.states.get("sensor.test_opentherm_ids")
     assert ids is not None
-    assert ids.attributes["scan"] == "waiting"
+    assert ids.attributes["scan"] == "not_run"
+
+    # The scan only runs on request
+    registry = er.async_get(hass)
+    button = registry.async_get_entity_id("button", DOMAIN, f"{entry.entry_id}-scan-opentherm-ids")
+    assert button is not None
+    assert hass.states.get(button) is not None
 
 
 async def test_the_id_scan_records_each_kind_of_answer() -> None:
-    scan = OpenThermIdScan(ids=(34, 35, 36, 113))
+    scan = OpenThermIdScan(ids=(34, 35, 36, 113, 25))
+    asked: list[int] = []
 
     async def _ask(data_id: int) -> None:
+        asked.append(data_id)
         answers = {34: "F0220000", 35: "C0233A00", 36: "E0240000"}
         if (frame := answers.get(data_id)) is not None:
             scan.observe("R", f"00{data_id:02X}0000")
             scan.observe("B", frame)
+        # The thermostat's own traffic counts as well, so ID 25 is not asked
+        scan.observe("T", "00190000")
+        scan.observe("B", "40192F80")
 
-    # The thermostat's own traffic counts as well
-    scan.observe("T", "00190000")
-    scan.observe("B", "40192F80")
     await scan.async_run(_ask, answer_seconds=0.01, pause=0)
 
     assert scan.finished
+    assert asked == [34, 35, 36, 113]
     assert scan.ids(SUPPORTED) == [25, 35]
     assert scan.ids(INVALID) == [36]
     assert scan.ids(UNKNOWN) == [34]
@@ -233,6 +243,44 @@ async def test_the_id_scan_records_each_kind_of_answer() -> None:
     assert scan.supported()["35 Fan speed (setpoint / actual)"].startswith("3A00 (")
     assert "hb 58, lb 0" in scan.supported()["35 Fan speed (setpoint / actual)"]
     assert "f8.8 47.50" in scan.supported()["25 Boiler water temperature"]
+
+
+async def test_the_id_scan_collects_the_boiler_parameters() -> None:
+    scan = OpenThermIdScan(ids=(10, 11))
+    asked: list[int] = []
+
+    async def _ask(data_id: int) -> None:
+        asked.append(data_id)
+        if data_id == 10:
+            # Three parameters; the gateway then reads them one by one
+            scan.observe("B", "C00A0300")
+            for frame in ("C00B0007", "C00B0150", "C00B0201"):
+                scan.observe("B", frame)
+
+    # A count already seen in the traffic is asked again, as only the answer to the gateway's
+    # own request makes it read the parameters
+    scan.observe("B", "C00A0300")
+    await scan.async_run(_ask, answer_seconds=0.01, pause=0, parameter_settle_seconds=0)
+
+    assert asked == [10]
+    assert scan.parameter_count == 3
+    assert scan.parameters == {0: 7, 1: 80, 2: 1}
+
+    restored = OpenThermIdScan()
+    restored.load(scan.to_dict())
+    assert restored.parameters == scan.parameters
+    assert restored.parameter_count == 3
+    assert restored.answer(11) == SUPPORTED
+    assert restored.finished
+
+
+def test_a_damaged_scan_is_left_out() -> None:
+    scan = OpenThermIdScan()
+    scan.load({"answers": {"x": ["supported", "0000"], "34": "unknown"}, "parameters": {"1": "a"}})
+
+    assert scan.answers == {}
+    assert scan.parameters == {}
+    assert not scan.finished
 
 
 async def test_the_id_scan_never_asks_for_the_thermostat_status() -> None:
@@ -290,8 +338,17 @@ async def test_the_scan_asks_the_gateway_with_priority_messages(hass: HomeAssist
 
     api.send_transparent_command.side_effect = _answer
     with patch("custom_components.sat.serial.listen_to_messages", return_value=lambda: None):
-        await coordinator._async_scan_ids(delay=0)
+        await coordinator._async_scan_ids()
 
     api.send_transparent_command.assert_awaited_once_with("PM", "35", timeout=2)
     assert coordinator.id_scan.ids(SUPPORTED) == [35]
+    assert not coordinator.id_scan.running
+    await coordinator.async_will_remove_from_hass()
+
+
+async def test_simulation_does_not_scan(hass: HomeAssistant) -> None:
+    coordinator, api = _coordinator(hass, {CONF_SIMULATION: True})
+
+    assert coordinator.async_start_id_scan() is False
+    api.send_transparent_command.assert_not_awaited()
     await coordinator.async_will_remove_from_hass()

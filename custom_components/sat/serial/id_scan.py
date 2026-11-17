@@ -1,6 +1,6 @@
 """Find out which OpenTherm data IDs the boiler answers.
 
-After a start SAT asks the boiler for every readable data ID once, through the gateway's priority
+On request SAT asks the boiler for every readable data ID once, through the gateway's priority
 message (PM=<id>), and records the answer: Read-Ack with a value, Data-Invalid (the ID is known but
 has no value now) or Unknown-DataId. pyotgw drops the answers it does not decode, so the scan
 listens to the raw messages for its duration.
@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -36,6 +37,13 @@ SCANNED_IDS: tuple[int, ...] = tuple(i for i in range(1, 128) if i not in NEVER_
 # The gateway sends a priority message at its next free slot, within a few seconds
 ANSWER_TIMEOUT_SECONDS = 15.0
 PAUSE_SECONDS = 1.0
+
+# Number of transparent slave parameters and one entry (index in the high byte)
+TSP_COUNT_ID = 10
+TSP_ENTRY_ID = 11
+# The gateway reads the parameters one per free slot; the scan waits until they stop coming
+PARAMETER_SETTLE_SECONDS = 30.0
+PARAMETER_MAXIMUM_WAIT_SECONDS = 600.0
 
 FRAME_LENGTH = 8
 VENTILATION_IDS = range(71, 92)
@@ -132,15 +140,23 @@ class Answer:
 
 
 class OpenThermIdScan:
-    """Ask the boiler for each data ID and keep its answers."""
+    """Ask the boiler for each data ID and keep its answers, with its parameters (TSP)."""
 
     def __init__(self, ids: tuple[int, ...] = SCANNED_IDS) -> None:
         self._ids = ids
         self.answers: dict[int, Answer] = {}
+        # Transparent slave parameters: index to value. Remeha and De Dietrich boilers expose
+        # their installer parameters here; the gateway reads them all once ID 10 is answered.
+        self.parameters: dict[int, int] = {}
+        self.parameter_count: int | None = None
+        self.scanned_at: str | None = None
         self.running = False
-        self.finished = False
         self._waiting: int | None = None
         self._answered = asyncio.Event()
+
+    @property
+    def finished(self) -> bool:
+        return self.scanned_at is not None
 
     def observe(self, source: str, frame: str) -> None:
         """Record a raw message from the gateway (source letter and 8 hex digits)."""
@@ -155,6 +171,10 @@ class OpenThermIdScan:
         data_id = data[1]
         if message_type in (READ_ACK, WRITE_ACK):
             answer = Answer(SUPPORTED, frame[4:].upper())
+            if data_id == TSP_COUNT_ID:
+                self.parameter_count = data[2]
+            elif data_id == TSP_ENTRY_ID:
+                self.parameters[data[2]] = data[3]
         elif message_type == DATA_INVALID:
             answer = Answer(INVALID)
         elif message_type == UNKNOWN_DATA_ID:
@@ -175,30 +195,60 @@ class OpenThermIdScan:
         ask: Callable[[int], Awaitable[Any]],
         answer_seconds: float = ANSWER_TIMEOUT_SECONDS,
         pause: float = PAUSE_SECONDS,
+        parameter_settle_seconds: float = PARAMETER_SETTLE_SECONDS,
     ) -> None:
-        """Ask for every ID that has not been answered yet, one at a time."""
+        """Ask for every ID, one at a time; IDs already seen in the traffic are not asked again.
+
+        The parameter count (ID 10) is always asked: its answer makes the gateway read every
+        parameter. Those reads go on after the scan, so it waits for them to stop coming.
+        """
+        self.answers.clear()
+        self.parameters.clear()
+        self.parameter_count = None
         self.running = True
         try:
             for data_id in self._ids:
-                if data_id in self.answers:
+                if data_id in self.answers and data_id != TSP_COUNT_ID:
                     continue
-
-                self._waiting = data_id
-                self._answered.clear()
-                try:
-                    await ask(data_id)
-                    await asyncio.wait_for(self._answered.wait(), answer_seconds)
-                except TimeoutError:
-                    self.answers[data_id] = Answer(NO_ANSWER)
-                finally:
-                    self._waiting = None
-
+                await self._async_ask(ask, data_id, answer_seconds)
                 await asyncio.sleep(pause)
+
+            await self._async_wait_for_parameters(parameter_settle_seconds)
         finally:
             self.running = False
 
-        self.finished = True
+        self.scanned_at = datetime.now(UTC).isoformat(timespec="seconds")
         _LOGGER.info("OpenTherm ID scan: %s", self.summary())
+
+    async def _async_ask(
+        self, ask: Callable[[int], Awaitable[Any]], data_id: int, answer_seconds: float
+    ) -> None:
+        self._waiting = data_id
+        self._answered.clear()
+        try:
+            await ask(data_id)
+            await asyncio.wait_for(self._answered.wait(), answer_seconds)
+        except TimeoutError:
+            self.answers.setdefault(data_id, Answer(NO_ANSWER))
+        finally:
+            self._waiting = None
+
+    async def _async_wait_for_parameters(self, settle_seconds: float) -> None:
+        if not self.parameter_count:
+            return
+
+        waited = 0.0
+        quiet = 0.0
+        seen = len(self.parameters)
+        while (
+            len(self.parameters) < self.parameter_count
+            and quiet < settle_seconds
+            and waited < PARAMETER_MAXIMUM_WAIT_SECONDS
+        ):
+            await asyncio.sleep(1.0)
+            waited += 1.0
+            quiet = 0.0 if len(self.parameters) != seen else quiet + 1.0
+            seen = len(self.parameters)
 
     def ids(self, kind: str) -> list[int]:
         return sorted(data_id for data_id, answer in self.answers.items() if answer.kind == kind)
@@ -213,7 +263,8 @@ class OpenThermIdScan:
     def summary(self) -> str:
         return (
             f"supported {self.ids(SUPPORTED)}, data invalid {self.ids(INVALID)}, "
-            f"unknown {self.ids(UNKNOWN)}, no answer {self.ids(NO_ANSWER)}"
+            f"unknown {self.ids(UNKNOWN)}, no answer {self.ids(NO_ANSWER)}, "
+            f"parameters {len(self.parameters)}/{self.parameter_count}"
         )
 
     def answer(self, data_id: int) -> str | None:
@@ -221,3 +272,37 @@ class OpenThermIdScan:
         if (answer := self.answers.get(data_id)) is None:
             return None
         return answer.kind
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "scanned_at": self.scanned_at,
+            "answers": {
+                str(data_id): [answer.kind, answer.raw] for data_id, answer in self.answers.items()
+            },
+            "parameters": {str(index): value for index, value in self.parameters.items()},
+            "parameter_count": self.parameter_count,
+        }
+
+    def load(self, data: dict[str, Any]) -> None:
+        """Restore the last scan; anything malformed is left out."""
+        answers: dict[int, Answer] = {}
+        for key, value in (data.get("answers") or {}).items():
+            try:
+                kind, raw = value
+                answers[int(key)] = Answer(str(kind), None if raw is None else str(raw))
+            except TypeError, ValueError:
+                continue
+
+        parameters: dict[int, int] = {}
+        for key, value in (data.get("parameters") or {}).items():
+            try:
+                parameters[int(key)] = int(value)
+            except TypeError, ValueError:
+                continue
+
+        count = data.get("parameter_count")
+        scanned_at = data.get("scanned_at")
+        self.answers = answers
+        self.parameters = parameters
+        self.parameter_count = count if isinstance(count, int) else None
+        self.scanned_at = scanned_at if isinstance(scanned_at, str) else None

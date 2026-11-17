@@ -13,9 +13,10 @@ from .const import (
     CONF_OVERSHOOT_PROTECTION,
     HEATING_SYSTEM_UNKNOWN,
 )
-from .entity import SatClimateEntity
+from .entity import SatClimateEntity, SatEntity
 from .helpers import configured_maximum_setpoint
 from .overshoot_protection import CalibrationError, create_overshoot_protection
+from .serial import SatSerialCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -41,6 +42,33 @@ async def async_setup_entry(
         async_add_entities(
             [SatCalibrateButton(coordinator, config_entry, config_entry.runtime_data.climate)]
         )
+
+    if isinstance(coordinator, SatSerialCoordinator) and not coordinator.simulation:
+        async_add_entities([SatScanOpenThermIdsButton(coordinator, config_entry)])
+
+
+class SatScanOpenThermIdsButton(SatEntity, ButtonEntity):
+    """Ask the boiler for every OpenTherm ID once; the answers show on the OpenTherm IDs sensor."""
+
+    _attr_translation_key = "scan_opentherm_ids"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:magnify-scan"
+
+    def __init__(self, coordinator: SatSerialCoordinator, config_entry: SatConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+
+        self._serial = coordinator
+        self._attr_unique_id = f"{config_entry.entry_id}-scan-opentherm-ids"
+
+    @override
+    @property
+    def available(self) -> bool:
+        return not self._serial.id_scan.running
+
+    @override
+    async def async_press(self) -> None:
+        if self._serial.async_start_id_scan():
+            self.async_write_ha_state()
 
 
 class SatCalibrateButton(SatClimateEntity, ButtonEntity):
