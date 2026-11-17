@@ -601,6 +601,9 @@
       "exhaust_temp": {
         "name": "Exhaust temperature ({source})"
       },
+      "opentherm_ids": {
+        "name": "OpenTherm IDs"
+      },
       "heat_exchanger_temp": {
         "name": "Heat exchanger temperature ({source})"
       },

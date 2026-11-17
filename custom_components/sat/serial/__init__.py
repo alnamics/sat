@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from time import monotonic
 from typing import TYPE_CHECKING, Any, override
@@ -35,9 +36,11 @@ from serial import SerialException
 
 from ..const import DOMAIN
 from ..coordinator import DeviceState, SatDataUpdateCoordinator
+from .id_scan import UNKNOWN, OpenThermIdScan
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    import re
+    from collections.abc import Callable, Mapping
     from datetime import datetime
 
     from homeassistant.core import HomeAssistant
@@ -85,6 +88,38 @@ def register_heat_exchanger_message() -> bool:
 
 register_heat_exchanger_message()
 
+# The ID scan starts once the gateway and the thermostat have settled after a start
+ID_SCAN_DELAY_SECONDS = 120.0
+
+
+def listen_to_messages(
+    api: OpenThermGateway, callback: Callable[[str, str], None]
+) -> Callable[[], None] | None:
+    """Pass each raw OpenTherm message to `callback(source, frame)`; return the undo, or None.
+
+    pyotgw only hands out the values it decodes, so the scan taps its message processor.
+    """
+    processor = getattr(getattr(api, "_protocol", None), "message_processor", None)
+    submit = getattr(processor, "submit_matched_message", None)
+    if processor is None or submit is None:
+        return None
+
+    def _submit(match: re.Match[str]) -> object:
+        try:
+            callback(match.group(1), match.group(2))
+        except Exception:  # a listener must never break the gateway
+            _LOGGER.debug("OpenTherm message listener failed", exc_info=True)
+        return submit(match)
+
+    processor.submit_matched_message = _submit
+
+    def _undo() -> None:
+        if getattr(processor, "submit_matched_message", None) is _submit:
+            processor.submit_matched_message = submit
+
+    return _undo
+
+
 # Sensors
 TRANSLATE_SOURCE = {
     gw_vars.OTGW: None,
@@ -122,10 +157,17 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         self._heat_exchanger_reported: bool = False
         self._heat_exchanger_missing_logged: bool = False
 
+        self.id_scan = OpenThermIdScan()
+        self._id_scan_task: asyncio.Task[None] | None = None
+
     @override
     @property
     def device_id(self) -> str:
         return self._port
+
+    @property
+    def simulation(self) -> bool:
+        return self._simulation
 
     @override
     @property
@@ -322,8 +364,38 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
     async def async_setup(self) -> None:
         await self.async_connect()
 
+        if not self._simulation:
+            self._id_scan_task = self.hass.async_create_background_task(
+                self._async_scan_ids(), "SAT OpenTherm ID scan"
+            )
+
+    async def _async_scan_ids(self, delay: float = ID_SCAN_DELAY_SECONDS) -> None:
+        """Ask the boiler once for every readable OpenTherm ID and keep its answers."""
+        await asyncio.sleep(delay)
+
+        undo = listen_to_messages(self._api, self.id_scan.observe)
+        if undo is None:
+            _LOGGER.debug("Cannot listen to the gateway's messages; skipping the ID scan")
+            return
+
+        async def _ask(data_id: int) -> None:
+            await self._api.send_transparent_command(
+                gw_vars.OTGW_CMD_PRIO_MSG, str(data_id), timeout=2
+            )
+
+        try:
+            self.async_update_listeners()
+            await self.id_scan.async_run(_ask)
+        finally:
+            undo()
+            self.async_update_listeners()
+
     @override
     async def async_will_remove_from_hass(self) -> None:
+        if self._id_scan_task is not None:
+            self._id_scan_task.cancel()
+            self._id_scan_task = None
+
         if self._publish_callback is not None:
             try:
                 self._api.unsubscribe(self._publish_callback)
@@ -345,7 +417,12 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
 
     async def _async_request_heat_exchanger_temperature(self, now: float | None = None) -> None:
         """Ask the boiler for data ID 34 through the gateway, at most once a minute."""
-        if self._simulation:
+        # The scan asks for it as well, and an Unknown-DataId answer settles it for good
+        if (
+            self._simulation
+            or self.id_scan.running
+            or self.id_scan.answer(HEAT_EXCHANGER_MESSAGE_ID) == UNKNOWN
+        ):
             return
 
         now = monotonic() if now is None else now

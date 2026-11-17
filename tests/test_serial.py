@@ -1,3 +1,4 @@
+import re
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,7 +26,15 @@ from custom_components.sat.serial import (
     HEAT_EXCHANGER_RETRY_SECONDS,
     HEAT_EXCHANGER_UNANSWERED_POLLS,
     SatSerialCoordinator,
+    listen_to_messages,
     register_heat_exchanger_message,
+)
+from custom_components.sat.serial.id_scan import (
+    INVALID,
+    NO_ANSWER,
+    SUPPORTED,
+    UNKNOWN,
+    OpenThermIdScan,
 )
 from tests.const import DEFAULT_USER_DATA
 
@@ -196,3 +205,93 @@ async def test_the_heat_exchanger_sensor_appears_with_its_first_value(hass: Home
     assert state is not None
     assert state.state == "38.5"
     assert state.attributes["friendly_name"] == "Living Room Heat exchanger temperature (Boiler)"
+
+    ids = hass.states.get("sensor.test_opentherm_ids")
+    assert ids is not None
+    assert ids.attributes["scan"] == "waiting"
+
+
+async def test_the_id_scan_records_each_kind_of_answer() -> None:
+    scan = OpenThermIdScan(ids=(34, 35, 36, 113))
+
+    async def _ask(data_id: int) -> None:
+        answers = {34: "F0220000", 35: "C0233A00", 36: "E0240000"}
+        if (frame := answers.get(data_id)) is not None:
+            scan.observe("R", f"00{data_id:02X}0000")
+            scan.observe("B", frame)
+
+    # The thermostat's own traffic counts as well
+    scan.observe("T", "00190000")
+    scan.observe("B", "40192F80")
+    await scan.async_run(_ask, answer_seconds=0.01, pause=0)
+
+    assert scan.finished
+    assert scan.ids(SUPPORTED) == [25, 35]
+    assert scan.ids(INVALID) == [36]
+    assert scan.ids(UNKNOWN) == [34]
+    assert scan.ids(NO_ANSWER) == [113]
+    assert scan.supported()["35 Fan speed (setpoint / actual)"].startswith("3A00 (")
+    assert "hb 58, lb 0" in scan.supported()["35 Fan speed (setpoint / actual)"]
+    assert "f8.8 47.50" in scan.supported()["25 Boiler water temperature"]
+
+
+async def test_the_id_scan_never_asks_for_the_thermostat_status() -> None:
+    asked: list[int] = []
+
+    async def _ask(data_id: int) -> None:
+        asked.append(data_id)
+
+    await OpenThermIdScan().async_run(_ask, answer_seconds=0.001, pause=0)
+
+    assert asked
+    assert not set(asked) & {0, 1, 2, 4, 7, 8, 14, 16, 24, 70, 101}
+
+
+def test_listening_to_messages_taps_pyotgw_and_undoes_it() -> None:
+    seen: list[tuple[str, str]] = []
+    submitted: list[str] = []
+
+    class _Processor:
+        def submit_matched_message(self, match: re.Match[str]) -> None:
+            submitted.append(match.group(0))
+
+    api = MagicMock()
+    api._protocol.message_processor = processor = _Processor()
+
+    undo = listen_to_messages(api, lambda source, frame: seen.append((source, frame)))
+    assert undo is not None
+    match = re.match(r"^(T|B|R|A|E)([0-9A-F]{8})$", "BF0220000")
+    assert match is not None
+    processor.submit_matched_message(match)
+    undo()
+    processor.submit_matched_message(match)
+
+    assert seen == [("B", "F0220000")]
+    assert submitted == ["BF0220000", "BF0220000"]
+
+
+async def test_an_unknown_heat_exchanger_id_is_not_asked_again(hass: HomeAssistant) -> None:
+    coordinator, api = _coordinator(hass)
+    coordinator.id_scan.observe("B", "F0220000")
+
+    await coordinator._async_request_heat_exchanger_temperature(now=0.0)
+
+    api.send_transparent_command.assert_not_awaited()
+    await coordinator.async_will_remove_from_hass()
+
+
+async def test_the_scan_asks_the_gateway_with_priority_messages(hass: HomeAssistant) -> None:
+    coordinator, api = _coordinator(hass)
+    coordinator.id_scan = OpenThermIdScan(ids=(35,))
+
+    async def _answer(*_args: object, **_kwargs: object) -> str:
+        coordinator.id_scan.observe("B", "C0233A00")
+        return "35"
+
+    api.send_transparent_command.side_effect = _answer
+    with patch("custom_components.sat.serial.listen_to_messages", return_value=lambda: None):
+        await coordinator._async_scan_ids(delay=0)
+
+    api.send_transparent_command.assert_awaited_once_with("PM", "35", timeout=2)
+    assert coordinator.id_scan.ids(SUPPORTED) == [35]
+    await coordinator.async_will_remove_from_hass()

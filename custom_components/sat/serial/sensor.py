@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components import sensor
 from homeassistant.const import (
+    EntityCategory,
     UnitOfPower,
     UnitOfPressure,
     UnitOfRatio,
@@ -81,6 +82,7 @@ from ..const import (
 )
 from ..entity import SatEntity
 from . import DATA_HEAT_EXCHANGER_TEMP, TRANSLATE_SOURCE
+from .id_scan import INVALID, NO_ANSWER, SUPPORTED, UNKNOWN
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -311,6 +313,39 @@ async def async_setup_entry(
 
     _add_reported_sensors()
     config_entry.async_on_unload(coordinator.async_add_listener(_add_reported_sensors))
+
+    if not coordinator.simulation:
+        async_add_entities([SatOpenThermIdsSensor(coordinator, config_entry)])
+
+
+class SatOpenThermIdsSensor(SatEntity, sensor.SensorEntity):
+    """The OpenTherm data IDs the boiler answered in the scan after a start."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "opentherm_ids"
+    _attr_icon = "mdi:format-list-numbered"
+
+    def __init__(self, coordinator: SatSerialCoordinator, config_entry: ConfigEntry) -> None:
+        super().__init__(coordinator, config_entry)
+        self._scan = coordinator.id_scan
+        self.entity_id = async_generate_entity_id(
+            sensor.DOMAIN + ".{}",
+            f"{config_entry.data[CONF_NAME].lower()}_opentherm_ids",
+            hass=coordinator.hass,
+        )
+        self._attr_unique_id = f"{config_entry.entry_id}-opentherm-ids"
+
+    @override
+    def _update_attrs(self) -> None:
+        scan = self._scan
+        self._attr_native_value = len(scan.ids(SUPPORTED)) if scan.finished else None
+        self._attr_extra_state_attributes = {
+            "scan": "done" if scan.finished else ("running" if scan.running else "waiting"),
+            "supported": scan.supported(),
+            "data_invalid": scan.ids(INVALID),
+            "unknown": scan.ids(UNKNOWN),
+            "no_answer": scan.ids(NO_ANSWER),
+        }
 
 
 class SatSensor(SatEntity, sensor.SensorEntity):
