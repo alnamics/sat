@@ -122,7 +122,7 @@ def id_scan_store(hass: HomeAssistant, port: str) -> Store[dict[str, Any]]:
     return Store(hass, 1, f"{DOMAIN}.serial.{slugify(port)}.opentherm_ids")
 
 
-def message_processor(api: OpenThermGateway) -> object | None:
+def message_processor(api: OpenThermGateway) -> Any:  # noqa: ANN401 - a private pyotgw object
     """Return pyotgw's message processor of the current connection, if there is one."""
     return getattr(getattr(api, "_protocol", None), "message_processor", None)
 
