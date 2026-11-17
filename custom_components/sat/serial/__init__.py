@@ -444,7 +444,7 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         flame = self.id_scan.flame
         self.id_scan.observe(source, frame)
 
-        if flame is False and self.id_scan.flame:
+        if flame is False and self.id_scan.flame is True:
             self._hass_loop.call_soon_threadsafe(self._start_fault_watch)
         if (
             self.id_scan.parameters != parameters or len(self.id_scan.fault_events) != faults
@@ -478,7 +478,7 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
             await asyncio.sleep(interval)
 
             now = clock()
-            if self.id_scan.flame:
+            if self.id_scan.flame is True:
                 flame_off_at = None
             elif flame_off_at is None:
                 flame_off_at = now
