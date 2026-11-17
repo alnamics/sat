@@ -103,21 +103,23 @@ async def test_pyotgw_decodes_the_heat_exchanger_temperature() -> None:
 
 
 def _coordinator(
-    hass: HomeAssistant, options: dict[str, Any] | None = None, **commands: object
+    hass: HomeAssistant,
+    options: dict[str, Any] | None = None,
+    command: AsyncMock | None = None,
 ) -> tuple[SatSerialCoordinator, MagicMock]:
     with patch("custom_components.sat.serial.OpenThermGateway") as gateway:
         api = gateway.return_value
         api.set_control_setpoint = AsyncMock()
         api.set_max_relative_mod = AsyncMock()
         api.disconnect = AsyncMock()
-        api.send_transparent_command = AsyncMock(**commands)
+        api.send_transparent_command = command or AsyncMock()
         coordinator = SatSerialCoordinator(hass, "socket://otgw:25238", DEFAULT_USER_DATA, options)
 
     return coordinator, api
 
 
 async def test_the_gateway_asks_for_the_heat_exchanger_once_a_minute(hass: HomeAssistant) -> None:
-    coordinator, api = _coordinator(hass, return_value="34")
+    coordinator, api = _coordinator(hass, command=AsyncMock(return_value="34"))
 
     assert coordinator.heat_exchanger_temperature is None
 
@@ -137,7 +139,7 @@ async def test_the_gateway_asks_for_the_heat_exchanger_once_a_minute(hass: HomeA
 
 
 async def test_an_unanswered_heat_exchanger_request_backs_off(hass: HomeAssistant) -> None:
-    coordinator, api = _coordinator(hass, side_effect=TimeoutError)
+    coordinator, api = _coordinator(hass, command=AsyncMock(side_effect=TimeoutError))
 
     now = 0.0
     for _ in range(HEAT_EXCHANGER_UNANSWERED_POLLS + 3):
