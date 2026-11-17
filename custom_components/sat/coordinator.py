@@ -328,6 +328,11 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         return None
 
     @property
+    def heat_exchanger_temperature(self) -> float | None:
+        """Primary heat exchanger temperature (OpenTherm ID 34), if the boiler reports it."""
+        return None
+
+    @property
     def hot_water_temperature(self) -> float | None:
         """Hot water (cylinder) temperature, if the boiler reports it."""
         return None

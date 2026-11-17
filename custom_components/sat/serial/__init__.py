@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.exceptions import ConfigEntryNotReady
 from pyotgw import OpenThermGateway
+from pyotgw import messages as gw_messages
 from pyotgw import vars as gw_vars
 from pyotgw.vars import (
     BOILER,
@@ -36,10 +38,52 @@ from ..coordinator import DeviceState, SatDataUpdateCoordinator
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from datetime import datetime
 
     from homeassistant.core import HomeAssistant
 
+    from ..pwm import PWMState
+
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+# Primary heat exchanger temperature (OpenTherm 4.x data ID 34). Thermostats rarely ask for it, so
+# the gateway is told to ask the boiler once a minute with a priority message (PM=34).
+HEAT_EXCHANGER_MESSAGE_ID = 34
+DATA_HEAT_EXCHANGER_TEMP: str = getattr(gw_vars, "DATA_HEATEXCH_TEMP", "heat_exchanger_temp")
+HEAT_EXCHANGER_POLL_SECONDS = 60.0
+# A boiler that answers Unknown-DataId never gives a value; ask again only once an hour
+HEAT_EXCHANGER_UNANSWERED_POLLS = 5
+HEAT_EXCHANGER_RETRY_SECONDS = 3600.0
+
+
+def register_heat_exchanger_message() -> bool:
+    """Teach pyotgw to decode data ID 34; versions up to 2.2.3 drop the boiler's answer.
+
+    Newer pyotgw releases decode it themselves, which leaves their entry untouched.
+    """
+    message_id = bytes([HEAT_EXCHANGER_MESSAGE_ID])
+    try:
+        registry = gw_messages.REGISTRY
+        if message_id in registry:
+            return False
+        registry[message_id] = {
+            gw_messages.M2S: [],
+            gw_messages.S2M: [
+                {
+                    gw_messages.FUNC: "_get_f8_8",
+                    gw_messages.ARGS: ("msb", "lsb"),
+                    gw_messages.RETURNS: (DATA_HEAT_EXCHANGER_TEMP,),
+                }
+            ],
+        }
+    except AttributeError, TypeError:  # pragma: no cover - a pyotgw with another layout
+        _LOGGER.debug("Cannot register OpenTherm data ID 34 with pyotgw", exc_info=True)
+        return False
+
+    return True
+
+
+register_heat_exchanger_message()
 
 # Sensors
 TRANSLATE_SOURCE = {
@@ -72,6 +116,11 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
 
         self._publish_callback = _publish
         self._api.subscribe(self._publish_callback)
+
+        self._heat_exchanger_requested_at: float | None = None
+        self._heat_exchanger_unanswered: int = 0
+        self._heat_exchanger_reported: bool = False
+        self._heat_exchanger_missing_logged: bool = False
 
     @override
     @property
@@ -158,6 +207,14 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
     @property
     def exhaust_temperature(self) -> float | None:
         if (value := self.get(DATA_EXHAUST_TEMP)) is not None and value > 0:
+            return float(value)
+
+        return None
+
+    @override
+    @property
+    def heat_exchanger_temperature(self) -> float | None:
+        if (value := self.get(DATA_HEAT_EXCHANGER_TEMP)) is not None:
             return float(value)
 
         return None
@@ -278,6 +335,62 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         await self._graceful_disconnect()
 
         await super().async_will_remove_from_hass()
+
+    @override
+    async def async_control_heating_loop(
+        self, pwm_state: PWMState | None = None, _time: datetime | None = None
+    ) -> None:
+        await super().async_control_heating_loop(pwm_state, _time)
+        await self._async_request_heat_exchanger_temperature()
+
+    async def _async_request_heat_exchanger_temperature(self, now: float | None = None) -> None:
+        """Ask the boiler for data ID 34 through the gateway, at most once a minute."""
+        if self._simulation:
+            return
+
+        now = monotonic() if now is None else now
+        answered = self.heat_exchanger_temperature is not None
+        if answered:
+            self._heat_exchanger_unanswered = 0
+            if not self._heat_exchanger_reported:
+                self._heat_exchanger_reported = True
+                _LOGGER.info(
+                    "The boiler reports its heat exchanger temperature (OpenTherm ID 34): %.1f °C",
+                    self.heat_exchanger_temperature,
+                )
+
+        since_request = (
+            None
+            if self._heat_exchanger_requested_at is None
+            else now - self._heat_exchanger_requested_at
+        )
+        interval = HEAT_EXCHANGER_POLL_SECONDS
+        if not answered and self._heat_exchanger_unanswered >= HEAT_EXCHANGER_UNANSWERED_POLLS:
+            interval = HEAT_EXCHANGER_RETRY_SECONDS
+            if (
+                not self._heat_exchanger_missing_logged
+                and since_request is not None
+                and since_request >= HEAT_EXCHANGER_POLL_SECONDS
+            ):
+                self._heat_exchanger_missing_logged = True
+                _LOGGER.info(
+                    "The boiler did not answer OpenTherm ID 34 (heat exchanger temperature) "
+                    "%d times, most likely Unknown-DataId; asking once an hour from now on",
+                    HEAT_EXCHANGER_UNANSWERED_POLLS,
+                )
+        if since_request is not None and since_request < interval:
+            return
+
+        if not answered:
+            self._heat_exchanger_unanswered += 1
+
+        self._heat_exchanger_requested_at = now
+        try:
+            await self._api.send_transparent_command(
+                gw_vars.OTGW_CMD_PRIO_MSG, str(HEAT_EXCHANGER_MESSAGE_ID), timeout=2
+            )
+        except Exception:  # a lost request must not stop the control loop
+            _LOGGER.debug("Requesting OpenTherm ID 34 failed", exc_info=True)
 
     @override
     async def async_set_control_setpoint(self, value: float) -> None:

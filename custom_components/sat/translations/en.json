@@ -601,6 +601,9 @@
       "exhaust_temp": {
         "name": "Exhaust temperature ({source})"
       },
+      "heat_exchanger_temp": {
+        "name": "Heat exchanger temperature ({source})"
+      },
       "slave_dhw_max_setp": {
         "name": "Hot water maximum setpoint ({source})"
       },

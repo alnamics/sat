@@ -14,6 +14,7 @@ from homeassistant.const import (
     UnitOfTime,
     UnitOfVolume,
 )
+from homeassistant.core import callback
 from homeassistant.helpers.entity import async_generate_entity_id
 from pyotgw.vars import (
     BOILER,
@@ -79,7 +80,7 @@ from ..const import (
     CONF_NAME,
 )
 from ..entity import SatEntity
-from . import TRANSLATE_SOURCE
+from . import DATA_HEAT_EXCHANGER_TEMP, TRANSLATE_SOURCE
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -205,6 +206,11 @@ SENSOR_INFO: dict[str, SatSensorInfo] = {
         UnitOfTemperature.CELSIUS,
         [BOILER, THERMOSTAT],
     ),
+    DATA_HEAT_EXCHANGER_TEMP: SatSensorInfo(
+        sensor.SensorDeviceClass.TEMPERATURE,
+        UnitOfTemperature.CELSIUS,
+        [BOILER],
+    ),
     DATA_SLAVE_DHW_MAX_SETP: SatSensorInfo(
         sensor.SensorDeviceClass.TEMPERATURE,
         UnitOfTemperature.CELSIUS,
@@ -284,22 +290,27 @@ async def async_setup_entry(
 ) -> None:
     """Set up the sensor platform."""
     has_thermostat = coordinator.data[OTGW].get(OTGW_THRM_DETECT) != "D"
+    added: set[tuple[str, str]] = set()
 
-    # Create a list of entities to be added
-    entities = []
+    @callback
+    def _add_reported_sensors() -> None:
+        """Add a sensor once the gateway reports its value; some only come after a while."""
+        entities = []
+        for key, info in SENSOR_INFO.items():
+            for source in info.status_sources:
+                if source == THERMOSTAT and has_thermostat is False:
+                    continue
+                if (key, source) in added or coordinator.data[source].get(key) is None:
+                    continue
 
-    # Iterate through sensor information
-    for key, info in SENSOR_INFO.items():
-        # Check if the sensor should be added based on its availability and thermostat presence
-        for source in info.status_sources:
-            if source == THERMOSTAT and has_thermostat is False:
-                continue
-
-            if coordinator.data[source].get(key) is not None:
+                added.add((key, source))
                 entities.append(SatSensor(coordinator, config_entry, info, key, source))
 
-    # Add all devices
-    async_add_entities(entities)
+        if entities:
+            async_add_entities(entities)
+
+    _add_reported_sensors()
+    config_entry.async_on_unload(coordinator.async_add_listener(_add_reported_sensors))
 
 
 class SatSensor(SatEntity, sensor.SensorEntity):
