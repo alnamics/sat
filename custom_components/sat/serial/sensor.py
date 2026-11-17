@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, override
 from homeassistant.components import sensor
 from homeassistant.const import (
     EntityCategory,
+    UnitOfFrequency,
     UnitOfPower,
     UnitOfPressure,
     UnitOfRatio,
@@ -81,7 +82,12 @@ from ..const import (
     CONF_NAME,
 )
 from ..entity import SatEntity
-from . import DATA_HEAT_EXCHANGER_TEMP, TRANSLATE_SOURCE
+from . import (
+    DATA_FAN_SPEED,
+    DATA_FAN_SPEED_SETPOINT,
+    DATA_HEAT_EXCHANGER_TEMP,
+    TRANSLATE_SOURCE,
+)
 from .id_scan import INVALID, NO_ANSWER, SUPPORTED, UNKNOWN
 
 if TYPE_CHECKING:
@@ -207,6 +213,16 @@ SENSOR_INFO: dict[str, SatSensorInfo] = {
         sensor.SensorDeviceClass.TEMPERATURE,
         UnitOfTemperature.CELSIUS,
         [BOILER, THERMOSTAT],
+    ),
+    DATA_FAN_SPEED_SETPOINT: SatSensorInfo(
+        sensor.SensorDeviceClass.FREQUENCY,
+        UnitOfFrequency.HERTZ,
+        [BOILER],
+    ),
+    DATA_FAN_SPEED: SatSensorInfo(
+        sensor.SensorDeviceClass.FREQUENCY,
+        UnitOfFrequency.HERTZ,
+        [BOILER],
     ),
     DATA_HEAT_EXCHANGER_TEMP: SatSensorInfo(
         sensor.SensorDeviceClass.TEMPERATURE,

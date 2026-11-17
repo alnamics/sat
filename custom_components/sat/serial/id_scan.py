@@ -174,7 +174,16 @@ class OpenThermIdScan:
             if data_id == TSP_COUNT_ID:
                 self.parameter_count = data[2]
             elif data_id == TSP_ENTRY_ID:
-                self.parameters[data[2]] = data[3]
+                index, value = data[2], data[3]
+                previous_value = self.parameters.get(index)
+                if previous_value is not None and previous_value != value:
+                    _LOGGER.info(
+                        "Boiler parameter %d (OpenTherm TSP) changed: %d -> %d",
+                        index,
+                        previous_value,
+                        value,
+                    )
+                self.parameters[index] = value
         elif message_type == DATA_INVALID:
             answer = Answer(INVALID)
         elif message_type == UNKNOWN_DATA_ID:
@@ -202,9 +211,8 @@ class OpenThermIdScan:
         The parameter count (ID 10) is always asked: its answer makes the gateway read every
         parameter. Those reads go on after the scan, so it waits for them to stop coming.
         """
+        # The parameters stay: the thermostat may have read them all, which the gateway does not
         self.answers.clear()
-        self.parameters.clear()
-        self.parameter_count = None
         self.running = True
         try:
             for data_id in self._ids:

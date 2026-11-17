@@ -23,11 +23,14 @@ from custom_components.sat.const import (
     MODE_SERIAL,
 )
 from custom_components.sat.serial import (
+    DATA_FAN_SPEED,
+    DATA_FAN_SPEED_SETPOINT,
     DATA_HEAT_EXCHANGER_TEMP,
     HEAT_EXCHANGER_RETRY_SECONDS,
     HEAT_EXCHANGER_UNANSWERED_POLLS,
     SatSerialCoordinator,
     listen_to_messages,
+    register_fan_speed_message,
     register_heat_exchanger_message,
 )
 from custom_components.sat.serial.id_scan import (
@@ -40,6 +43,7 @@ from custom_components.sat.serial.id_scan import (
 from tests.const import DEFAULT_USER_DATA
 
 if TYPE_CHECKING:
+    import pytest
     from homeassistant.core import HomeAssistant
 
 
@@ -337,7 +341,7 @@ async def test_the_scan_asks_the_gateway_with_priority_messages(hass: HomeAssist
         return "35"
 
     api.send_transparent_command.side_effect = _answer
-    with patch("custom_components.sat.serial.listen_to_messages", return_value=lambda: None):
+    with patch.object(coordinator, "_ensure_listening", return_value=True):
         await coordinator._async_scan_ids()
 
     api.send_transparent_command.assert_awaited_once_with("PM", "35", timeout=2)
@@ -351,4 +355,56 @@ async def test_simulation_does_not_scan(hass: HomeAssistant) -> None:
 
     assert coordinator.async_start_id_scan() is False
     api.send_transparent_command.assert_not_awaited()
+    await coordinator.async_will_remove_from_hass()
+
+
+async def test_pyotgw_decodes_the_fan_speed() -> None:
+    assert register_fan_speed_message() is False
+
+    status_manager = MagicMock()
+    processor = MessageProcessor(MagicMock(), status_manager)
+    try:
+        # Read-Ack for data ID 35: setpoint 58 Hz, actual 41 Hz
+        await processor._process_msg(("B", gw_vars.READ_ACK, b"\x23", b"\x3a", b"\x29"))
+    finally:
+        await processor.cleanup()
+
+    status_manager.submit_partial_update.assert_called_once_with(
+        BOILER, {DATA_FAN_SPEED_SETPOINT: 58, DATA_FAN_SPEED: 41}
+    )
+
+
+async def test_the_boiler_parameters_are_heard_as_the_thermostat_reads_them(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    class _Processor:
+        def submit_matched_message(self, match: re.Match[str]) -> None:
+            pass
+
+    coordinator, api = _coordinator(hass)
+    api._protocol.message_processor = processor = _Processor()
+    assert coordinator._ensure_listening()
+
+    def _send(line: str) -> None:
+        match = re.match(r"^(T|B|R|A|E)([0-9A-F]{8})$", line)
+        assert match is not None
+        processor.submit_matched_message(match)
+
+    # The thermostat reads parameter 12, then writes 10 to it
+    _send("T000B0C00")
+    _send("BC00B0C07")
+    assert coordinator.id_scan.parameters == {12: 7}
+    _send("T900B0C0A")
+    _send("BD00B0C0A")
+    assert coordinator.id_scan.parameters == {12: 10}
+    assert "Boiler parameter 12 (OpenTherm TSP) changed: 7 -> 10" in caplog.text
+
+    # A reconnect brings a new processor, which is tapped on the next check
+    api._protocol.message_processor = second = _Processor()
+    assert coordinator._ensure_listening()
+    match = re.match(r"^(T|B|R|A|E)([0-9A-F]{8})$", "BC00B0D01")
+    assert match is not None
+    second.submit_matched_message(match)
+    assert coordinator.id_scan.parameters == {12: 10, 13: 1}
+
     await coordinator.async_will_remove_from_hass()

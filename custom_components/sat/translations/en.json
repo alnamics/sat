@@ -601,6 +601,12 @@
       "exhaust_temp": {
         "name": "Exhaust temperature ({source})"
       },
+      "boiler_fan_speed_setpoint": {
+        "name": "Fan speed setpoint ({source})"
+      },
+      "boiler_fan_speed": {
+        "name": "Fan speed ({source})"
+      },
       "opentherm_ids": {
         "name": "OpenTherm IDs"
       },

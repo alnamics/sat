@@ -61,34 +61,60 @@ HEAT_EXCHANGER_UNANSWERED_POLLS = 5
 HEAT_EXCHANGER_RETRY_SECONDS = 3600.0
 
 
-def register_heat_exchanger_message() -> bool:
-    """Teach pyotgw to decode data ID 34; versions up to 2.2.3 drop the boiler's answer.
+# Fan speed (OpenTherm 4.x data ID 35): setpoint and actual, in Hz. Gateways ask for it on
+# their own, but pyotgw up to 2.2.3 drops the answer as well.
+FAN_SPEED_MESSAGE_ID = 35
+DATA_FAN_SPEED_SETPOINT = str(
+    getattr(gw_vars, "DATA_BOILER_FANSPD_SETP", "boiler_fan_speed_setpoint")
+)
+DATA_FAN_SPEED = str(getattr(gw_vars, "DATA_BOILER_FANSPD", "boiler_fan_speed"))
 
-    Newer pyotgw releases decode it themselves, which leaves their entry untouched.
-    """
-    message_id = bytes([HEAT_EXCHANGER_MESSAGE_ID])
+
+def _register_message(message_id: int, actions: list[tuple[str, tuple[str, ...], str]]) -> bool:
+    """Teach pyotgw to decode a boiler answer; newer releases that decode it are left alone."""
+    key = bytes([message_id])
     try:
         registry = gw_messages.REGISTRY
-        if message_id in registry:
+        if key in registry:
             return False
-        registry[message_id] = {
+        registry[key] = {
             gw_messages.M2S: [],
             gw_messages.S2M: [
                 {
-                    gw_messages.FUNC: "_get_f8_8",
-                    gw_messages.ARGS: ("msb", "lsb"),
-                    gw_messages.RETURNS: (DATA_HEAT_EXCHANGER_TEMP,),
+                    gw_messages.FUNC: function,
+                    gw_messages.ARGS: arguments,
+                    gw_messages.RETURNS: (returns,),
                 }
+                for function, arguments, returns in actions
             ],
         }
     except AttributeError, TypeError:  # pragma: no cover - a pyotgw with another layout
-        _LOGGER.debug("Cannot register OpenTherm data ID 34 with pyotgw", exc_info=True)
+        _LOGGER.debug("Cannot register OpenTherm data ID %d with pyotgw", message_id, exc_info=True)
         return False
 
     return True
 
 
+def register_heat_exchanger_message() -> bool:
+    """Decode data ID 34; pyotgw versions up to 2.2.3 drop the boiler's answer."""
+    return _register_message(
+        HEAT_EXCHANGER_MESSAGE_ID, [("_get_f8_8", ("msb", "lsb"), DATA_HEAT_EXCHANGER_TEMP)]
+    )
+
+
+def register_fan_speed_message() -> bool:
+    """Decode data ID 35: the fan speed setpoint in the high byte, the actual speed in the low."""
+    return _register_message(
+        FAN_SPEED_MESSAGE_ID,
+        [
+            ("_get_u8", ("msb",), DATA_FAN_SPEED_SETPOINT),
+            ("_get_u8", ("lsb",), DATA_FAN_SPEED),
+        ],
+    )
+
+
 register_heat_exchanger_message()
+register_fan_speed_message()
 
 
 def id_scan_store(hass: HomeAssistant, port: str) -> Store[dict[str, Any]]:
@@ -96,14 +122,19 @@ def id_scan_store(hass: HomeAssistant, port: str) -> Store[dict[str, Any]]:
     return Store(hass, 1, f"{DOMAIN}.serial.{slugify(port)}.opentherm_ids")
 
 
+def message_processor(api: OpenThermGateway) -> object | None:
+    """Return pyotgw's message processor of the current connection, if there is one."""
+    return getattr(getattr(api, "_protocol", None), "message_processor", None)
+
+
 def listen_to_messages(
     api: OpenThermGateway, callback: Callable[[str, str], None]
 ) -> Callable[[], None] | None:
     """Pass each raw OpenTherm message to `callback(source, frame)`; return the undo, or None.
 
-    pyotgw only hands out the values it decodes, so the scan taps its message processor.
+    pyotgw only hands out the values it decodes, so SAT taps its message processor.
     """
-    processor = getattr(getattr(api, "_protocol", None), "message_processor", None)
+    processor = message_processor(api)
     submit = getattr(processor, "submit_matched_message", None)
     if processor is None or submit is None:
         return None
@@ -164,6 +195,8 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         self.id_scan = OpenThermIdScan()
         self._id_scan_task: asyncio.Task[None] | None = None
         self._id_scan_store: Store[dict[str, Any]] | None = None
+        self._listening_to: object | None = None
+        self._stop_listening: Callable[[], None] | None = None
 
     @override
     @property
@@ -376,6 +409,36 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         except Exception:  # an unreadable scan only means asking again
             _LOGGER.debug("Cannot load the last OpenTherm ID scan", exc_info=True)
 
+        self._ensure_listening()
+
+    def _ensure_listening(self) -> bool:
+        """Listen to the raw messages of the current connection; a reconnect brings a new one."""
+        if self._simulation:
+            return False
+
+        processor = message_processor(self._api)
+        if processor is None:
+            return False
+        if processor is self._listening_to:
+            return True
+
+        if self._stop_listening is not None:
+            self._stop_listening()
+        self._stop_listening = listen_to_messages(self._api, self._on_message)
+        self._listening_to = processor if self._stop_listening is not None else None
+        return self._stop_listening is not None
+
+    def _on_message(self, source: str, frame: str) -> None:
+        """Keep the boiler's answers, its parameters among them, as the messages pass."""
+        parameters = dict(self.id_scan.parameters)
+        self.id_scan.observe(source, frame)
+        if self.id_scan.parameters != parameters and self._id_scan_store is not None:
+            self._hass_loop.call_soon_threadsafe(self._schedule_id_scan_save)
+
+    def _schedule_id_scan_save(self) -> None:
+        if self._id_scan_store is not None:
+            self._id_scan_store.async_delay_save(self.id_scan.to_dict, 60)
+
     def async_start_id_scan(self) -> bool:
         """Start asking the boiler for every OpenTherm ID; False when one is already running."""
         if self._simulation or self.id_scan.running:
@@ -388,8 +451,7 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
 
     async def _async_scan_ids(self) -> None:
         """Ask the boiler once for every readable OpenTherm ID and keep its answers."""
-        undo = listen_to_messages(self._api, self.id_scan.observe)
-        if undo is None:
+        if not self._ensure_listening():
             _LOGGER.warning("Cannot listen to the gateway's messages; the ID scan is not possible")
             return
 
@@ -404,7 +466,6 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         try:
             await self.id_scan.async_run(_ask)
         finally:
-            undo()
             self.async_update_listeners()
 
         if self._id_scan_store is not None:
@@ -415,6 +476,11 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         if self._id_scan_task is not None:
             self._id_scan_task.cancel()
             self._id_scan_task = None
+
+        if self._stop_listening is not None:
+            self._stop_listening()
+            self._stop_listening = None
+            self._listening_to = None
 
         if self._publish_callback is not None:
             try:
@@ -433,6 +499,7 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         self, pwm_state: PWMState | None = None, _time: datetime | None = None
     ) -> None:
         await super().async_control_heating_loop(pwm_state, _time)
+        self._ensure_listening()
         await self._async_request_heat_exchanger_temperature()
 
     async def _async_request_heat_exchanger_temperature(self, now: float | None = None) -> None:
