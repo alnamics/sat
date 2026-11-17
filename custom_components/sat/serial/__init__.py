@@ -22,6 +22,7 @@ from pyotgw.vars import (
     DATA_MASTER_CH_ENABLED,
     DATA_REL_MOD_LEVEL,
     DATA_RETURN_WATER_TEMP,
+    DATA_SLAVE_CH_MIN_SETP,
     DATA_SLAVE_DHW_ACTIVE,
     DATA_SLAVE_DHW_MAX_SETP,
     DATA_SLAVE_DHW_MIN_SETP,
@@ -360,6 +361,14 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
             return float(value)
 
         return super().boiler_capacity
+
+    @override
+    @property
+    def minimum_heating_setpoint(self) -> float | None:
+        if (value := self.get(DATA_SLAVE_CH_MIN_SETP)) is not None and value > 0:
+            return float(value)
+
+        return None
 
     @override
     @property

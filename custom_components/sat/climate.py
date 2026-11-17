@@ -189,6 +189,9 @@ INPUTS_MISSING_GRACE_PERIOD = timedelta(minutes=10)
 KEEP_HEATING_FLAME_GRACE_SECONDS = 90
 # A boiler that lit against the off-phase setpoint gets heating disabled between on-phases again
 KEEP_HEATING_SUSPEND_SECONDS = 3600
+# A boiler raises the off-phase setpoint to its own minimum and lights once the water cools to it,
+# so heating is released for the rest of the off-phase this close above that minimum
+KEEP_HEATING_RELEASE_MARGIN = 1.0
 # Warm-up modulation: a burner on the edge of stability at its minimum loses the flame while the
 # system water is cold, so the first minutes of a burn may modulate a little higher
 WARM_UP_RETURN_TEMPERATURE = 33.0
@@ -390,6 +393,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._pwm_off_since: float | None = None
         self._keep_heating_suspended_until: float | None = None
         self._kept_on_flame_since: float | None = None
+        self._kept_on_released: bool = False
 
         # Create a PID controller with given configuration options
         self.pid = create_pid_controller(config_entry.data, config_options)
@@ -2414,6 +2418,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self.hvac_mode == HVACMode.HEAT
             and self._pwm_off_since is not None
             and self._keep_heating_suspended_until is None
+            and not self._kept_on_released
         )
 
     def _heating_kept_on_in_pwm_off(self) -> bool:
@@ -2425,6 +2430,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             or self.pwm.status != PWMStatus.OFF
         ):
             self._pwm_off_since = None
+            self._kept_on_released = False
             return False
 
         now = monotonic()
@@ -2435,6 +2441,20 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             if now < self._keep_heating_suspended_until:
                 return False
             self._keep_heating_suspended_until = None
+
+        # The setpoint the boiler reports lags the off-phase setpoint for a few seconds
+        if self._kept_on_released or (
+            now - self._pwm_off_since > KEEP_HEATING_FLAME_GRACE_SECONDS
+            and self._kept_on_water_near_boiler_minimum()
+        ):
+            if not self._kept_on_released:
+                self._kept_on_released = True
+                _LOGGER.info(
+                    "The water cooled to %.1f °C, close to the lowest setpoint the boiler accepts; "
+                    "heating stays disabled until the next on-phase.",
+                    self._coordinator.boiler_temperature,
+                )
+            return False
 
         # A boiler that raises the off-phase setpoint to its own minimum lights against it;
         # the on-phase flame is given time to go out first
@@ -2460,6 +2480,28 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             KEEP_HEATING_SUSPEND_SECONDS // 60,
         )
         return False
+
+    def _kept_on_water_near_boiler_minimum(self) -> bool:
+        """Return True once the off-phase water nears the setpoint the boiler really uses.
+
+        Boilers raise a setpoint below their minimum to that minimum (the Lumea and other Baxi
+        boards to 25 °C), so with heating enabled they light as soon as the water cools to it.
+        """
+        coordinator = self._coordinator
+        if coordinator.flame_active or (flow := coordinator.boiler_temperature) is None:
+            return False
+
+        # The reported setpoint counts once the boiler shows it raised the off-phase one
+        reported = coordinator.setpoint
+        if reported is not None and reported >= coordinator.minimum_setpoint:
+            reported = None
+        floors = [
+            value for value in (coordinator.minimum_heating_setpoint, reported) if value is not None
+        ]
+        if not floors:
+            return False
+
+        return flow <= max(floors) + KEEP_HEATING_RELEASE_MARGIN
 
     async def async_set_heater_state(self, state: DeviceState) -> None:
         """Set the heater state, ensuring proper conditions are met."""

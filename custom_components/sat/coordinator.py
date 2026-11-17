@@ -402,6 +402,11 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         return None
 
     @property
+    def minimum_heating_setpoint(self) -> float | None:
+        """Lowest heating setpoint the boiler accepts (OpenTherm ID 49), if it reports it."""
+        return None
+
+    @property
     def minimum_boiler_capacity(self) -> float | None:
         if (minimum_relative_modulation_value := self.minimum_relative_modulation_value) is None:
             return None
