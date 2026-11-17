@@ -234,7 +234,7 @@ class OpenThermIdScan:
             self._waiting = None
 
     async def _async_wait_for_parameters(self, settle_seconds: float) -> None:
-        if not self.parameter_count:
+        if self.parameter_count is None or self.parameter_count == 0:
             return
 
         waited = 0.0
