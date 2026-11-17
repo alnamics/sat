@@ -113,6 +113,7 @@ from .const import (
     CONF_THERMAL_COMFORT,
     CONF_THERMOSTAT,
     CONF_VALVE_OPENING_TIME,
+    CONF_WARM_UP_MODULATION,
     CONF_WARM_WEATHER_SHUTDOWN,
     CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_DETECTION,
@@ -1300,6 +1301,17 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
                     CONF_KEEP_HEATING_IN_PWM_OFF, default=options[CONF_KEEP_HEATING_IN_PWM_OFF]
                 )
             ] = bool
+            advanced[
+                vol.Required(CONF_WARM_UP_MODULATION, default=options[CONF_WARM_UP_MODULATION])
+            ] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=30,
+                    step=1,
+                    unit_of_measurement="%",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
 
             # Heat budget: learn the house and dose the burner in long blocks
             advanced[

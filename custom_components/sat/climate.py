@@ -108,6 +108,7 @@ from .const import (
     CONF_THERMAL_COMFORT,
     CONF_THERMOSTAT,
     CONF_VALVE_OPENING_TIME,
+    CONF_WARM_UP_MODULATION,
     CONF_WARM_WEATHER_SHUTDOWN,
     CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_DETECTION,
@@ -188,6 +189,10 @@ INPUTS_MISSING_GRACE_PERIOD = timedelta(minutes=10)
 KEEP_HEATING_FLAME_GRACE_SECONDS = 90
 # A boiler that lit against the off-phase setpoint gets heating disabled between on-phases again
 KEEP_HEATING_SUSPEND_SECONDS = 3600
+# Warm-up modulation: a burner on the edge of stability at its minimum loses the flame while the
+# system water is cold, so the first minutes of a burn may modulate a little higher
+WARM_UP_RETURN_TEMPERATURE = 33.0
+WARM_UP_MAXIMUM_SECONDS = 600.0
 # A flame in the off-phase is judged after this long; a hot water burn the boiler does not flag
 # has by then heated the water well above any heating setpoint
 KEEP_HEATING_FLAME_JUDGE_SECONDS = 60
@@ -381,6 +386,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # Some combi boilers swing their diverter valve to hot water once heating is disabled,
         # so the pump overrun pulls the cylinder heat into the floor
         self._keep_heating_in_pwm_off = bool(config_options.get(CONF_KEEP_HEATING_IN_PWM_OFF))
+        self._warm_up_modulation = int(config_options.get(CONF_WARM_UP_MODULATION) or 0)
         self._pwm_off_since: float | None = None
         self._keep_heating_suspended_until: float | None = None
         self._kept_on_flame_since: float | None = None
@@ -973,6 +979,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             "pulse_width_modulation_enabled": self.pulse_width_modulation_enabled,
             "pulse_width_modulation_state": self.pwm.status.name,
             "heating_kept_on_in_pwm_off": self._heating_is_kept_on,
+            "warm_up_modulation_active": self._warming_up,
             "pulse_width_modulation_duty_cycle": self.pwm.duty_cycle,
             **(
                 {"heat_budget_mode": self._heat_budget_mode, **self.heat_budget.attributes}
@@ -1204,6 +1211,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             not self.relative_modulation.enabled
             and self._coordinator.supports_relative_modulation_management
         ):
+            if self._warming_up:
+                return self._warm_up_modulation
             return MINIMUM_RELATIVE_MODULATION
 
         # Heating left enabled in an off-phase is not meant to burn, so any burn stays minimal
@@ -1215,6 +1224,21 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             return MINIMUM_RELATIVE_MODULATION
 
         return self._maximum_relative_modulation
+
+    @property
+    def _warming_up(self) -> bool:
+        """Return True early in a heating burn while the system water is still cold."""
+        if self._warm_up_modulation <= 0 or self.pwm.status != PWMStatus.ON:
+            return False
+        coordinator = self._coordinator
+        if coordinator.heating_hot_water:
+            return False
+        return_temperature = coordinator.return_temperature
+        if return_temperature is None or return_temperature >= WARM_UP_RETURN_TEMPERATURE:
+            return False
+        # Until the flame is seen the boiler lights at its own ignition load anyway
+        on_time = coordinator.flame.latest_on_time_seconds
+        return not coordinator.flame_active or on_time is None or on_time < WARM_UP_MAXIMUM_SECONDS
 
     @property
     def relative_modulation_state(self) -> RelativeModulationState:

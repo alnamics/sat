@@ -75,6 +75,7 @@ What each setting is; [MPX additions](mpx.md) explains how the features behave.
 - **Boiler anti-cycling time**: the boiler's own wait before it relights, from its installer settings (default 0: not set).
 - **Learn overshoot protection value** (default off): adjusts the calibrated value from how low-load burns end, between 30 °C and the maximum setpoint minus 3 °C. The `minimum_setpoint` attribute shows the current value.
 - **Valve opening time**: how long the actuators of your room thermostats take to open (default 0: light the boiler at once).
+- **Warm-up modulation** (default 0, off): lets a cold burn modulate up to this share for its first minutes, for a flame that goes out at minimum power. Not in switch mode.
 - **Keep heating enabled between PWM on-phases** (default off): for combi boilers whose pump overrun cools the hot water cylinder. Not in switch mode.
 - **Duty Cycles per hour**: underfloor heating can go down to 1.
 
