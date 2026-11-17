@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from pyotgw import vars as gw_vars
@@ -81,7 +81,7 @@ async def test_serial_entities_are_named_after_the_device(hass: HomeAssistant) -
         assert state.attributes["friendly_name"] == name
 
 
-def _status(boiler: dict) -> dict:
+def _status(boiler: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {BOILER: boiler, OTGW: {}, THERMOSTAT: {}}
 
 

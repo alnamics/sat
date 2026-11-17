@@ -49,7 +49,7 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 # Primary heat exchanger temperature (OpenTherm 4.x data ID 34). Thermostats rarely ask for it, so
 # the gateway is told to ask the boiler once a minute with a priority message (PM=34).
 HEAT_EXCHANGER_MESSAGE_ID = 34
-DATA_HEAT_EXCHANGER_TEMP: str = getattr(gw_vars, "DATA_HEATEXCH_TEMP", "heat_exchanger_temp")
+DATA_HEAT_EXCHANGER_TEMP = str(getattr(gw_vars, "DATA_HEATEXCH_TEMP", "heat_exchanger_temp"))
 HEAT_EXCHANGER_POLL_SECONDS = 60.0
 # A boiler that answers Unknown-DataId never gives a value; ask again only once an hour
 HEAT_EXCHANGER_UNANSWERED_POLLS = 5
