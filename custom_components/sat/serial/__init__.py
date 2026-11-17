@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from time import monotonic
 from typing import TYPE_CHECKING, Any, override
@@ -37,10 +38,9 @@ from serial import SerialException
 
 from ..const import DOMAIN
 from ..coordinator import DeviceState, SatDataUpdateCoordinator
-from .id_scan import UNKNOWN, OpenThermIdScan
+from .id_scan import FAULT_ID, UNKNOWN, OpenThermIdScan
 
 if TYPE_CHECKING:
-    import asyncio
     import re
     from collections.abc import Callable, Mapping
     from datetime import datetime
@@ -115,6 +115,14 @@ def register_fan_speed_message() -> bool:
 
 register_heat_exchanger_message()
 register_fan_speed_message()
+
+
+# A flame lost early in a burn may leave a fault code for only seconds, and the thermostat asks
+# for it about every 45 s, so SAT asks every 10 s from the ignition until a minute past the flame
+FAULT_WATCH_INTERVAL_SECONDS = 10.0
+FAULT_WATCH_BURN_SECONDS = 240.0
+FAULT_WATCH_AFTER_FLAME_SECONDS = 60.0
+FAULT_WATCH_MAXIMUM_SECONDS = 300.0
 
 
 def id_scan_store(hass: HomeAssistant, port: str) -> Store[dict[str, Any]]:
@@ -196,6 +204,7 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         self._id_scan_task: asyncio.Task[None] | None = None
         self._id_scan_store: Store[dict[str, Any]] | None = None
         self._listening_to: object | None = None
+        self._fault_watch_task: asyncio.Task[None] | None = None
         self._stop_listening: Callable[[], None] | None = None
 
     @override
@@ -431,9 +440,56 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
     def _on_message(self, source: str, frame: str) -> None:
         """Keep the boiler's answers, its parameters among them, as the messages pass."""
         parameters = dict(self.id_scan.parameters)
+        faults = len(self.id_scan.fault_events)
+        flame = self.id_scan.flame
         self.id_scan.observe(source, frame)
-        if self.id_scan.parameters != parameters and self._id_scan_store is not None:
+
+        if flame is False and self.id_scan.flame:
+            self._hass_loop.call_soon_threadsafe(self._start_fault_watch)
+        if (
+            self.id_scan.parameters != parameters or len(self.id_scan.fault_events) != faults
+        ) and self._id_scan_store is not None:
             self._hass_loop.call_soon_threadsafe(self._schedule_id_scan_save)
+
+    def _start_fault_watch(self) -> None:
+        if self._simulation or (
+            self._fault_watch_task is not None and not self._fault_watch_task.done()
+        ):
+            return
+        self._fault_watch_task = self.hass.async_create_background_task(
+            self._async_watch_faults(), "SAT boiler fault watch"
+        )
+
+    async def _async_watch_faults(
+        self,
+        interval: float = FAULT_WATCH_INTERVAL_SECONDS,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
+        """Ask for the fault code (ID 5) often while a burn starts, when flames get lost."""
+        started = clock()
+        flame_off_at: float | None = None
+        while True:
+            try:
+                await self._api.send_transparent_command(
+                    gw_vars.OTGW_CMD_PRIO_MSG, str(FAULT_ID), timeout=2
+                )
+            except Exception:  # a lost request must not end the watch
+                _LOGGER.debug("Requesting OpenTherm ID 5 failed", exc_info=True)
+            await asyncio.sleep(interval)
+
+            now = clock()
+            if self.id_scan.flame:
+                flame_off_at = None
+            elif flame_off_at is None:
+                flame_off_at = now
+
+            elapsed = now - started
+            if elapsed >= FAULT_WATCH_MAXIMUM_SECONDS:
+                return
+            if elapsed >= FAULT_WATCH_BURN_SECONDS and (
+                flame_off_at is None or now - flame_off_at >= FAULT_WATCH_AFTER_FLAME_SECONDS
+            ):
+                return
 
     def _schedule_id_scan_save(self) -> None:
         if self._id_scan_store is not None:
@@ -476,6 +532,10 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         if self._id_scan_task is not None:
             self._id_scan_task.cancel()
             self._id_scan_task = None
+
+        if self._fault_watch_task is not None:
+            self._fault_watch_task.cancel()
+            self._fault_watch_task = None
 
         if self._stop_listening is not None:
             self._stop_listening()

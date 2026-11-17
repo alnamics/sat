@@ -408,3 +408,37 @@ async def test_the_boiler_parameters_are_heard_as_the_thermostat_reads_them(
     assert coordinator.id_scan.parameters == {12: 10, 13: 1}
 
     await coordinator.async_will_remove_from_hass()
+
+
+def test_each_boiler_fault_is_kept_once() -> None:
+    scan = OpenThermIdScan()
+    for frame in ("C0050000", "C0050880", "C0050880", "C0050000", "C0050881"):
+        scan.observe("B", frame)
+
+    assert [(event["code"], event["flags"]) for event in scan.fault_events] == [
+        (128, "0x08"),
+        (129, "0x08"),
+    ]
+
+    restored = OpenThermIdScan()
+    restored.load(scan.to_dict())
+    assert restored.fault_events == scan.fault_events
+
+
+async def test_a_burn_start_is_watched_for_faults(hass: HomeAssistant) -> None:
+    coordinator, api = _coordinator(hass)
+
+    with patch.object(coordinator, "_start_fault_watch") as start:
+        coordinator._on_message("B", "40000000")
+        coordinator._on_message("B", "40000008")
+        await hass.async_block_till_done()
+    start.assert_called_once()
+
+    # The flame went out before the watch began: it asks until four minutes have passed
+    coordinator.id_scan.flame = False
+    times = iter(range(0, 1000, 10))
+    await coordinator._async_watch_faults(interval=0, clock=lambda: float(next(times)))
+
+    assert api.send_transparent_command.await_count == 24
+    api.send_transparent_command.assert_awaited_with("PM", "5", timeout=2)
+    await coordinator.async_will_remove_from_hass()

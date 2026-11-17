@@ -45,6 +45,12 @@ TSP_ENTRY_ID = 11
 PARAMETER_SETTLE_SECONDS = 30.0
 PARAMETER_MAXIMUM_WAIT_SECONDS = 600.0
 
+# Fault flags in the high byte, the manufacturer's fault code (as on the boiler panel) in the low
+FAULT_ID = 5
+FAULT_EVENTS_KEPT = 20
+STATUS_ID = 0
+FLAME_BIT = 0x08
+
 FRAME_LENGTH = 8
 VENTILATION_IDS = range(71, 92)
 SOLAR_STORAGE_IDS = range(102, 109)
@@ -149,6 +155,11 @@ class OpenThermIdScan:
         # their installer parameters here; the gateway reads them all once ID 10 is answered.
         self.parameters: dict[int, int] = {}
         self.parameter_count: int | None = None
+        # Each fault the boiler reported, when it first showed: time, flags and code
+        self.fault_events: list[dict[str, Any]] = []
+        self._last_fault: tuple[int, int] = (0, 0)
+        # Flame bit of the boiler's last status answer, None before the first
+        self.flame: bool | None = None
         self.scanned_at: str | None = None
         self.running = False
         self._waiting: int | None = None
@@ -171,7 +182,11 @@ class OpenThermIdScan:
         data_id = data[1]
         if message_type in (READ_ACK, WRITE_ACK):
             answer = Answer(SUPPORTED, frame[4:].upper())
-            if data_id == TSP_COUNT_ID:
+            if data_id == FAULT_ID:
+                self._record_fault(data[2], data[3])
+            elif data_id == STATUS_ID:
+                self.flame = bool(data[3] & FLAME_BIT)
+            elif data_id == TSP_COUNT_ID:
                 self.parameter_count = data[2]
             elif data_id == TSP_ENTRY_ID:
                 index, value = data[2], data[3]
@@ -198,6 +213,24 @@ class OpenThermIdScan:
 
         if data_id == self._waiting:
             self._answered.set()
+
+    def _record_fault(self, flags: int, code: int) -> None:
+        fault = (flags, code)
+        if fault == self._last_fault:
+            return
+        self._last_fault = fault
+        if fault == (0, 0):
+            return
+
+        _LOGGER.warning("The boiler reported a fault: code %d, flags 0x%02X", code, flags)
+        self.fault_events.append(
+            {
+                "time": datetime.now(UTC).isoformat(timespec="seconds"),
+                "code": code,
+                "flags": f"0x{flags:02X}",
+            }
+        )
+        del self.fault_events[:-FAULT_EVENTS_KEPT]
 
     async def async_run(
         self,
@@ -289,6 +322,7 @@ class OpenThermIdScan:
             },
             "parameters": {str(index): value for index, value in self.parameters.items()},
             "parameter_count": self.parameter_count,
+            "fault_events": self.fault_events,
         }
 
     def load(self, data: dict[str, Any]) -> None:
@@ -314,3 +348,9 @@ class OpenThermIdScan:
         self.parameters = parameters
         self.parameter_count = count if isinstance(count, int) else None
         self.scanned_at = scanned_at if isinstance(scanned_at, str) else None
+        events = data.get("fault_events")
+        self.fault_events = (
+            [event for event in events if isinstance(event, dict)][-FAULT_EVENTS_KEPT:]
+            if isinstance(events, list)
+            else []
+        )
