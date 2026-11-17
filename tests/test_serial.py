@@ -107,12 +107,12 @@ def _coordinator(
     options: dict[str, Any] | None = None,
     command: AsyncMock | None = None,
 ) -> tuple[SatSerialCoordinator, MagicMock]:
-    with patch("custom_components.sat.serial.OpenThermGateway") as gateway:
-        api = gateway.return_value
-        api.set_control_setpoint = AsyncMock()
-        api.set_max_relative_mod = AsyncMock()
-        api.disconnect = AsyncMock()
-        api.send_transparent_command = command or AsyncMock()
+    api = MagicMock()
+    api.set_control_setpoint = AsyncMock()
+    api.set_max_relative_mod = AsyncMock()
+    api.disconnect = AsyncMock()
+    api.send_transparent_command = command or AsyncMock()
+    with patch("custom_components.sat.serial.OpenThermGateway", return_value=api):
         coordinator = SatSerialCoordinator(hass, "socket://otgw:25238", DEFAULT_USER_DATA, options)
 
     return coordinator, api
