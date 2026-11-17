@@ -26,12 +26,12 @@ This page follows one flat to show what SAT does with the boiler: where the wate
 |---|---|
 | Flat | 87 m², building finished in 2021 (Polish 2021 insulation standard) |
 | Boiler | De Dietrich Lumea MPX 28/33 BIC, condensing, with a 40 l cylinder |
-| Boiler power | 33 kW maximum, 16% minimum modulation → **about 5.3 kW** |
+| Boiler power | 33 kW for hot water, 28 kW for heating (80/60 °C); minimum **4.7–5.1 kW** per the data sheet. SAT works it out as 33 kW × 16% minimum modulation (OpenTherm) = 5.3 kW, about 3% high |
 | Heating | screed underfloor heating, 8 loops |
 | Loops | 4 with Afriso TSA-02 actuators (5–6 minutes to open) and Heatit Z-Temp2 thermostats, 4 always open (2 bathrooms, 2 corridors) |
 | Connection | OpenTherm Gateway (OTGW) over serial |
 | Main thermostat | De Dietrich AD289 iSense on the OpenTherm bus, through the gateway |
-| Boiler limit | maximum flow temperature set to 45 °C in the boiler |
+| Boiler limits | P15 = 01: heating setpoint at most 45 °C; P12 = 0: heating power at most about 5 kW (the factory setting is 80, 28 kW) |
 
 The gateway sits between the iSense and the boiler. It passes the thermostat's messages on, but replaces the water setpoint, the heating enable and the maximum modulation with SAT's values. The iSense room temperature (in tenths of a degree) is SAT's main sensor.
 
@@ -112,7 +112,7 @@ The heat budget is meant to replace the short PWM phases with **one longer block
 
 - **Learning.** Every hour it records the heat burned, the temperature difference and the change of the room temperature, and fits the heat loss of the house over the last day. The first fit gave 80 W/K, a few hours later 74 W/K. Two independent methods agreed: at +6 °C the budget worked out 1.3 kW, and plain PWM burned 1.3 kW on average.
 - **Dosing.** With the budget On, this flat at +6 °C gets a block of about 15 minutes an hour at 5.3 kW (1.3 kWh), at 0 °C about 20 minutes: one start an hour instead of two.
-- **Credit.** Heat that could not be delivered (a cylinder reheat during the block) carries over to the next hour. A room more than 0.7 °C too warm clears it.
+- **Credit.** Heat that could not be delivered (a cylinder reheat during the block) carries over to the next hour. A room more than 0.5 °C too warm clears it, and the block in progress ends.
 - **A lower target.** After going from 22.5 to 22 °C the budget burns nothing until the room is within 0.2 °C of the new target; in a simulation of this flat that takes about 3 hours.
 - **Not enough power.** If the house needed more than 5.3 kW, the budget would hand over to normal modulation. In this flat that is unlikely to happen.
 
@@ -149,12 +149,13 @@ The Lumea does not report its own start and hour counters (the boiler entities r
 | Heating system | Underfloor | screed |
 | Heating curve coefficient | 1.3 | SAT suggests 1.2–1.4 after learning |
 | Heating mode | Eco | control on one sensor (the iSense) |
-| Overshoot protection | on, 42 °C | the lowest setpoint at which the boiler does not cut out |
+| Overshoot protection | on, 45 °C (was 42) | at 42 °C the ignition peak (46–48 °C) made the boiler cut out; at 45 °C it rides out peaks up to about 50 °C |
 | Duty cycles per hour | 2 | long burns, few starts |
 | Anti-cycling time | 10 min | the boiler's minimum pause |
 | Valve opening time | 6 min | Afriso actuator travel time |
-| Keep heating between PWM phases | on (under test) | the diverter valve does not switch every cycle |
-| Heat budget | Learn only → On once learned | one block an hour |
+| Keep heating between PWM phases | on | one cylinder reheat a night instead of five; the pump then runs all the time, 13 W at part load per the data sheet (about 0.3 kWh a day) |
+| Warm-up modulation | 30%, with P12 = 07 (7 kW) in the boiler | under test: the flame went out about 2 minutes after ignition once the burner reached its minimum with the return below about 32 °C |
+| Heat budget | On since 17 November (learned 66 W/K) | one block every 1–2 hours at +6–8 °C |
 | Detect open windows | on | the iSense reports tenths of a degree |
 | Warm weather shutdown | on | heating stops on a warm daily mean |
 | Boiler service | due 1 October 2027 | reminder in Repairs |

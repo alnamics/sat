@@ -26,12 +26,12 @@ Ta strona pokazuje na jednym konkretnym mieszkaniu, co SAT robi z kotłem: skąd
 |---|---|
 | Mieszkanie | 87 m², budynek oddany w 2021 roku (Warunki Techniczne 2021) |
 | Kocioł | De Dietrich Lumea MPX 28/33 BIC, kondensacyjny, z zasobnikiem 40 l |
-| Moc kotła | maksymalnie 33 kW, minimalna modulacja 16% → **około 5,3 kW** |
+| Moc kotła | 33 kW na ciepłą wodę, 28 kW na ogrzewanie (80/60 °C); minimum **4,7–5,1 kW** według danych technicznych. SAT liczy je jako 33 kW × 16% minimalnej modulacji (OpenTherm) = 5,3 kW, czyli o około 3% za dużo |
 | Ogrzewanie | podłogówka w wylewce, 8 pętli |
 | Pętle | 4 z siłownikami Afriso TSA-02 (otwierają się 5–6 minut) i termostatami Heatit Z-Temp2, 4 zawsze otwarte (2 łazienki, 2 korytarze) |
 | Połączenie | bramka OpenTherm Gateway (OTGW) po łączu szeregowym |
 | Termostat główny | De Dietrich AD289 iSense na magistrali OpenTherm, przez bramkę |
-| Limit kotła | maksymalna temperatura zasilania ustawiona w kotle na 45 °C |
+| Limity w kotle | P15 = 01: temperatura zadana c.o. najwyżej 45 °C; P12 = 0: moc c.o. najwyżej około 5 kW (fabrycznie 80, czyli 28 kW) |
 
 Bramka siedzi między iSense a kotłem. Przekazuje kotłowi wiadomości termostatu, ale temperaturę zadaną wody, włączenie ogrzewania i maksymalną modulację podmienia na wartości z SAT. Temperatura z iSense (podawana co 0,1 °C) jest głównym czujnikiem SAT.
 
@@ -112,7 +112,7 @@ Budżet to dodatek, który zamiast krótkich faz PWM ma palić **jeden dłuższy
 
 - **Nauka.** Co godzinę zapisuje spalone ciepło, różnicę temperatur i zmianę temperatury w pokoju, a z ostatniej doby wylicza straty domu. Pierwsze dopasowanie wyszło 80 W/K, po kilku godzinach 74 W/K. Dwie niezależne metody dały to samo: przy +6 °C budżet liczył 1,3 kW, a zwykły PWM palił średnio 1,3 kW.
 - **Dawkowanie.** Po włączeniu budżetu na On dla tego mieszkania przy +6 °C wychodzi blok około 15 minut na godzinę na 5,3 kW (1,3 kWh), przy 0 °C około 20 minut. To jeden start na godzinę zamiast dwóch.
-- **Kredyt.** Ciepło, którego nie dało się dostarczyć (dogrzewanie zasobnika w trakcie bloku), przechodzi na następną godzinę. Gdy pokój jest o ponad 0,7 °C za ciepły, kredyt się zeruje.
+- **Kredyt.** Ciepło, którego nie dało się dostarczyć (dogrzewanie zasobnika w trakcie bloku), przechodzi na następną godzinę. Gdy pokój jest o ponad 0,5 °C za ciepły, kredyt się zeruje, a trwający blok się kończy.
 - **Obniżenie celu.** Po zmianie z 22,5 na 22 °C budżet nic nie pali, dopóki pokój nie zejdzie na 0,2 °C od nowego celu. W symulacji tego mieszkania trwa to około 3 godzin.
 - **Za mało mocy.** Gdyby dom potrzebował więcej niż 5,3 kW, budżet oddałby sterowanie zwykłej modulacji. W tym mieszkaniu raczej się to nie zdarzy.
 
@@ -149,12 +149,13 @@ Lumea nie podaje własnych liczników startów i godzin pracy (encje kotła poka
 | Heating system | Underfloor | wylewka |
 | Heating curve coefficient | 1,3 | SAT po nauce sugeruje 1,2–1,4 |
 | Heating mode | Eco | regulacja według jednego czujnika (iSense) |
-| Overshoot protection | włączona, 42 °C | minimum, przy którym kocioł nie gasi palenia |
+| Overshoot protection | włączona, 45 °C (wcześniej 42) | przy 42 °C skok przy zapłonie (46–48 °C) wyłączał palnik; przy 45 °C kocioł wytrzymuje skoki do około 50 °C |
 | Duty cycles per hour | 2 | długie palenia, mało startów |
 | Anti-cycling time | 10 min | minimalna przerwa kotła |
 | Valve opening time | 6 min | czas otwarcia siłowników Afriso |
-| Keep heating between PWM phases | włączone (test) | zawór trójdrogowy nie przełącza się co cykl |
-| Heat budget | Learn only → On po nauce | jeden blok na godzinę |
+| Keep heating between PWM phases | włączone | jedno dogrzanie zasobnika na noc zamiast pięciu; pompa pracuje wtedy cały czas, według danych technicznych 13 W przy obciążeniu częściowym (około 0,3 kWh na dobę) |
+| Warm-up modulation | 30%, w kotle P12 = 07 (7 kW) | w trakcie testu: płomień gasł około 2 minut po zapłonie, gdy palnik zszedł do minimum przy powrocie poniżej około 32 °C |
+| Heat budget | On od 17 listopada (nauczone 66 W/K) | jeden blok co 1–2 godziny przy +6–8 °C |
 | Detect open windows | włączone | iSense podaje 0,1 °C |
 | Warm weather shutdown | włączone | ogrzewanie wyłącza się przy ciepłej średniej dobowej |
 | Boiler service | przegląd do 1.10.2027 | przypomnienie w Naprawach |

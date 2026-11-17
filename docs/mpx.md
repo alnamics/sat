@@ -62,7 +62,7 @@ OpenTherm defines the relative modulation as a share of the range between minimu
 - two burns the boiler cuts out by overheating end a block;
 - a hot water reheat in the last third of a period starts the next block right away, while the boiler is warm (`hot_water_piggybacks`);
 - a pause shorter than the anti-cycling time is not worth an ignition, so the block runs on;
-- a room more than 0.7 °C above its target gets no heat: the running block ends and nothing is carried over (`heat_budget_room_too_warm`);
+- a room more than 0.5 °C above its target gets no heat: the running block ends and nothing is carried over (`heat_budget_room_too_warm`);
 - after the target is lowered by 0.2 °C or more the house coasts: nothing burns until the room is within 0.2 °C of the new target (`heat_budget_coasting`);
 - while all room valves are closed no heat is owed, so reopened valves do not start a block for the time they were closed.
 

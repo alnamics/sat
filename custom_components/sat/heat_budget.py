@@ -65,7 +65,7 @@ INTEGRAL_HOURS = 1.5
 INTEGRAL_LIMIT_K = 8.0
 INTEGRAL_BAND_K = 0.5
 # A room this far above its target gets no heat at all
-SURPLUS_STOP_K = 0.7
+SURPLUS_STOP_K = 0.5
 # After the target is lowered the house coasts down to it; heating resumes this close to it,
 # early enough for the screed to hold the room there
 COAST_TARGET_DROP = 0.2

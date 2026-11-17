@@ -62,7 +62,7 @@ OpenTherm definiuje modulację względną jako udział w zakresie między mocą 
 - dwa palenia przerwane przez kocioł z powodu przegrzania kończą blok;
 - dogrzanie ciepłej wody w ostatniej tercji okresu od razu rozpoczyna następny blok, póki kocioł jest ciepły (`hot_water_piggybacks`);
 - przerwa krótsza niż czas antytaktowania nie jest warta zapłonu, więc blok trwa dalej;
-- pokój cieplejszy o ponad 0,7 °C od temperatury zadanej nie dostaje ciepła: trwający blok się kończy i nic nie przechodzi na później (`heat_budget_room_too_warm`);
+- pokój cieplejszy o ponad 0,5 °C od temperatury zadanej nie dostaje ciepła: trwający blok się kończy i nic nie przechodzi na później (`heat_budget_room_too_warm`);
 - po obniżeniu temperatury zadanej o 0,2 °C lub więcej dom stygnie swobodnie: nic się nie pali, dopóki pokój nie zejdzie na 0,2 °C od nowego celu (`heat_budget_coasting`);
 - gdy wszystkie zawory pokojowe są zamknięte, budżet nie nalicza zaległego ciepła, więc po ich otwarciu nie odrabia czasu, w którym były zamknięte.
 
