@@ -2430,7 +2430,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             or self.pwm.status != PWMStatus.OFF
         ):
             self._pwm_off_since = None
-            self._kept_on_released = False
+            # Only a real on-phase warms the water again; an idle step between off-phases
+            # (valves, a reset) must not enable heating against the boiler minimum once more
+            if self.pwm.status == PWMStatus.ON or not self.pulse_width_modulation_enabled:
+                self._kept_on_released = False
             return False
 
         now = monotonic()

@@ -500,7 +500,15 @@ async def test_keep_heating_is_released_before_the_water_reaches_the_boiler_mini
         boiler_temperature.return_value = 27.0
         assert not climate._heating_kept_on_in_pwm_off()
 
-        # The next off-phase keeps heating on again
+        # An idle step between off-phases does not enable heating again
+        status.return_value = PWMStatus.IDLE
+        assert not climate._heating_kept_on_in_pwm_off()
+        status.return_value = PWMStatus.OFF
+        clock[0] += 120
+        boiler_temperature.return_value = 28.0
+        assert not climate._heating_kept_on_in_pwm_off()
+
+        # The next off-phase after an on-phase keeps heating on again
         status.return_value = PWMStatus.ON
         assert not climate._heating_kept_on_in_pwm_off()
         status.return_value = PWMStatus.OFF
