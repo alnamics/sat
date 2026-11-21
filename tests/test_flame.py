@@ -773,3 +773,41 @@ def test_a_heating_burn_on_a_hot_exchanger_is_heating(freezer: FrozenDateTimeFac
         flame.update(boiler_state(True, setpoint=42.0, flow=float(flow)), PWM_ON)
         freezer.tick(timedelta(seconds=5))
         assert not flame.hot_water_burn
+
+
+def test_a_flame_lost_far_below_the_setpoint_is_not_a_cut_out(
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    flame = Flame()
+    run_pwm_cycle(flame, freezer, 900)
+
+    for _ in range(2):
+        # The flame goes out at 38 °C against a 45 °C setpoint; the boiler relights later
+        flame.update(boiler_state(False, setpoint=45.0, flow=30.0), PWM_ON)
+        flame.update(boiler_state(True, setpoint=45.0, flow=30.0), PWM_ON)
+        freezer.tick(timedelta(seconds=60))
+        flame.update(boiler_state(True, setpoint=45.0, flow=38.0), PWM_ON)
+        freezer.tick(timedelta(seconds=10))
+        flame.update(boiler_state(False, setpoint=45.0, flow=37.0), PWM_ON)
+        freezer.tick(timedelta(seconds=23))
+
+    assert flame.cut_short_burn_ends == ()
+    assert len(flame.flame_loss_ends) == 2
+    assert flame.flame_losses_last_day == 2
+    start_pwm_burn(flame)
+    assert flame.health_status != FlameStatus.PWM_SHORT
+
+    freezer.tick(timedelta(days=1, seconds=1))
+    assert flame.flame_losses_last_day == 0
+
+
+def test_a_cut_out_near_the_setpoint_is_still_cut_short(freezer: FrozenDateTimeFactory) -> None:
+    flame = Flame()
+    flame.update(boiler_state(False, setpoint=45.0, flow=30.0), PWM_ON)
+    flame.update(boiler_state(True, setpoint=45.0, flow=30.0), PWM_ON)
+    freezer.tick(timedelta(seconds=40))
+    flame.update(boiler_state(True, setpoint=45.0, flow=44.0), PWM_ON)
+    flame.update(boiler_state(False, setpoint=45.0, flow=44.0), PWM_ON)
+
+    assert len(flame.cut_short_burn_ends) == 1
+    assert flame.flame_loss_ends == ()

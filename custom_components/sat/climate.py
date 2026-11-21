@@ -983,6 +983,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             "pulse_width_modulation_enabled": self.pulse_width_modulation_enabled,
             "pulse_width_modulation_state": self.pwm.status.name,
             "heating_kept_on_in_pwm_off": self._heating_is_kept_on,
+            "flame_losses_24h": self._coordinator.flame_losses_last_day,
             "warm_up_modulation_active": self._warming_up,
             "pulse_width_modulation_duty_cycle": self.pwm.duty_cycle,
             **(
@@ -1945,6 +1946,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             solar=solar,
             solar_forecast=sum(sunshine) / len(sunshine) if sunshine else None,
             cut_short_burn_ends=coordinator.flame.cut_short_burn_ends,
+            flame_loss_ends=coordinator.flame.flame_loss_ends,
             comfort=comfort,
             next_comfort_change=next_change,
             setback=self._setback_temperature,

@@ -81,6 +81,9 @@ FORECAST_HORIZON_HOURS = 3.0
 
 # Boiler cut-outs in one block that end it, because the water cannot take the heat
 CUT_SHORT_BURNS_TO_END_BLOCK = 2
+# A boiler relights a lost flame by itself; this many in one block end it well before the
+# boiler locks out (a Baxi board after about 12), and the heat stays owed for the next block
+FLAME_LOSSES_TO_END_BLOCK = 4
 
 # Recovery from a setback: hours per kelvin and hours at full demand, bounded
 PREHEAT_DEFAULT_HOURS_PER_K = 2.0
@@ -164,6 +167,7 @@ class HeatBudgetInputs:
     solar: float | None = None
     solar_forecast: float | None = None
     cut_short_burn_ends: tuple[float, ...] = ()
+    flame_loss_ends: tuple[float, ...] = ()
     comfort: bool | None = None
     next_comfort_change: datetime | None = None
     setback: float = 0.0
@@ -616,6 +620,17 @@ class HeatBudget:
             _LOGGER.info("The boiler cut out %d burns; ending the heat block.", cut_short)
             # The water could not take the heat, so do not push the rest straight after
             self._credit = min(self._credit, self._minimum_power * self._period / 7200)
+            self._block_target = 0.0
+            self._end_block(now)
+            return
+
+        losses = sum(1 for ended in inputs.flame_loss_ends if ended >= started)
+        if losses >= FLAME_LOSSES_TO_END_BLOCK:
+            _LOGGER.warning(
+                "The boiler lost its flame %d times in this heat block; ending it, "
+                "the heat not delivered carries over to the next block.",
+                losses,
+            )
             self._block_target = 0.0
             self._end_block(now)
             return

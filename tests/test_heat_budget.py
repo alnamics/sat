@@ -119,6 +119,21 @@ def test_two_boiler_cut_outs_end_the_block() -> None:
     assert budget.status == PWMStatus.OFF
 
 
+def test_four_flame_losses_end_the_block_and_keep_the_heat_owed() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.12)
+    budget.update(inputs(1000))
+    budget.update(inputs(1030, flame_active=True))
+    losses = (1100.0, 1200.0, 1300.0)
+    budget.update(inputs(1310, flame_loss_ends=losses))
+    assert budget.status == PWMStatus.ON
+    credit = budget.attributes["heat_credit_kwh"]
+
+    budget.update(inputs(1410, flame_loss_ends=(*losses, 1400.0)))
+    assert budget.status == PWMStatus.OFF
+    # Unlike a cut-out, a lost flame does not cap what is still owed
+    assert budget.attributes["heat_credit_kwh"] >= credit
+
+
 def test_the_heat_loss_is_learned() -> None:
     budget = HeatBudget()
     assert budget.attributes["heat_budget_ready"] is False

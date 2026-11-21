@@ -44,6 +44,7 @@ class FlameState:
     last_cut_short_peak_flow: float | None
     last_cut_short_setpoint: float | None
     cut_short_burn_ends: tuple[float, ...]
+    flame_loss_ends: tuple[float, ...] = ()
 
 
 class Flame:
@@ -67,6 +68,9 @@ class Flame:
     # (the Lumea lights for the cylinder some 150 s after it stopped the heating burn, and
     # does not always flag it, so the reheat has to show in the water first)
     HOT_WATER_TAKEOVER_SECONDS: float = 300.0
+    # A burn that ends this far below its setpoint lost its flame; a cut-out comes above it
+    FLAME_LOSS_SETPOINT_MARGIN: float = 3.0
+    FLAME_LOSS_WINDOW_SECONDS: float = 86400.0
     # A heating burn cuts out 5 to 7 °C above its setpoint; a Remeha preheat runs ~20 °C above
     UNFLAGGED_HOT_WATER_MARGIN: float = 10.0
     # Boilers heat to their own minimum, often 25 °C, when the setpoint is lower
@@ -157,6 +161,7 @@ class Flame:
         self._on_deltas_window: deque[tuple[float, float]] = deque()
         self._on_durations_window: deque[tuple[float, float]] = deque()
         self._pwm_burns_cut_short: deque[tuple[float, bool]] = deque(maxlen=3)
+        self._flame_losses: deque[float] = deque(maxlen=200)
 
         # Health
         self._health_status: FlameStatus = FlameStatus.INSUFFICIENT_DATA
@@ -198,6 +203,10 @@ class Flame:
             [*stored("pwm_burns_cut_short"), *self._pwm_burns_cut_short],
             maxlen=self._pwm_burns_cut_short.maxlen,
         )
+        self._flame_losses = deque(
+            [*(ended + offset for ended in data.get("flame_losses", [])), *self._flame_losses],
+            maxlen=self._flame_losses.maxlen,
+        )
 
         _LOGGER.debug("Loaded %d flame cycles from storage.", len(self._on_durations_window))
 
@@ -215,6 +224,7 @@ class Flame:
             "pwm_burns_cut_short": [
                 (ended + offset, value) for ended, value in self._pwm_burns_cut_short
             ],
+            "flame_losses": [ended + offset for ended in self._flame_losses],
         }
 
     @property
@@ -295,6 +305,8 @@ class Flame:
 
     def _forgive_cut_out_before_hot_water(self, now: float) -> None:
         """Clear the cut-short mark of a burn the boiler stopped to reheat the cylinder."""
+        if self._flame_losses and now - self._flame_losses[-1] <= self.HOT_WATER_TAKEOVER_SECONDS:
+            self._flame_losses.pop()
         if (
             self._pwm_burns_cut_short
             and self._pwm_burns_cut_short[-1][1]
@@ -326,6 +338,18 @@ class Flame:
     @property
     def cut_short_burn_ends(self) -> tuple[float, ...]:
         return tuple(ended for ended, cut_short in self._pwm_burns_cut_short if cut_short)
+
+    @property
+    def flame_loss_ends(self) -> tuple[float, ...]:
+        """When heating burns lost their flame well below the setpoint, oldest first."""
+        return tuple(self._flame_losses)
+
+    @property
+    def flame_losses_last_day(self) -> int:
+        now = monotonic()
+        return sum(
+            1 for ended in self._flame_losses if now - ended <= self.FLAME_LOSS_WINDOW_SECONDS
+        )
 
     @property
     def cycles_last_hour(self) -> float:
@@ -479,6 +503,25 @@ class Flame:
                     and duration < self._pwm_planned_on_seconds
                     and not lit_above_cut_out
                 )
+                # Far below the setpoint the boiler did not cut out, it lost the flame and
+                # relights by itself; the water could take the heat
+                if (
+                    cut_short
+                    and self._burn_peak_flow is not None
+                    and self._burn_highest_setpoint is not None
+                    and self._burn_peak_flow
+                    < self._burn_highest_setpoint - self.FLAME_LOSS_SETPOINT_MARGIN
+                ):
+                    cut_short = False
+                    self._flame_losses.append(now)
+                    _LOGGER.info(
+                        "The flame went out after %.0fs with the flow at %.1f°C, "
+                        "well below the %.1f°C setpoint (%d in the last day).",
+                        duration,
+                        self._burn_peak_flow,
+                        self._burn_highest_setpoint,
+                        self.flame_losses_last_day,
+                    )
                 self._pwm_burns_cut_short.append((now, cut_short))
 
                 if (

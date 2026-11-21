@@ -256,6 +256,11 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     @property
+    def flame_losses_last_day(self) -> int:
+        """Heating burns that lost their flame well below the setpoint in the last day."""
+        return self._flame.flame_losses_last_day
+
+    @property
     def flame(self) -> FlameState:
         return FlameState(
             is_active=self._flame.is_active,
@@ -271,6 +276,7 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
             last_cut_short_peak_flow=self._flame.last_cut_short_peak_flow,
             last_cut_short_setpoint=self._flame.last_cut_short_setpoint,
             cut_short_burn_ends=self._flame.cut_short_burn_ends,
+            flame_loss_ends=self._flame.flame_loss_ends,
         )
 
     @property
