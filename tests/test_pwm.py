@@ -474,9 +474,13 @@ async def test_an_early_off_phase_lasts_until_the_planned_cycle_ends(
     for _ in range(2):
         await coordinator.async_set_heater_state(DeviceState.ON)
         coordinator.async_update_listeners()
+        # The boiler cuts out at its setpoint; far below it the flame would have been lost
+        await coordinator.async_set_boiler_temperature((coordinator.setpoint or 30) + 1)
         freezer.tick(timedelta(seconds=30))
+        coordinator.async_update_listeners()
         await coordinator.async_set_heater_state(DeviceState.OFF)
         coordinator.async_update_listeners()
+        await coordinator.async_set_boiler_temperature(30)
         freezer.tick(timedelta(seconds=90))
         await climate.async_control_heating_loop()
     assert climate.pwm.status == PWMStatus.OFF
