@@ -3,9 +3,10 @@
 🇬🇧 [English version](../mpx.md)
 
 > [!WARNING]
-> Wszystko na tej stronie napisał Claude, model AI, i nikt tego nie sprawdził ręcznie ani nie
-> uruchamiał dłużej na prawdziwym kotle. Kod przechodzi testy automatyczne i tylko tyle o nim
-> wiadomo. Używasz na własne ryzyko; włączaj funkcje po jednej i obserwuj kocioł.
+> Wszystko na tej stronie napisał Claude, model AI, i nie sprawdził tego człowiek. Kod
+> przechodzi testy automatyczne i od połowy listopada 2026 pracuje na jednym prawdziwym kotle
+> (zob. [Test na prawdziwym kotle](#test-na-prawdziwym-kotle)); niczego innego nie próbowano.
+> Używasz na własne ryzyko; włączaj funkcje po jednej i obserwuj kocioł.
 
 Ta strona opisuje, co ten fork (wersje z czwartą liczbą, np. 5.2.0.5) dodaje do [SAT v2](https://github.com/bellini666/SAT). Same ustawienia są w [Opcjach](options.md) (menu Sterowanie i PWM, Budżet ciepła, Ciepła woda, Obecność i okna, Kocioł i serwis); tutaj jest wyjaśnione, co robią i jak się ze sobą łączą.
 
@@ -20,6 +21,7 @@ Ta strona opisuje, co ten fork (wersje z czwartą liczbą, np. 5.2.0.5) dodaje d
 - [Komunikaty w Naprawach](#komunikaty-w-naprawach)
 - [Pomiar pętli](#pomiar-pętli)
 - [Po restarcie](#po-restarcie)
+- [Test na prawdziwym kotle](#test-na-prawdziwym-kotle)
 - [Ograniczenia i to, czego nie sprawdzono](#ograniczenia-i-to-czego-nie-sprawdzono)
 
 ## Po co
@@ -147,10 +149,35 @@ Po restarcie Home Assistanta albo zmianie opcji zachowują się: liczniki, naucz
 
 Uczone od nowa: odczyt kotła na minimalnej modulacji, średnie i przepływy monitora pętli, przenikanie ciepła podłogi, średnie sprawności, kredyt ciepła i bieżący blok budżetu ciepła.
 
+## Test na prawdziwym kotle
+
+Od połowy listopada 2026 dodatki pracują na jednej instalacji: mieszkanie 87 m² w bloku z 2021 roku, podłogówka w wylewce z 8 pętlami, kocioł De Dietrich Lumea MPX 28/33 BIC (33 kW, minimum około 5 kW, zasobnik 40 l) za bramką OpenTherm Gateway na porcie szeregowym i termostat De Dietrich iSense jako czujnik w pokoju. Całość opisuje [Przykład](example.md). Liczby poniżej pochodzą z historii kotła w Home Assistancie, przy 3–8 °C na zewnątrz.
+
+| | Przed: PWM bez budżetu ciepła (16–17 listopada) | Z budżetem ciepła (20–22 listopada) |
+|---|---|---|
+| Starty palnika na ogrzewanie | około 27 na dobę | 8–10 na dobę |
+| Typowe palenie na ogrzewanie | 2–3 minuty, dwie trzecie krótsze niż 5 | 12–23 minuty, mniej więcej jeden blok co 2 godziny |
+| Temperatura zasilania | do granicy 45 °C | 35–44 °C; spaliny 2–3 K nad powrotem (pełna kondensacja) |
+| Palenia krótsze niż 5 minut | około 18 na dobę | 1–2 na dobę, głównie zaniki płomienia; 19 listopada, przed poprawką dla 25 °C, 16 |
+| Temperatura w pokoju przy docelowej 22 °C | | 21,6–22,3 °C |
+
+Dogrzewania zasobnika to decyzja kotła i zostały na poziomie 11–16 na dobę, po 2–3 minuty.
+
+Co pokazał dopiero prawdziwy kocioł i co się przez to zmieniło:
+
+- **Kocioł podnosi niską nastawę do swojego minimum.** Przy ogrzewaniu włączonym między blokami Lumea zamieniała nastawę 10 °C na 25 °C i zapalała się na kilka sekund, gdy woda do niej wystygła. SAT odczytuje teraz to minimum (ID 49 i nastawę potwierdzoną przez kocioł) i wyłącza ogrzewanie 1 K nad nim (5.2.0.27–28).
+- **Dogrzewanie zasobnika bez flagi.** Lumea często grzeje zasobnik, nie zgłaszając tego. SAT rozpoznaje takie palenia po wodzie i nie liczy ich jako ogrzewania ani przerwań.
+- **Zaniki płomienia.** Mniej więcej co czwarty start na ogrzewanie tracił płomień w ciągu kilku minut, a kocioł zapalał się sam. Na początku SAT brał to za przerwania i kończył bloki. Teraz je rozróżnia i liczy (`flame_losses_24h`). Blok kończy się dopiero po 4 zanikach, a przy 6 na dobę pojawia się komunikat w Naprawach (5.2.0.29–30). Przyczyna jest wciąż niewyjaśniona, potrzebna jest wizyta serwisu.
+- **Wspólna nauka strat i słońca nie działała.** Z jednej doby danych słońce rosło do granicy 3 kW, a H spadało. Teraz są uczone z osobnych godzin (5.2.0.30). Efektywne straty mieszkania wyszły 45–55 W/K, mniej niż wynikałoby z samych ścian, bo dochodzi ciepło od sąsiadów.
+- **Restart wyglądał jak otwarte okno**, bo pierwsze odczyty skaczą. Teraz przez pierwsze 10 minut po starcie okno nie jest wykrywane (5.2.0.30).
+- **Modulacja przy rozgrzewaniu nic nie dawała.** OpenTherm pozwala tylko ograniczyć maksymalną modulację, a Lumea i tak schodzi na minimum w 90 sekund. Usunąłem ją razem z dynamiczną minimalną nastawą, którą budżet uczynił zbędną (5.2.0.30–31).
+- **Ogrzewanie wychładza zasobnik.** W nocnych logach zasobnik tracił 3–4 K w ciągu kilku minut od każdego startu ogrzewania, choć nikt nie odkręcał wody, a kocioł od razu go dogrzewał. SAT teraz to mierzy i zgłasza w Naprawach (5.2.0.31). Prawdopodobna przyczyna to zawór trójdrogowy, który przełącza się nieczysto.
+- **Odczyt kotła.** Przez OpenTherm Lumea odpowiada na 28 identyfikatorów danych, podaje parametry instalatora (ID 10/11), prędkość wentylatora (ID 35) i kody usterek, ale nie temperaturę wymiennika (ID 34), liczniki ani prąd jonizacji.
+
 ## Ograniczenia i to, czego nie sprawdzono
 
-- Sprawdzone: testy jednostkowe i integracyjne w CI (ruff ze wszystkimi regułami, ty, pytest, hassfest) oraz symulacje budżetu ciepła na dwuwęzłowym modelu wylewki i pokoju.
-- Niesprawdzone: zachowanie na jakimkolwiek prawdziwym kotle (dodatki powstały dla De Dietrich Lumea z OTGW w trybie szeregowym, ale jeszcze tam nie działały); połączenia MQTT, ESPHome i EMS; prawdziwe encje pogody i harmonogramów; pomiar pętli na prawdziwych siłownikach; dokładność szacunków sprawności, przepływu i krzywej.
+- Sprawdzone: testy jednostkowe i integracyjne w CI (ruff ze wszystkimi regułami, ty, pytest, hassfest), symulacje budżetu ciepła na dwuwęzłowym modelu wylewki i pokoju oraz około tygodnia na jednym prawdziwym kotle ([Test na prawdziwym kotle](#test-na-prawdziwym-kotle)): budżet ciepła z nauką, utrzymanie ogrzewania między blokami, śledzenie płomienia, ciepłej wody i usterek, skanowanie i parametry OpenTherm, wykrywanie okna i komunikaty w Naprawach, z prognozą Met.no.
+- Niesprawdzone: inne kotły i marki; połączenia MQTT, ESPHome i EMS; cały sezon grzewczy (mrozy, przekazanie modulacji przy przeciążeniu); harmonogram komfortu, obecność, harmonogram ciepłej wody i przegrzew przeciw legionelli, ochrona przed zamarzaniem i nauka wiatru, których instalacja testowa jeszcze nie używa albo które doszły na końcu; pomiar pętli na prawdziwych siłownikach; dokładność szacunków sprawności, gazu i przepływu (w testowym mieszkaniu nie ma gazomierza w Home Assistancie).
 - Szacunki są szacunkami: opierają się na mocy palnika, własnych czujnikach kotła i podręcznikowych wartościach spalania.
 - Brak migracji wpisu konfiguracji: powrót do oryginalnego SAT v2 to kwestia podmiany plików.
 

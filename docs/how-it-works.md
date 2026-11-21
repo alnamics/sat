@@ -51,7 +51,7 @@ The on/off thermostat (switch, valve or input_boolean) always works this way, si
 ## Heat budget (MPX)
 
 > [!WARNING]
-> Part of this fork's AI-written, unverified additions. See [MPX additions](mpx.md).
+> Part of this fork's AI-written additions, field-tested on one boiler. See [MPX additions](mpx.md#field-test).
 
 For screed underfloor heating behind an oversized boiler, PWM still lights the boiler several times an hour. The heat budget replaces the duty cycle with an energy balance: SAT learns how many watts the house loses per degree of indoor-outdoor difference, works out the heat the next hour needs from the target, the outside temperature, the forecast and the sun, and burns that heat in one block at minimum power. A slow floor does not notice the difference, but the boiler starts a few times less per hour. When the house needs more than the minimum power, control goes back to the heating curve and the boiler's modulation. Details in [MPX additions](mpx.md#heat-budget).
 

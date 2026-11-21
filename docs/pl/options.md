@@ -74,7 +74,7 @@ Sekcja jest domyślnie zwinięta.
 ⓜ Dla wolnych instalacji, np. podłogówki w wylewce. [Szczegóły](mpx.md#budżet-ciepła).
 
 > [!WARNING]
-> Kod napisany przez AI i niesprawdzony, zobacz [Dodatki MPX](mpx.md). Przy wartościach domyślnych SAT steruje kotłem tak jak oryginalny SAT v2.
+> Kod napisany przez AI i sprawdzany tylko na jednym kotle, zobacz [Dodatki MPX](mpx.md#test-na-prawdziwym-kotle). Przy wartościach domyślnych SAT steruje kotłem tak jak oryginalny SAT v2.
 
 - **Budżet ciepła** (Heat budget): Wyłączony (domyślnie), Tylko nauka albo Włączony. Włączony steruje tylko ogrzewaniem podłogowym.
 - **Straty ciepła domu** (Heat loss of the house): w W/K; 0 oznacza naukę (domyślnie, zalecane).

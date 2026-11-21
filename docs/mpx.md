@@ -4,8 +4,9 @@
 
 > [!WARNING]
 > Everything on this page was written by Claude, an AI model, and has not been reviewed by a
-> person or run for long on a real boiler. It passes the automated tests; that is all that is
-> known. Use it at your own risk, turn features on one at a time and watch the boiler.
+> person. It passes the automated tests and has run since mid-November 2026 on one real boiler
+> (see [Field test](#field-test)); nothing else has been tried. Use it at your own risk, turn
+> features on one at a time and watch the boiler.
 
 This page lists what this fork (versions with a fourth number, such as 5.2.0.5) adds to [SAT v2](https://github.com/bellini666/SAT). The settings themselves are in [Options](options.md) (the Control and PWM, Heat budget, Hot water, Presence and windows, and Boiler and service menus); this page explains what they do and how they fit together.
 
@@ -20,6 +21,7 @@ This page lists what this fork (versions with a fourth number, such as 5.2.0.5) 
 - [Repair issues](#repair-issues)
 - [Loop measurement](#loop-measurement)
 - [After a restart](#after-a-restart)
+- [Field test](#field-test)
 - [Limits and what is not verified](#limits-and-what-is-not-verified)
 
 ## Why
@@ -147,10 +149,35 @@ Kept across a restart of Home Assistant or a change of options: the totals, the 
 
 Learned again: what the boiler reads at minimum modulation, the loop monitor's averages and flows, the floor's heat transfer, the efficiency averages, the heat credit and the current block of the heat budget.
 
+## Field test
+
+Since mid-November 2026 the additions have run on one installation: an 87 m² flat in a block from 2021, screed underfloor heating with 8 loops, a De Dietrich Lumea MPX 28/33 BIC (33 kW, minimum about 5 kW, 40 l cylinder) behind a serial OpenTherm Gateway, with a De Dietrich iSense as the room sensor. The [Example](example.md) describes it in full. The numbers below come from the boiler's history in Home Assistant, at 3–8 °C outside.
+
+| | Before: PWM, no heat budget (16–17 Nov) | With the heat budget (20–22 Nov) |
+|---|---|---|
+| Heating burner starts | about 27 a day | 8–10 a day |
+| Typical heating burn | 2–3 minutes, two thirds under 5 | 12–23 minutes, about one block every 2 hours |
+| Flow temperature | up to the 45 °C limit | 35–44 °C; flue gas 2–3 K above the return (full condensing) |
+| Burns under 5 minutes | about 18 a day | 1–2 a day, mostly flame losses; on 19 Nov, before the 25 °C fix, 16 |
+| Room temperature at a 22 °C target | | 21.6–22.3 °C |
+
+Hot water reheats are the boiler's own decision and stayed at 11–16 a day, 2–3 minutes each.
+
+What only the real boiler showed, and what changed because of it:
+
+- **The boiler raises a low setpoint to its own minimum.** With heating kept on between blocks, the Lumea turned the 10 °C off setpoint into 25 °C and lit for a few seconds whenever the water cooled to it. SAT now reads that minimum (ID 49, and the setpoint the boiler confirms) and disables heating at 1 K above it (5.2.0.27–28).
+- **Hot water reheats without the hot water flag.** The Lumea often heats the cylinder without reporting it. SAT tells such burns by the water and does not count them as heating or as cut-outs.
+- **Flame losses.** About a quarter of the heating starts lost the flame within minutes and the boiler relit by itself; at first SAT took them for cut-outs and ended the blocks. They are now told apart, counted (`flame_losses_24h`), end a block only after 4, and raise a repair issue at 6 a day (5.2.0.29–30). The cause is still open; a service visit is due.
+- **Learning heat loss and sun together did not work.** With one day of data the sun rose to its 3 kW limit and H fell; they are now learned from separate hours (5.2.0.30). The house's effective heat loss came out at 45–55 W/K, lower than its walls alone because of the neighbours' heat.
+- **A restart looked like an open window**, because the first readings jump; there is now a 10 minute start guard (5.2.0.30).
+- **Warm-up modulation did nothing**: OpenTherm only caps the maximum modulation, and the Lumea turns itself down within 90 seconds anyway. It was removed, together with the dynamic minimum setpoint, which the budget made pointless (5.2.0.30–31).
+- **Heating cools the hot water cylinder.** In the night logs the cylinder dropped 3–4 K within minutes of every heating start, with no tap open, and the boiler reheated it straight after. SAT now measures this and raises a repair issue (5.2.0.31); a diverter valve that does not switch cleanly is the likely cause.
+- **Reading the boiler.** Over OpenTherm the Lumea answers 28 data IDs, gives its installer parameters (ID 10/11), fan speed (ID 35) and fault codes, but not its exchanger temperature (ID 34), counters or flame current.
+
 ## Limits and what is not verified
 
-- Verified: unit and integration tests in CI (ruff with all rules, ty, pytest, hassfest), and simulations of the heat budget on a two-node screed and room model.
-- Not verified: behaviour on any real boiler (the additions were written for a De Dietrich Lumea on a serial OTGW, but not yet run there); MQTT, ESPHome and EMS connections; real weather and schedule entities; the loop measurement on real actuators; the accuracy of the efficiency, flow and curve estimates.
+- Verified: unit and integration tests in CI (ruff with all rules, ty, pytest, hassfest), simulations of the heat budget on a two-node screed and room model, and about a week on one real boiler ([Field test](#field-test)): the heat budget with its learning, keep heating between blocks, the flame, hot water and fault tracking, the OpenTherm scan and parameters, the window detection and the repair issues, with a Met.no weather forecast.
+- Not verified: other boilers and brands; MQTT, ESPHome and EMS connections; a heating season (frost, a whole winter, the overload hand-over); the comfort schedule, presence, hot water schedule and legionella boost, frost protection and the wind learning, which the test installation does not use yet or added last; the loop measurement on real actuators; the accuracy of the efficiency, gas and flow estimates (there is no gas meter in the test home).
 - The estimates are estimates: they rest on the burner power, the boiler's own sensors and textbook combustion values.
 - No config entry migration: going back to upstream SAT v2 is a matter of replacing the files.
 

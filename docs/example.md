@@ -5,7 +5,7 @@
 > [!WARNING]
 > The description and numbers come from the first weeks of this fork on one installation
 > (November 2026). The code was written by Claude, an AI model; it has not been reviewed by a
-> person. Another house will give other numbers.
+> person. Another house will give other numbers. Before and after: [Field test](mpx.md#field-test).
 
 This page follows one flat to show what SAT does with the boiler: when and how long it burns, what it does in between, how it deals with hot water and flame losses and what it learns about the house. The general description is in [How SAT works](how-it-works.md) and [MPX additions](mpx.md).
 

@@ -51,7 +51,7 @@ Termostat dwustanowy (switch, valve albo input_boolean) zawsze działa w ten spo
 ## Budżet ciepła (MPX)
 
 > [!WARNING]
-> Część dodatków tego forka, napisanych przez AI i niesprawdzonych. Zobacz [Dodatki MPX](mpx.md).
+> Część dodatków tego forka, napisanych przez AI i sprawdzanych na jednym kotle. Zobacz [Dodatki MPX](mpx.md#test-na-prawdziwym-kotle).
 
 Przy ogrzewaniu podłogowym w wylewce i przewymiarowanym kotle PWM nadal zapala kocioł kilka razy na godzinę. Budżet ciepła zastępuje wypełnienie cyklu bilansem energii: SAT uczy się, ile watów dom traci na każdy stopień różnicy temperatur wewnątrz i na zewnątrz, wylicza ciepło potrzebne na następną godzinę z temperatury zadanej, temperatury zewnętrznej, prognozy i słońca, i spala je w jednym bloku na mocy minimalnej. Powolna podłoga nie zauważa różnicy, a kocioł startuje kilka razy rzadziej na godzinę. Gdy dom potrzebuje więcej niż moc minimalna, sterowanie wraca do krzywej grzewczej i modulacji kotła. Szczegóły na stronie [Dodatki MPX](mpx.md#budżet-ciepła).
 

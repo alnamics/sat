@@ -6,22 +6,29 @@
 🇬🇧 [English version](README.md)
 
 > [!WARNING]
-> **Kod eksperymentalny, napisany przez AI i niesprawdzony. Używasz na własne ryzyko.**
+> **Kod eksperymentalny, napisany przez AI, sprawdzany na jednym kotle. Używasz na własne
+> ryzyko.**
 >
 > Dodatki w tym forku (wersje z czwartą liczbą, np. `5.2.0.5`) napisał
 > [Claude](https://claude.ai), model AI firmy Anthropic, w rozmowie z właścicielem forka.
-> Przechodzą testy automatyczne (testy jednostkowe, ruff, ty, hassfest), ale **nikt ich nie
-> sprawdził ręcznie ani nie uruchamiał dłużej na prawdziwym kotle**. Sterują kotłem gazowym:
-> błąd może oznaczać zimny dom, zmarnowany gaz, przegrzaną podłogę albo blokadę kotła.
-> Przeczytaj kod, zanim go użyjesz, zrób kopię zapasową, obserwuj kocioł po instalacji i miej
-> pod ręką oryginalny [SAT v2](https://github.com/bellini666/SAT), żeby móc do niego wrócić.
-> Autorzy SAT nie mają z tymi dodatkami nic wspólnego i ich nie popierają.
+> Przechodzą testy automatyczne (testy jednostkowe, ruff, ty, hassfest) i **od połowy listopada
+> 2026 pracują na jednej prawdziwej instalacji**: kotle De Dietrich Lumea MPX 28/33 BIC na
+> podłogówce w wylewce, za bramką OpenTherm Gateway (port szeregowy) z termostatem De Dietrich
+> iSense. Kodu nie sprawdził człowiek i nie próbowano niczego innego (innych kotłów, MQTT,
+> ESPHome, EMS). Sterują kotłem gazowym: błąd może oznaczać zimny dom, zmarnowany gaz,
+> przegrzaną podłogę albo blokadę kotła. Przeczytaj kod, zanim go użyjesz, zrób kopię zapasową,
+> obserwuj kocioł po instalacji i miej pod ręką oryginalny
+> [SAT v2](https://github.com/bellini666/SAT), żeby móc do niego wrócić. Autorzy SAT nie mają
+> z tymi dodatkami nic wspólnego i ich nie popierają. Co pokazał test na kotle:
+> [Dodatki MPX → Test na prawdziwym kotle](docs/pl/mpx.md#test-na-prawdziwym-kotle).
 
 SAT to inteligentny termostat dla Home Assistanta, który steruje kotłem.
 
 Zwykły termostat włącza i wyłącza kocioł, a kocioł grzeje wodę do stałej, często wysokiej temperatury. SAT wylicza najniższą temperaturę wody, która utrzyma w domu temperaturę zadaną, na podstawie temperatury zewnętrznej i tego, ile brakuje w każdym pokoju, i wysyła ją do kotła. Chłodniejsza woda to mniej gazu i mniej włączeń kotła.
 
 Ten fork powstał na bazie [SAT v2 Thiago Belliniego Ribeiro](https://github.com/bellini666/SAT), który sam jest forkiem oryginalnego [Smart Autotune Thermostat](https://github.com/Alexwijn/SAT) autorstwa [Alexa Wijnholdsa](https://github.com/Alexwijn). Został napisany dla przewymiarowanego kotła kondensacyjnego z zasobnikiem (De Dietrich Lumea, 33 kW, minimum około 5 kW) pracującego na ogrzewanie podłogowe w wylewce, za bramką OpenTherm Gateway. Dodaje to, czego taka instalacja potrzebuje, żeby kocioł przestał taktować i zużywał mniej gazu. Wszystko, co nowe, jest wyłączone albo tylko informuje, dopóki tego nie włączysz.
+
+Na testowym kotle budżet ciepła zmniejszył liczbę startów na ogrzewanie z około 27 do 8–10 na dobę, z paleniami po 12–23 minuty zamiast 2–3 i wodą o temperaturze 35–44 °C. Prawdziwy kocioł pokazał też kilka rzeczy, których nie wychwyciły testy; są już poprawione ([test na prawdziwym kotle](docs/pl/mpx.md#test-na-prawdziwym-kotle)).
 
 ## Co dodaje ten fork
 

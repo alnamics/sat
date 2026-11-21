@@ -6,25 +6,30 @@
 🇵🇱 [Polska wersja](README.pl.md)
 
 > [!WARNING]
-> **Experimental, AI-written, unverified code. Use at your own risk.**
+> **Experimental, AI-written code, field-tested on one boiler. Use at your own risk.**
 >
 > The additions in this fork (versions with a fourth number, such as `5.2.0.5`) were written by
 > [Claude](https://claude.ai), an AI model by Anthropic, in a conversation with the fork's owner.
-> They pass the automated test suite (unit tests, ruff, ty, hassfest), but **they have not been
-> reviewed by a person or run on a real boiler for any length of time**. They control a gas
-> boiler: a mistake can mean a cold house, wasted gas, an overheated floor or a boiler lockout.
-> Read the code before you use it, keep a backup, watch your boiler closely after installing, and
-> keep the original [SAT v2](https://github.com/bellini666/SAT) at hand to go back to. Nothing
-> here is endorsed by the authors of SAT.
+> They pass the automated test suite (unit tests, ruff, ty, hassfest) and **have run since
+> mid-November 2026 on one real installation**: a De Dietrich Lumea MPX 28/33 BIC on screed
+> underfloor heating, behind a serial OpenTherm Gateway with a De Dietrich iSense thermostat.
+> The code has not been reviewed by a person, and nothing else (other boilers, MQTT, ESPHome,
+> EMS) has been tried. It controls a gas boiler: a mistake can mean a cold house, wasted gas,
+> an overheated floor or a boiler lockout. Read the code before you use it, keep a backup, watch
+> your boiler after installing, and keep the original
+> [SAT v2](https://github.com/bellini666/SAT) at hand to go back to. Nothing here is endorsed by
+> the authors of SAT. What the field test showed: [MPX additions → Field test][field].
 >
-> **Kod eksperymentalny, napisany przez AI i niesprawdzony. Używasz na własne ryzyko.**
-> Polski opis: [README.pl.md](README.pl.md).
+> **Kod eksperymentalny, napisany przez AI, sprawdzany na jednym kotle. Używasz na własne
+> ryzyko.** Polski opis: [README.pl.md](README.pl.md).
 
 SAT is a smart thermostat for Home Assistant that controls your boiler.
 
 A regular thermostat turns the boiler on and off, and the boiler heats its water to a fixed, often high, temperature. SAT works out the lowest water temperature that keeps your home at the target, from the outside temperature and how far each room is from its target, and sends that to the boiler. Cooler water means less gas and fewer on/off cycles.
 
 This fork builds on [SAT v2 by Thiago Bellini Ribeiro](https://github.com/bellini666/SAT), itself a fork of the original [Smart Autotune Thermostat](https://github.com/Alexwijn/SAT) by [Alex Wijnholds](https://github.com/Alexwijn). It was written for an oversized condensing combi boiler (De Dietrich Lumea, 33 kW, minimum about 5 kW) on screed underfloor heating behind an OpenTherm Gateway, and adds what such a setup needs to stop short cycling and save gas. Everything new is off, or only informs, until you turn it on.
+
+On the test boiler the heat budget cut heating starts from about 27 to 8–10 a day, with burns of 12–23 minutes instead of 2–3 and the water at 35–44 °C; the real boiler also showed several things no test had, which are fixed now ([field test][field]).
 
 ## What this fork adds
 
@@ -114,6 +119,7 @@ SAT is the work of [Alex Wijnholds](https://github.com/Alexwijn) and [Thiago Bel
 <!-- References -->
 
 [repository]: https://github.com/alnamics/sat
+[field]: docs/mpx.md#field-test
 [mpx]: docs/mpx.md
 [example]: docs/example.md
 [setup]: docs/setup.md

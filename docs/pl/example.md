@@ -5,6 +5,7 @@
 > [!WARNING]
 > Opis i liczby pochodzą z pierwszych tygodni pracy tego forka na jednej instalacji (listopad 2026).
 > Kod napisał Claude, model AI; nie był sprawdzany przez człowieka. Wartości w innym domu będą inne.
+> Przed i po: [Test na prawdziwym kotle](mpx.md#test-na-prawdziwym-kotle).
 
 Ta strona pokazuje na jednym konkretnym mieszkaniu, co SAT robi z kotłem: kiedy i jak długo pali, co robi w przerwach, jak radzi sobie z ciepłą wodą i zanikami płomienia oraz czego uczy się o domu. Opis ogólny jest w [Jak działa SAT](how-it-works.md) i [Dodatki MPX](mpx.md).
 

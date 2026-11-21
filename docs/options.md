@@ -74,7 +74,7 @@ This section is collapsed by default.
 ⓜ For slow emitters such as screed underfloor heating. [Details](mpx.md#heat-budget).
 
 > [!WARNING]
-> AI-written, unreviewed code, see [MPX additions](mpx.md). With the defaults SAT drives the boiler as the original SAT v2 does.
+> AI-written code, field-tested on one boiler only, see [MPX additions](mpx.md#field-test). With the defaults SAT drives the boiler as the original SAT v2 does.
 
 - **Heat budget**: Off (default), Learn only or On. On controls underfloor heating only.
 - **Heat loss of the house**: in W/K; 0 learns it (default, recommended).
