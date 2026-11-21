@@ -384,13 +384,15 @@ class BoilerDiagnostics:
         if self._store is not None:
             self._store.async_delay_save(self._data, 1)
 
-        if (drop := self.cylinder_drop) is None:
+        if (median_drop := self.cylinder_drop) is None:
             return
-        if drop >= CYLINDER_DROP:
+        if median_drop >= CYLINDER_DROP:
             self._set(
-                "cylinder_cools_in_heating", active=True, placeholders={"drop": f"{drop:.1f}"}
+                "cylinder_cools_in_heating",
+                active=True,
+                placeholders={"drop": f"{median_drop:.1f}"},
             )
-        elif drop <= CYLINDER_DROP_CLEARED:
+        elif median_drop <= CYLINDER_DROP_CLEARED:
             self._set("cylinder_cools_in_heating", active=False)
 
     def _update_screed(self, now: float, *, flow: float | None, heating_burn: bool) -> None:
