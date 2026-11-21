@@ -2399,8 +2399,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         if self.heat_budget is None:
             return
 
-        if not self._anti_cycling_configured and (
-            learned := self._coordinator.learned_relight_wait_seconds
+        if (
+            not self._anti_cycling_configured
+            and (learned := self._coordinator.learned_relight_wait_seconds) is not None
         ):
             self.heat_budget.set_minimum_off(learned)
         self.heat_budget.update(self._heat_budget_inputs())
