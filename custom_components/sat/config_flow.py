@@ -157,6 +157,29 @@ DEFAULT_NAME = "Living Room"
 _LOGGER = logging.getLogger(__name__)
 
 
+def _choice(
+    key: str, values: list[str], mode: SelectSelectorMode = SelectSelectorMode.DROPDOWN
+) -> selector.SelectSelector:
+    """Return a drop-down whose labels come from the translations (selector.<key>)."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[str(value) for value in values], translation_key=key, mode=mode
+        )
+    )
+
+
+def _number(
+    minimum: float, maximum: float, step: float, unit: str | None = None
+) -> selector.NumberSelector:
+    """Return a number typed into a box, with its unit."""
+    config = selector.NumberSelectorConfig(
+        min=minimum, max=maximum, step=step, mode=selector.NumberSelectorMode.BOX
+    )
+    if unit is not None:
+        config["unit_of_measurement"] = unit
+    return selector.NumberSelector(config)
+
+
 class SatFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for SAT."""
 
@@ -263,20 +286,8 @@ class SatFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             errors=self.errors,
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_MODE): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            mode=SelectSelectorMode.DROPDOWN,
-                            options=[
-                                selector.SelectOptionDict(
-                                    value=MODE_MQTT_OPENTHERM,
-                                    label="OpenTherm Gateway (For advanced boiler control)",
-                                ),
-                                selector.SelectOptionDict(
-                                    value=MODE_MQTT_EMS,
-                                    label="EMS-ESP (For Bosch, Junkers, Buderus systems)",
-                                ),
-                            ],
-                        )
+                    vol.Required(CONF_MODE): _choice(
+                        "mqtt_mode", [MODE_MQTT_OPENTHERM, MODE_MQTT_EMS]
                     ),
                 }
             ),
@@ -522,16 +533,14 @@ class SatFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         default=self.data.get(
                             CONF_HEATING_SYSTEM, OPTIONS_DEFAULTS[CONF_HEATING_SYSTEM]
                         ),
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                SelectOptionDict(value=HEATING_SYSTEM_RADIATORS, label="Radiators"),
-                                SelectOptionDict(value=HEATING_SYSTEM_HEAT_PUMP, label="Heat Pump"),
-                                SelectOptionDict(
-                                    value=HEATING_SYSTEM_UNDERFLOOR, label="Underfloor"
-                                ),
-                            ]
-                        )
+                    ): _choice(
+                        "heating_system",
+                        [
+                            HEATING_SYSTEM_RADIATORS,
+                            HEATING_SYSTEM_UNDERFLOOR,
+                            HEATING_SYSTEM_HEAT_PUMP,
+                        ],
+                        mode=SelectSelectorMode.LIST,
                     )
                 }
             ),
@@ -896,9 +905,11 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
     """Config flow options handler."""
 
     async def async_step_init(self, _user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(
-            step_id="init", menu_options=["general", "presets", "system_configuration"]
-        )
+        menu = ["general", "presets", "system_configuration"]
+        if self._takes_setpoint:
+            menu += ["heat_budget", "hot_water", "presence"]
+        menu.append("boiler")
+        return self.async_show_menu(step_id="init", menu_options=menu)
 
     async def async_step_general(
         self, _user_input: dict[str, Any] | None = None
@@ -924,28 +935,11 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             vol.Required(
                 CONF_PID_CONTROLLER_VERSION, default=str(options[CONF_PID_CONTROLLER_VERSION])
             )
-        ] = selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                mode=SelectSelectorMode.DROPDOWN,
-                options=[
-                    selector.SelectOptionDict(value="1", label="Classic Controller"),
-                    selector.SelectOptionDict(value="2", label="Improved Controller"),
-                    selector.SelectOptionDict(value="3", label="Adaptive Controller"),
-                ],
-            )
-        )
+        ] = _choice("pid_controller_version", ["1", "2", "3"])
 
         if len(self.config_entry.data.get(CONF_ROOMS, [])) > 0:
             schema[vol.Required(CONF_HEATING_MODE, default=str(options[CONF_HEATING_MODE]))] = (
-                selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        mode=SelectSelectorMode.DROPDOWN,
-                        options=[
-                            selector.SelectOptionDict(value=HEATING_MODE_COMFORT, label="Comfort"),
-                            selector.SelectOptionDict(value=HEATING_MODE_ECO, label="Eco"),
-                        ],
-                    )
-                )
+                _choice("heating_mode", [HEATING_MODE_COMFORT, HEATING_MODE_ECO])
             )
 
         schema[vol.Required(CONF_MAXIMUM_SETPOINT, default=maximum_setpoint)] = (
@@ -1086,25 +1080,25 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if _user_input is not None:
-            advanced = _user_input["advanced"]
+            advanced = _user_input.get("advanced", {})
             if (
-                convert_time_str_to_seconds(advanced[CONF_CALIBRATION_FLAME_TIMEOUT]) == 0
-                or convert_time_str_to_seconds(advanced[CONF_CALIBRATION_PLATEAU_TIMEOUT])
+                convert_time_str_to_seconds(
+                    advanced.get(
+                        CONF_CALIBRATION_FLAME_TIMEOUT,
+                        OPTIONS_DEFAULTS[CONF_CALIBRATION_FLAME_TIMEOUT],
+                    )
+                )
+                == 0
+                or convert_time_str_to_seconds(
+                    advanced.get(
+                        CONF_CALIBRATION_PLATEAU_TIMEOUT,
+                        OPTIONS_DEFAULTS[CONF_CALIBRATION_PLATEAU_TIMEOUT],
+                    )
+                )
                 < PLATEAU_WINDOW.total_seconds()
             ):
                 errors["base"] = "calibration_timeout"
             else:
-                # A cleared optional entity is left out of the input, which would keep the old one
-                if self.config_entry.data.get(CONF_MODE) != MODE_SWITCH:
-                    for key in (
-                        CONF_WEATHER_FORECAST_ENTITY_ID,
-                        CONF_COMFORT_SCHEDULE_ENTITY_ID,
-                        CONF_HOT_WATER_SCHEDULE_ENTITY_ID,
-                        CONF_PROXIMITY_ENTITY_ID,
-                        CONF_LAST_SERVICE_DATE,
-                    ):
-                        advanced.setdefault(key, None)
-                    advanced.setdefault(CONF_PRESENCE_ENTITY_IDS, [])
                 return await self.update_options(_user_input)
 
         options = await self.get_options()
@@ -1113,235 +1107,72 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             vol.Required(
                 CONF_AUTOMATIC_DUTY_CYCLE, default=options[CONF_AUTOMATIC_DUTY_CYCLE]
             ): bool,
-            vol.Required(
-                CONF_SYNC_CLIMATES_WITH_MODE, default=options[CONF_SYNC_CLIMATES_WITH_MODE]
-            ): bool,
         }
 
         heating_system = self.config_entry.data.get(CONF_HEATING_SYSTEM)
-
-        if heating_system == HEATING_SYSTEM_HEAT_PUMP:
+        cycles = {
+            HEATING_SYSTEM_HEAT_PUMP: ["2", "3"],
+            HEATING_SYSTEM_RADIATORS: ["3", "4"],
+            # An underfloor screed stores heat for hours, so it tolerates fewer, longer cycles
+            HEATING_SYSTEM_UNDERFLOOR: ["1", "2", "3", "4"],
+        }.get(str(heating_system))
+        if cycles is not None:
             schema[
                 vol.Required(CONF_CYCLES_PER_HOUR, default=str(options[CONF_CYCLES_PER_HOUR]))
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value="2", label="Normal (2x per hour)"),
-                        selector.SelectOptionDict(value="3", label="High (3x per hour)"),
-                    ],
-                )
-            )
+            ] = _choice("cycles_per_hour", cycles)
 
-        if heating_system == HEATING_SYSTEM_RADIATORS:
-            schema[
-                vol.Required(CONF_CYCLES_PER_HOUR, default=str(options[CONF_CYCLES_PER_HOUR]))
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value="3", label="Normal (3x per hour)"),
-                        selector.SelectOptionDict(value="4", label="High (4x per hour)"),
-                    ],
-                )
+        schema[
+            vol.Required(
+                CONF_SYNC_CLIMATES_WITH_MODE, default=options[CONF_SYNC_CLIMATES_WITH_MODE]
             )
-
-        # An underfloor screed stores heat for hours, so it tolerates fewer, longer cycles
-        if heating_system == HEATING_SYSTEM_UNDERFLOOR:
-            schema[
-                vol.Required(CONF_CYCLES_PER_HOUR, default=str(options[CONF_CYCLES_PER_HOUR]))
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value="1", label="Minimal (1x per hour)"),
-                        selector.SelectOptionDict(value="2", label="Low (2x per hour)"),
-                        selector.SelectOptionDict(value="3", label="Normal (3x per hour)"),
-                        selector.SelectOptionDict(value="4", label="High (4x per hour)"),
-                    ],
-                )
-            )
-
+        ] = bool
+        schema[vol.Required(CONF_DEFAULT_HVAC_MODE, default=options[CONF_DEFAULT_HVAC_MODE])] = (
+            _choice("default_hvac_mode", [climate.HVACMode.HEAT, climate.HVACMode.OFF])
+        )
         schema[
             vol.Required(CONF_SENSOR_MAX_VALUE_AGE, default=options[CONF_SENSOR_MAX_VALUE_AGE])
         ] = selector.TimeSelector()
-        schema[vol.Required(CONF_DEFAULT_HVAC_MODE, default=options[CONF_DEFAULT_HVAC_MODE])] = (
-            selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value=climate.HVACMode.HEAT, label="Heat"),
-                        selector.SelectOptionDict(value=climate.HVACMode.OFF, label="Off"),
-                    ],
-                )
-            )
-        )
         schema[
             vol.Required(
                 CONF_WINDOW_MINIMUM_OPEN_TIME, default=options[CONF_WINDOW_MINIMUM_OPEN_TIME]
             )
         ] = selector.TimeSelector()
 
-        advanced: dict[Marker, Any] = {
-            vol.Required(CONF_SIMULATION, default=options[CONF_SIMULATION]): bool,
-            vol.Required(CONF_THERMAL_COMFORT, default=options[CONF_THERMAL_COMFORT]): bool,
-        }
-
-        if self.config_entry.data.get(CONF_MODE) in [
-            MODE_MQTT_OPENTHERM,
-            MODE_SERIAL,
-            MODE_SIMULATOR,
-        ]:
+        advanced: dict[Marker, Any] = {}
+        if self._opentherm:
             advanced[
                 vol.Required(
                     CONF_FORCE_PULSE_WIDTH_MODULATION,
                     default=options[CONF_FORCE_PULSE_WIDTH_MODULATION],
                 )
             ] = bool
-
             advanced[
                 vol.Required(
                     CONF_LEARN_OVERSHOOT_PROTECTION,
                     default=options[CONF_LEARN_OVERSHOOT_PROTECTION],
                 )
             ] = bool
-
-            advanced[
-                vol.Required(CONF_MINIMUM_CONSUMPTION, default=options[CONF_MINIMUM_CONSUMPTION])
-            ] = selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=8, step=0.1))
-
-            advanced[
-                vol.Required(CONF_MAXIMUM_CONSUMPTION, default=options[CONF_MAXIMUM_CONSUMPTION])
-            ] = selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=8, step=0.1))
-
-            advanced[
-                vol.Required(CONF_GAS_ENERGY_CONTENT, default=options[CONF_GAS_ENERGY_CONTENT])
-            ] = selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=5,
-                    max=30,
-                    step=0.1,
-                    unit_of_measurement="kWh/m³",
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            )
-
-        advanced[
-            vol.Required(CONF_CLIMATE_VALVE_OFFSET, default=options[CONF_CLIMATE_VALVE_OFFSET])
-        ] = selector.NumberSelector(selector.NumberSelectorConfig(min=-1, max=1, step=0.1))
-
-        advanced[
-            vol.Required(
-                CONF_TARGET_TEMPERATURE_STEP, default=options[CONF_TARGET_TEMPERATURE_STEP]
-            )
-        ] = selector.NumberSelector(selector.NumberSelectorConfig(min=0.1, max=1, step=0.05))
-
-        advanced[
-            vol.Required(
-                CONF_MAXIMUM_RELATIVE_MODULATION, default=options[CONF_MAXIMUM_RELATIVE_MODULATION]
-            )
-        ] = selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=100, step=1))
-
-        advanced[vol.Required(CONF_SAMPLE_TIME, default=options[CONF_SAMPLE_TIME])] = (
-            selector.TimeSelector()
-        )
         advanced[
             vol.Required(
                 CONF_PWM_SHORT_BURNS_THRESHOLD, default=options[CONF_PWM_SHORT_BURNS_THRESHOLD]
             )
-        ] = selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=1, max=3, step=1, mode=selector.NumberSelectorMode.BOX
-            )
-        )
+        ] = _number(1, 3, 1)
         advanced[
             vol.Required(
-                CONF_BOILER_ANTI_CYCLING_TIME, default=options[CONF_BOILER_ANTI_CYCLING_TIME]
+                CONF_MAXIMUM_RELATIVE_MODULATION, default=options[CONF_MAXIMUM_RELATIVE_MODULATION]
             )
-        ] = selector.TimeSelector()
+        ] = _number(0, 100, 1, "%")
         advanced[
-            vol.Required(CONF_VALVE_OPENING_TIME, default=options[CONF_VALVE_OPENING_TIME])
-        ] = selector.TimeSelector()
-
-        # Only a boiler that takes a setpoint can idle with heating enabled
-        if self.config_entry.data.get(CONF_MODE) != MODE_SWITCH:
-            advanced[
-                vol.Required(
-                    CONF_KEEP_HEATING_IN_PWM_OFF, default=options[CONF_KEEP_HEATING_IN_PWM_OFF]
-                )
-            ] = bool
-
-            # Heat budget: learn the house and dose the burner in long blocks
-            advanced[
-                vol.Required(CONF_HEAT_BUDGET_MODE, default=options[CONF_HEAT_BUDGET_MODE])
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value=HEAT_BUDGET_OFF, label="Off"),
-                        selector.SelectOptionDict(
-                            value=HEAT_BUDGET_SHADOW, label="Learn only (shadow)"
-                        ),
-                        selector.SelectOptionDict(value=HEAT_BUDGET_ON, label="On"),
-                    ],
-                )
+            vol.Required(CONF_CLIMATE_VALVE_OFFSET, default=options[CONF_CLIMATE_VALVE_OFFSET])
+        ] = _number(-1, 1, 0.1)
+        advanced[
+            vol.Required(
+                CONF_TARGET_TEMPERATURE_STEP, default=options[CONF_TARGET_TEMPERATURE_STEP]
             )
-            advanced[
-                vol.Required(CONF_HEAT_BUDGET_PERIOD, default=str(options[CONF_HEAT_BUDGET_PERIOD]))
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value="30", label="30 minutes"),
-                        selector.SelectOptionDict(value="60", label="60 minutes"),
-                        selector.SelectOptionDict(value="90", label="90 minutes"),
-                        selector.SelectOptionDict(value="120", label="120 minutes"),
-                    ],
-                )
-            )
-            advanced[
-                vol.Required(
-                    CONF_HEAT_BUDGET_MINIMUM_BURN,
-                    default=options[CONF_HEAT_BUDGET_MINIMUM_BURN],
-                )
-            ] = selector.TimeSelector()
-            advanced[
-                vol.Required(
-                    CONF_HEAT_LOSS_COEFFICIENT, default=options[CONF_HEAT_LOSS_COEFFICIENT]
-                )
-            ] = selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    max=600,
-                    step=5,
-                    unit_of_measurement="W/K",
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            )
-            advanced[
-                vol.Optional(
-                    CONF_WEATHER_FORECAST_ENTITY_ID,
-                    description={"suggested_value": options[CONF_WEATHER_FORECAST_ENTITY_ID]},
-                )
-            ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="weather"))
-            advanced[
-                vol.Optional(
-                    CONF_COMFORT_SCHEDULE_ENTITY_ID,
-                    description={"suggested_value": options[CONF_COMFORT_SCHEDULE_ENTITY_ID]},
-                )
-            ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="schedule"))
-            advanced[
-                vol.Required(CONF_SETBACK_TEMPERATURE, default=options[CONF_SETBACK_TEMPERATURE])
-            ] = selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    max=3,
-                    step=0.5,
-                    unit_of_measurement="°C",
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            )
-            self._add_extra_options(advanced, options)
+        ] = _number(0.1, 1, 0.05, "°C")
+        advanced[vol.Required(CONF_SAMPLE_TIME, default=options[CONF_SAMPLE_TIME])] = (
+            selector.TimeSelector()
+        )
         advanced[
             vol.Required(
                 CONF_CALIBRATION_FLAME_TIMEOUT, default=options[CONF_CALIBRATION_FLAME_TIMEOUT]
@@ -1352,6 +1183,8 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
                 CONF_CALIBRATION_PLATEAU_TIMEOUT, default=options[CONF_CALIBRATION_PLATEAU_TIMEOUT]
             )
         ] = selector.TimeSelector()
+        advanced[vol.Required(CONF_THERMAL_COMFORT, default=options[CONF_THERMAL_COMFORT])] = bool
+        advanced[vol.Required(CONF_SIMULATION, default=options[CONF_SIMULATION])] = bool
 
         schema[vol.Required("advanced")] = section(vol.Schema(advanced), {"collapsed": True})
 
@@ -1361,100 +1194,186 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             errors=errors,
         )
 
-    @staticmethod
-    def _add_extra_options(advanced: dict[Marker, Any], options: dict[str, Any]) -> None:
-        """Add warm weather, hot water, presence, window, service and cost settings."""
+    @property
+    def _opentherm(self) -> bool:
+        """Whether the gateway reports modulation and takes a maximum modulation."""
+        return self.config_entry.data.get(CONF_MODE) in [
+            MODE_MQTT_OPENTHERM,
+            MODE_SERIAL,
+            MODE_SIMULATOR,
+        ]
 
-        def number(minimum: float, maximum: float, step: float, unit: str | None = None) -> Any:  # noqa: ANN401
-            config = selector.NumberSelectorConfig(
-                min=minimum, max=maximum, step=step, mode=selector.NumberSelectorMode.BOX
+    @property
+    def _takes_setpoint(self) -> bool:
+        """Whether the boiler takes a flow setpoint (everything but a plain switch)."""
+        return self.config_entry.data.get(CONF_MODE) != MODE_SWITCH
+
+    def _optional(self, key: str, options: dict[str, Any]) -> vol.Optional:
+        return vol.Optional(key, description={"suggested_value": options.get(key)})
+
+    async def _update_with_cleared(
+        self, _user_input: dict[str, Any], keys: tuple[str, ...], lists: tuple[str, ...] = ()
+    ) -> ConfigFlowResult:
+        # A cleared optional entity is left out of the input, which would keep the old one
+        for key in keys:
+            _user_input.setdefault(key, None)
+        for key in lists:
+            _user_input.setdefault(key, [])
+        return await self.update_options(_user_input)
+
+    async def async_step_heat_budget(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if _user_input is not None:
+            return await self._update_with_cleared(
+                _user_input, (CONF_WEATHER_FORECAST_ENTITY_ID, CONF_COMFORT_SCHEDULE_ENTITY_ID)
             )
-            if unit is not None:
-                config["unit_of_measurement"] = unit
-            return selector.NumberSelector(config)
 
-        def optional(key: str) -> vol.Optional:
-            return vol.Optional(key, description={"suggested_value": options.get(key)})
+        options = await self.get_options()
+        schema: dict[Marker, Any] = {
+            vol.Required(CONF_HEAT_BUDGET_MODE, default=options[CONF_HEAT_BUDGET_MODE]): _choice(
+                "heat_budget_mode", [HEAT_BUDGET_OFF, HEAT_BUDGET_SHADOW, HEAT_BUDGET_ON]
+            ),
+            vol.Required(
+                CONF_HEAT_LOSS_COEFFICIENT, default=options[CONF_HEAT_LOSS_COEFFICIENT]
+            ): _number(0, 600, 5, "W/K"),
+            vol.Required(
+                CONF_HEAT_BUDGET_PERIOD, default=str(options[CONF_HEAT_BUDGET_PERIOD])
+            ): _choice("heat_budget_period", ["30", "60", "90", "120"]),
+            vol.Required(
+                CONF_HEAT_BUDGET_MINIMUM_BURN, default=options[CONF_HEAT_BUDGET_MINIMUM_BURN]
+            ): selector.TimeSelector(),
+            self._optional(CONF_WEATHER_FORECAST_ENTITY_ID, options): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            ),
+            self._optional(CONF_COMFORT_SCHEDULE_ENTITY_ID, options): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="schedule")
+            ),
+            vol.Required(
+                CONF_SETBACK_TEMPERATURE, default=options[CONF_SETBACK_TEMPERATURE]
+            ): _number(0, 3, 0.5, "°C"),
+            vol.Required(
+                CONF_WARM_WEATHER_SHUTDOWN, default=options[CONF_WARM_WEATHER_SHUTDOWN]
+            ): _number(0, 25, 0.5, "°C"),
+        }
+        return self.async_show_form(step_id="heat_budget", data_schema=vol.Schema(schema))
 
-        advanced[
-            vol.Required(CONF_WARM_WEATHER_SHUTDOWN, default=options[CONF_WARM_WEATHER_SHUTDOWN])
-        ] = number(0, 25, 0.5, "°C")
-        advanced[optional(CONF_HOT_WATER_SCHEDULE_ENTITY_ID)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="schedule")
+    async def async_step_boiler(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if _user_input is not None:
+            return await self._update_with_cleared(
+                _user_input, (CONF_LAST_SERVICE_DATE,) if self._takes_setpoint else ()
+            )
+
+        options = await self.get_options()
+        schema: dict[Marker, Any] = {}
+        if self._takes_setpoint:
+            # Only a boiler that takes a setpoint can idle with heating enabled
+            schema[
+                vol.Required(
+                    CONF_KEEP_HEATING_IN_PWM_OFF, default=options[CONF_KEEP_HEATING_IN_PWM_OFF]
+                )
+            ] = bool
+        schema[
+            vol.Required(
+                CONF_BOILER_ANTI_CYCLING_TIME, default=options[CONF_BOILER_ANTI_CYCLING_TIME]
+            )
+        ] = selector.TimeSelector()
+        schema[vol.Required(CONF_VALVE_OPENING_TIME, default=options[CONF_VALVE_OPENING_TIME])] = (
+            selector.TimeSelector()
         )
-        advanced[
+        if self._takes_setpoint:
+            schema[
+                vol.Required(
+                    CONF_SCREED_MAXIMUM_TEMPERATURE,
+                    default=options[CONF_SCREED_MAXIMUM_TEMPERATURE],
+                )
+            ] = _number(0, 70, 1, "°C")
+            schema[
+                vol.Required(CONF_CONDENSING_BOILER, default=options[CONF_CONDENSING_BOILER])
+            ] = bool
+        if self._opentherm:
+            schema[
+                vol.Required(CONF_MINIMUM_CONSUMPTION, default=options[CONF_MINIMUM_CONSUMPTION])
+            ] = _number(0, 8, 0.1, "m³/h")
+            schema[
+                vol.Required(CONF_MAXIMUM_CONSUMPTION, default=options[CONF_MAXIMUM_CONSUMPTION])
+            ] = _number(0, 8, 0.1, "m³/h")
+            schema[
+                vol.Required(CONF_GAS_ENERGY_CONTENT, default=options[CONF_GAS_ENERGY_CONTENT])
+            ] = _number(5, 30, 0.1, "kWh/m³")
+        if self._takes_setpoint:
+            schema[vol.Required(CONF_GAS_PRICE, default=options[CONF_GAS_PRICE])] = _number(
+                0, 50, 0.01
+            )
+            schema[self._optional(CONF_LAST_SERVICE_DATE, options)] = selector.DateSelector()
+            schema[vol.Required(CONF_SERVICE_INTERVAL, default=options[CONF_SERVICE_INTERVAL])] = (
+                _number(1, 36, 1)
+            )
+        return self.async_show_form(step_id="boiler", data_schema=vol.Schema(schema))
+
+    async def async_step_hot_water(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if _user_input is not None:
+            return await self._update_with_cleared(
+                _user_input, (CONF_HOT_WATER_SCHEDULE_ENTITY_ID,)
+            )
+
+        options = await self.get_options()
+        schema: dict[Marker, Any] = {
             vol.Required(
                 CONF_HOT_WATER_COMFORT_TEMPERATURE,
                 default=options[CONF_HOT_WATER_COMFORT_TEMPERATURE],
-            )
-        ] = number(0, 65, 1, "°C")
-        advanced[
+            ): _number(0, 65, 1, "°C"),
             vol.Required(
                 CONF_HOT_WATER_ECO_TEMPERATURE, default=options[CONF_HOT_WATER_ECO_TEMPERATURE]
-            )
-        ] = number(0, 65, 1, "°C")
-        advanced[vol.Required(CONF_LEGIONELLA_DAY, default=options[CONF_LEGIONELLA_DAY])] = (
-            selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value=LEGIONELLA_OFF, label="Off"),
-                        *(
-                            selector.SelectOptionDict(value=str(index), label=name)
-                            for index, name in enumerate(
-                                (
-                                    "Monday",
-                                    "Tuesday",
-                                    "Wednesday",
-                                    "Thursday",
-                                    "Friday",
-                                    "Saturday",
-                                    "Sunday",
-                                )
-                            )
-                        ),
-                    ],
-                )
-            )
-        )
-        advanced[vol.Required(CONF_LEGIONELLA_TIME, default=options[CONF_LEGIONELLA_TIME])] = (
-            selector.TimeSelector()
-        )
-        advanced[optional(CONF_PRESENCE_ENTITY_IDS)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                domain=[
-                    "person",
-                    "device_tracker",
-                    "zone",
-                    "group",
-                    "binary_sensor",
-                    "input_boolean",
-                ],
-                multiple=True,
-            )
-        )
-        advanced[optional(CONF_PROXIMITY_ENTITY_ID)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor")
-        )
-        advanced[vol.Required(CONF_RETURN_DISTANCE, default=options[CONF_RETURN_DISTANCE])] = (
-            number(0, 200, 1, "km")
-        )
-        advanced[vol.Required(CONF_WINDOW_DETECTION, default=options[CONF_WINDOW_DETECTION])] = bool
-        advanced[
+            ): _number(0, 65, 1, "°C"),
+            self._optional(CONF_HOT_WATER_SCHEDULE_ENTITY_ID, options): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="schedule")
+            ),
+            vol.Required(CONF_LEGIONELLA_DAY, default=options[CONF_LEGIONELLA_DAY]): _choice(
+                "legionella_day", [LEGIONELLA_OFF, *(str(day) for day in range(7))]
+            ),
             vol.Required(
-                CONF_SCREED_MAXIMUM_TEMPERATURE, default=options[CONF_SCREED_MAXIMUM_TEMPERATURE]
+                CONF_LEGIONELLA_TIME, default=options[CONF_LEGIONELLA_TIME]
+            ): selector.TimeSelector(),
+        }
+        return self.async_show_form(step_id="hot_water", data_schema=vol.Schema(schema))
+
+    async def async_step_presence(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if _user_input is not None:
+            return await self._update_with_cleared(
+                _user_input, (CONF_PROXIMITY_ENTITY_ID,), (CONF_PRESENCE_ENTITY_IDS,)
             )
-        ] = number(0, 70, 1, "°C")
-        advanced[optional(CONF_LAST_SERVICE_DATE)] = selector.DateSelector()
-        advanced[vol.Required(CONF_SERVICE_INTERVAL, default=options[CONF_SERVICE_INTERVAL])] = (
-            number(1, 36, 1, "months")
-        )
-        advanced[vol.Required(CONF_GAS_PRICE, default=options[CONF_GAS_PRICE])] = number(
-            0, 50, 0.01
-        )
-        advanced[vol.Required(CONF_CONDENSING_BOILER, default=options[CONF_CONDENSING_BOILER])] = (
-            bool
-        )
+
+        options = await self.get_options()
+        schema: dict[Marker, Any] = {
+            self._optional(CONF_PRESENCE_ENTITY_IDS, options): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=[
+                        "person",
+                        "device_tracker",
+                        "zone",
+                        "group",
+                        "binary_sensor",
+                        "input_boolean",
+                    ],
+                    multiple=True,
+                )
+            ),
+            self._optional(CONF_PROXIMITY_ENTITY_ID, options): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            ),
+            vol.Required(CONF_RETURN_DISTANCE, default=options[CONF_RETURN_DISTANCE]): _number(
+                0, 200, 1, "km"
+            ),
+            vol.Required(CONF_WINDOW_DETECTION, default=options[CONF_WINDOW_DETECTION]): bool,
+        }
+        return self.async_show_form(step_id="presence", data_schema=vol.Schema(schema))
 
     async def update_options(self, _user_input: dict[str, Any]) -> ConfigFlowResult:
         advanced = _user_input.pop("advanced", {})

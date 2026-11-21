@@ -1,0 +1,934 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Ta bramka jest już skonfigurowana.",
+      "reconfigure_successful": "Bramka została skonfigurowana ponownie.",
+      "already_in_progress": "Kalibracja już trwa.",
+      "unsupported_gateway": "Ten temat MQTT nie należy do obsługiwanej bramki."
+    },
+    "error": {
+      "maximum_setpoint_below_overshoot_protection": "Maksymalna temperatura zasilania nie może być niższa od wartości ochrony przed przegrzaniem.",
+      "invalid_device": "To urządzenie jest nieprawidłowe.",
+      "connection": "Nie można połączyć się z bramką.",
+      "unable_to_calibrate": "Kalibracja została przerwana ({reason}). Wpisz wartość ochrony przed przegrzaniem ręcznie."
+    },
+    "progress": {
+      "calibration": "Kalibracja i wyznaczanie wartości ochrony przed przegrzaniem…\n\nTo potrwa około 20 minut."
+    },
+    "step": {
+      "areas": {
+        "title": "Pomieszczenia",
+        "description": "Termostat i sterowanie wieloma pomieszczeniami. Grzejniki są w tym samym pomieszczeniu co czujnik wewnętrzny, a pomieszczenia mają własne temperatury docelowe.",
+        "data": {
+          "thermostat": "Termostat",
+          "main_climates": "Grzejniki",
+          "secondary_climates": "Pomieszczenia"
+        }
+      },
+      "automatic_gains": {
+        "title": "Automatyczne wzmocnienia",
+        "description": "SAT sam dobiera parametry regulatora PID do domu i warunków.\n\nBez tej opcji trzeba wpisać wartości PID ręcznie.",
+        "data": {
+          "automatic_gains": "Automatyczne wzmocnienia (zalecane)"
+        }
+      },
+      "calibrate_system": {
+        "title": "Kalibracja",
+        "description": "Wartość ochrony przed przegrzaniem to najniższa temperatura zasilania, jaką kocioł utrzymuje na minimalnej mocy. SAT może ją zmierzyć (około 20 minut) albo możesz ją wpisać.",
+        "menu_options": {
+          "calibrate": "Zmierz wartość ochrony przed przegrzaniem (około 20 min)",
+          "overshoot_protection": "Wpisz wartość ochrony przed przegrzaniem ręcznie",
+          "pid_controller": "Wpisz wartości PID ręcznie (niezalecane)"
+        }
+      },
+      "calibrated": {
+        "title": "Kalibracja zakończona",
+        "description": "Kalibracja się udała.\n\nWartość ochrony przed przegrzaniem: {minimum_setpoint} °C\n\nTo najniższa temperatura zasilania, jaką kocioł utrzymuje na minimalnej mocy. SAT wysyła ją w fazach palenia PWM.",
+        "menu_options": {
+          "calibrate": "Kalibruj ponownie",
+          "finish": "Zachowaj tę wartość"
+        }
+      },
+      "heating_system": {
+        "title": "Instalacja grzewcza",
+        "description": "Wybierz rodzaj instalacji. Od niego zależą krzywa grzewcza i domyślne ustawienia.",
+        "data": {
+          "heating_system": "Instalacja"
+        }
+      },
+      "mosquitto": {
+        "title": "Bramka MQTT",
+        "description": "Wybierz rodzaj bramki MQTT.",
+        "data": {
+          "mode": "Rodzaj"
+        }
+      },
+      "mosquitto_opentherm": {
+        "title": "OpenTherm Gateway (MQTT)",
+        "description": "Podaj główny temat MQTT i identyfikator urządzenia.",
+        "data": {
+          "name": "Nazwa",
+          "mqtt_topic": "Temat MQTT",
+          "device": "Identyfikator urządzenia"
+        }
+      },
+      "mosquitto_ems": {
+        "title": "EMS-ESP (MQTT)",
+        "description": "Podaj temat MQTT.",
+        "data": {
+          "name": "Nazwa",
+          "mqtt_topic": "Temat MQTT"
+        }
+      },
+      "overshoot_protection": {
+        "title": "Ochrona przed przegrzaniem",
+        "description": "Wpisz najniższą temperaturę zasilania, jaką kocioł utrzymuje na minimalnej mocy. Jeśli jej nie znasz, wróć i wybierz kalibrację.",
+        "data": {
+          "minimum_setpoint": "Wartość"
+        }
+      },
+      "pid_controller": {
+        "title": "Regulator PID",
+        "description": "Wpisz wzmocnienia regulatora PID.",
+        "data": {
+          "proportional": "Proporcjonalne (kP)",
+          "integral": "Całkujące (kI)",
+          "derivative": "Różniczkujące (kD)"
+        }
+      },
+      "sensors": {
+        "title": "Czujniki",
+        "description": "Wybierz czujniki temperatury.",
+        "data": {
+          "inside_sensor_entity_id": "Czujnik temperatury wewnętrznej",
+          "outside_sensor_entity_id": "Czujnik temperatury zewnętrznej",
+          "humidity_sensor_entity_id": "Czujnik wilgotności"
+        }
+      },
+      "serial": {
+        "title": "OpenTherm Gateway (port szeregowy)",
+        "description": "Podaj nazwę bramki i jej adres, na przykład „{example_device}”, gdzie otgw.local to nazwa lub adres IP bramki, a 25238 to port.",
+        "data": {
+          "name": "Nazwa",
+          "device": "Adres"
+        }
+      },
+      "esphome": {
+        "title": "OpenTherm Gateway (ESPHome)",
+        "description": "Wybierz urządzenie ESPHome z OpenTherm, które steruje kotłem, i podaj nazwę.",
+        "data": {
+          "name": "Nazwa",
+          "device": "Urządzenie"
+        }
+      },
+      "simulator": {
+        "title": "Symulowany kocioł (dla programistów)",
+        "description": "Symulator kotła do testów i pokazów. Nie steruje prawdziwym kotłem.",
+        "data": {
+          "name": "Nazwa",
+          "minimum_setpoint": "Minimalna temperatura",
+          "maximum_setpoint": "Maksymalna temperatura",
+          "simulated_heating": "Szybkość grzania",
+          "simulated_cooling": "Szybkość stygnięcia",
+          "simulated_warming_up": "Czas rozgrzewania"
+        }
+      },
+      "switch": {
+        "title": "Termostat PID z PWM (włącz/wyłącz)",
+        "description": "Podaj nazwę i encję przełącznika. W polu temperatury wpisz temperaturę, jaką osiąga kocioł; dla ogrzewania elektrycznego wpisz 100.",
+        "data": {
+          "name": "Nazwa",
+          "device": "Encja",
+          "minimum_setpoint": "Temperatura"
+        }
+      },
+      "user": {
+        "title": "Smart Autotune Thermostat (SAT)",
+        "description": "SAT to inteligentny termostat, który sam dostraja sterowanie. Wybierz sposób połączenia z kotłem.",
+        "menu_options": {
+          "mosquitto": "Bramka MQTT (OpenTherm, EMS-ESP)",
+          "serial": "Bramka szeregowa (OpenTherm Gateway)",
+          "esphome": "ESPHome",
+          "simulator": "Symulowany kocioł (dla programistów)",
+          "switch": "Termostat PID (włącz/wyłącz)"
+        }
+      },
+      "manufacturer": {
+        "title": "Producent kotła",
+        "description": "SAT wybrał producenta na podstawie bramki i danych urządzenia. Jeśli się nie zgadza, wybierz innego.",
+        "data": {
+          "manufacturer": "Producent"
+        }
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "maximum_setpoint_below_overshoot_protection": "Maksymalna temperatura zasilania nie może być niższa od wartości ochrony przed przegrzaniem.",
+      "calibration_timeout": "Czas oczekiwania na płomień musi być większy od zera, a na ustabilizowanie co najmniej 5 minut."
+    },
+    "step": {
+      "init": {
+        "title": "Ustawienia SAT",
+        "description": "Wybierz grupę ustawień.",
+        "menu_options": {
+          "general": "Krzywa grzewcza i PID",
+          "presets": "Tryby (presety)",
+          "system_configuration": "Sterowanie i PWM",
+          "heat_budget": "Budżet ciepła",
+          "hot_water": "Ciepła woda",
+          "presence": "Obecność i okna",
+          "boiler": "Kocioł i serwis"
+        }
+      },
+      "general": {
+        "title": "Krzywa grzewcza i PID",
+        "description": "Jak SAT wylicza temperaturę zasilania potrzebną w domu.",
+        "data": {
+          "pid_controller_version": "Regulator PID",
+          "heating_mode": "Tryb grzania",
+          "maximum_setpoint": "Maksymalna temperatura zasilania",
+          "minimum_setpoint": "Wartość ochrony przed przegrzaniem",
+          "heating_curve_coefficient": "Współczynnik krzywej grzewczej",
+          "automatic_gains_value": "Siła automatycznych wzmocnień",
+          "derivative_time_weight": "Waga czasowa członu różniczkującego",
+          "proportional": "Proporcjonalne (kP)",
+          "integral": "Całkujące (kI)",
+          "derivative": "Różniczkujące (kD)",
+          "duty_cycle": "Maksymalny cykl PWM",
+          "window_sensors": "Czujniki okien i drzwi"
+        },
+        "data_description": {
+          "pid_controller_version": "Adaptacyjny jest najnowszy i sam dopasowuje wzmocnienia do domu.",
+          "heating_mode": "Komfort grzeje według najzimniejszego pomieszczenia, Eko tylko według głównego termostatu.",
+          "maximum_setpoint": "Najwyższa temperatura zasilania, o jaką SAT poprosi. Dla podłogówki najwyżej 50 °C.",
+          "minimum_setpoint": "Najniższa temperatura zasilania, jaką kocioł utrzymuje na minimalnej mocy. SAT wysyła ją w fazach palenia PWM.",
+          "heating_curve_coefficient": "Nachylenie krzywej grzewczej: zwiększ, jeśli przy mrozie w domu jest za zimno.",
+          "automatic_gains_value": "Jak mocno reagują automatyczne wzmocnienia.",
+          "derivative_time_weight": "Wpływ członu różniczkującego w czasie; zmniejsza niedogrzanie przy rozgrzewaniu.",
+          "proportional": "Reaguje na bieżącą odchyłkę temperatury w pokoju.",
+          "integral": "Usuwa trwałą odchyłkę temperatury w pokoju.",
+          "derivative": "Tłumi reakcję na szybkie zmiany.",
+          "duty_cycle": "Najdłuższy cykl PWM, gdy cykl nie jest dobierany automatycznie.",
+          "window_sensors": "Gdy któryś jest otwarty przez minimalny czas, grzanie zostaje wstrzymane (preset Activity)."
+        }
+      },
+      "presets": {
+        "title": "Tryby (presety)",
+        "description": "Temperatury w pokoju dla poszczególnych trybów.",
+        "data": {
+          "comfort_temperature": "Komfort",
+          "home_temperature": "W domu",
+          "sleep_temperature": "Sen",
+          "away_temperature": "Poza domem",
+          "activity_temperature": "Aktywność",
+          "sync_climates_with_preset": "Przekazuj tryb termostatom pokojowym",
+          "push_setpoint_to_thermostat": "Przekazuj temperaturę docelową termostatowi kotła"
+        },
+        "data_description": {
+          "activity_temperature": "Używana też wtedy, gdy okno jest otwarte.",
+          "sync_climates_with_preset": "Dla trybów Sen, Poza domem i Aktywność.",
+          "push_setpoint_to_thermostat": "Termostat podłączony do kotła ma tę samą temperaturę docelową i przejmuje sterowanie, gdy Home Assistant przestanie działać."
+        }
+      },
+      "system_configuration": {
+        "title": "Sterowanie i PWM",
+        "description": "Jak SAT włącza palnik i odczytuje czujniki.",
+        "data": {
+          "automatic_duty_cycle": "Automatyczny cykl PWM",
+          "cycles_per_hour": "Cykle PWM na godzinę",
+          "sync_climates_with_mode": "Przekazuj tryb pracy termostatom pokojowym",
+          "default_hvac_mode": "Tryb po starcie bez zapisanego stanu",
+          "sensor_max_value_age": "Maksymalny wiek odczytu temperatury",
+          "window_minimum_open_time": "Minimalny czas otwarcia okna"
+        },
+        "data_description": {
+          "automatic_duty_cycle": "SAT sam dobiera długość cykli PWM.",
+          "cycles_per_hour": "Najwięcej startów palnika na godzinę w PWM. Budżet ciepła robi ich mniej.",
+          "sync_climates_with_mode": "Grzanie i wyłączenie trafia do termostatów grzejnikowych i pokojowych.",
+          "sensor_max_value_age": "Starszy odczyt oznacza, że czujnik przestał raportować.",
+          "window_minimum_open_time": "Jak długo czujnik okna musi być otwarty, zanim grzanie zostanie wstrzymane."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Zaawansowane",
+            "description": "Zostaw domyślne, jeśli nie wiesz, po co je zmieniać.",
+            "data": {
+              "force_pulse_width_modulation": "Zawsze używaj PWM",
+              "learn_overshoot_protection": "Ucz się wartości ochrony przed przegrzaniem",
+              "pwm_short_burns_threshold": "Przerwane palenia, po których kończy się faza PWM",
+              "maximum_relative_modulation": "Maksymalna modulacja",
+              "climate_valve_offset": "Próg otwarcia zaworu termostatu pokojowego",
+              "target_temperature_step": "Krok temperatury docelowej",
+              "sample_time": "Okres próbkowania PID",
+              "calibration_flame_timeout": "Kalibracja: czekanie na płomień",
+              "calibration_plateau_timeout": "Kalibracja: czekanie na stałe zasilanie",
+              "thermal_comfort": "Temperatura odczuwalna (summer simmer index)",
+              "simulation": "Symulacja (nie steruj kotłem)"
+            },
+            "data_description": {
+              "force_pulse_width_modulation": "Także wtedy, gdy kocioł mógłby zmodulować wystarczająco nisko.",
+              "learn_overshoot_protection": "Zaczyna od wartości z kalibracji i ją koryguje: w górę, gdy kocioł przerywa palenia PWM przez przegrzanie albo nie może się zapalić, w dół, gdy długie palenia ustalają się poniżej niej. Ponowna kalibracja lub zmiana wartości zaczyna od nowa.",
+              "pwm_short_burns_threshold": "1 pozwala na jedno palenie w fazie (domyślnie 2).",
+              "maximum_relative_modulation": "Ogranicza moc kotła, w procentach.",
+              "climate_valve_offset": "Dla termostatów pokojowych, które nie podają, czy grzeją: pokój chce ciepła, gdy jest co najmniej o tyle poniżej swojej temperatury docelowej.",
+              "target_temperature_step": "Krok zmiany temperatury docelowej w encji klimatu.",
+              "sample_time": "Najkrótszy czas między dwoma przeliczeniami PID.",
+              "calibration_flame_timeout": "Jak długo kalibracja czeka na zapłon palnika.",
+              "calibration_plateau_timeout": "Jak długo kalibracja grzeje, czekając na ustalenie się temperatury zasilania.",
+              "thermal_comfort": "Steruje według temperatury odczuwalnej z temperatury i wilgotności. Wymaga czujnika wilgotności.",
+              "simulation": "SAT wszystko liczy, ale nic nie wysyła do kotła."
+            }
+          }
+        }
+      },
+      "heat_budget": {
+        "title": "Budżet ciepła",
+        "description": "Dla wolnych instalacji, np. podłogówki w wylewce: SAT uczy się, ile ciepła potrzebuje dom, i dostarcza je długimi blokami na minimalnej mocy.",
+        "data": {
+          "heat_budget_mode": "Budżet ciepła",
+          "heat_loss_coefficient": "Straty ciepła domu",
+          "heat_budget_period": "Okres",
+          "heat_budget_minimum_burn": "Minimalne palenie",
+          "weather_forecast_entity_id": "Prognoza pogody",
+          "comfort_schedule_entity_id": "Harmonogram komfortu",
+          "setback_temperature": "Obniżenie poza harmonogramem",
+          "warm_weather_shutdown_temperature": "Wyłączenie przy ciepłej pogodzie"
+        },
+        "data_description": {
+          "heat_budget_mode": "Tylko nauka pokazuje plan w atrybutach encji klimatu, ale nie steruje. Dopóki dom nie jest nauczony (około 36 godzin), steruje zwykły PWM.",
+          "heat_loss_coefficient": "Ciepło, które dom traci na każdy stopień różnicy między wnętrzem a otoczeniem. 0 oznacza naukę (zalecane).",
+          "heat_budget_period": "Co tyle przybywa kredytu; dłuższy okres to rzadsze i dłuższe palenia.",
+          "heat_budget_minimum_burn": "Najkrótszy blok, dla którego warto zapalić palnik; mniejsza ilość ciepła czeka na następny okres.",
+          "weather_forecast_entity_id": "Prognoza godzinowa: budżet planuje według najbliższych trzech godzin i uczy się zysków ze słońca z zachmurzenia.",
+          "comfort_schedule_entity_id": "Harmonogram włączony wtedy, gdy w domu ma być temperatura docelowa. Dogrzewanie zaczyna się na tyle wcześnie, żeby zdążyć.",
+          "setback_temperature": "O ile chłodniej poza harmonogramem. Przy wylewce duże obniżenia dają niewiele.",
+          "warm_weather_shutdown_temperature": "Ogrzewanie wyłącza się, gdy średnia dobowa temperatura zewnętrzna osiągnie tę wartość, i włącza 2 °C niżej. Ciepła woda działa dalej. 0 nigdy nie wyłącza."
+        }
+      },
+      "boiler": {
+        "title": "Kocioł i serwis",
+        "description": "Co SAT wie o kotle, zaworach i kosztach.",
+        "data": {
+          "keep_heating_in_pwm_off": "Nie wyłączaj ogrzewania między fazami PWM",
+          "boiler_anti_cycling_time": "Blokada ponownego zapłonu w kotle",
+          "valve_opening_time": "Czas otwarcia siłowników",
+          "screed_maximum_temperature": "Maksymalne zasilanie dla wylewki",
+          "condensing_boiler": "Kocioł kondensacyjny",
+          "minimum_consumption": "Zużycie gazu na minimalnej mocy",
+          "maximum_consumption": "Zużycie gazu na maksymalnej mocy",
+          "gas_energy_content": "Ciepło z metra sześciennego gazu",
+          "gas_price": "Cena gazu za metr sześcienny",
+          "last_service_date": "Ostatni przegląd kotła",
+          "service_interval": "Odstęp między przeglądami (miesiące)"
+        },
+        "data_description": {
+          "keep_heating_in_pwm_off": "Pompa dalej krąży, a kocioł dwufunkcyjny nie przełącza zaworu na zasobnik po każdym paleniu. Gdy woda zbliży się do najniższej nastawy kotła, SAT wyłącza ogrzewanie, żeby kocioł nie zapalał się na chwilę.",
+          "boiler_anti_cycling_time": "Własna przerwa kotła przed ponownym zapłonem. 0 zostawia wartości domyślne.",
+          "valve_opening_time": "Jak długo otwierają się siłowniki termostatów pokojowych. SAT czeka tyle przed zapaleniem kotła dla właśnie otwartej pętli.",
+          "screed_maximum_temperature": "Zasilanie powyżej tej wartości przez 3 minuty zgłasza problem w Naprawach. 0 wyłącza.",
+          "condensing_boiler": "Do szacowania sprawności bez czujnika temperatury spalin.",
+          "gas_energy_content": "Około 10,2 kWh/m³ dla gazu ziemnego, 24 dla propanu. Używane do szacowania gazu, ciepła i przepływu wody.",
+          "gas_price": "Z dystrybucją, w Twojej walucie. 0 wyłącza czujnik kosztów.",
+          "last_service_date": "W Naprawach pojawi się przypomnienie o kolejnym przeglądzie."
+        }
+      },
+      "hot_water": {
+        "title": "Ciepła woda",
+        "description": "Temperatura zasobnika, którą SAT wysyła do kotła.",
+        "data": {
+          "hot_water_comfort_temperature": "Temperatura ciepłej wody",
+          "hot_water_eco_temperature": "Temperatura eko",
+          "hot_water_schedule_entity_id": "Harmonogram ciepłej wody",
+          "legionella_day": "Dzień przegrzewu (legionella)",
+          "legionella_time": "Godzina przegrzewu"
+        },
+        "data_description": {
+          "hot_water_comfort_temperature": "0 zostawia ciepłą wodę kotłowi.",
+          "hot_water_eco_temperature": "Poza godzinami harmonogramu; 0 utrzymuje temperaturę ciepłej wody przez cały dzień.",
+          "hot_water_schedule_entity_id": "Harmonogram włączony w godzinach, w których używa się ciepłej wody.",
+          "legionella_day": "Raz w tygodniu zasobnik jest utrzymywany przez godzinę w 60 °C.",
+          "legionella_time": "Najlepiej w nocy."
+        }
+      },
+      "presence": {
+        "title": "Obecność i okna",
+        "description": "Gdy nikogo nie ma w domu, SAT przełącza się na Poza domem; otwarte okno wstrzymuje grzanie.",
+        "data": {
+          "presence_entity_ids": "Obecność",
+          "proximity_entity_id": "Odległość od domu",
+          "return_distance": "Odległość powrotu",
+          "window_detection": "Wykrywaj otwarte okna po temperaturze"
+        },
+        "data_description": {
+          "presence_entity_ids": "Osoby, urządzenia śledzące, strefy lub grupy. Poza domem po 30 minutach nieobecności wszystkich.",
+          "proximity_entity_id": "Czujnik odległości (integracja Proximity), żeby wolna podłoga zaczęła grzać wcześniej.",
+          "return_distance": "Jak blisko ktoś musi być, żeby grzanie wróciło; 0 czeka, aż będzie w domu.",
+          "window_detection": "Bez czujników otwarcia: spadek o 0,8 °C w 10 minut albo o 0,3 °C w 30 minut wstrzymuje grzanie, aż pokój przestanie stygnąć (najwyżej 2 godziny). Wymaga czujnika z dokładnością do 0,1 °C."
+        }
+      }
+    }
+  },
+  "selector": {
+    "mqtt_mode": {
+      "options": {
+        "mqtt_opentherm": "OpenTherm Gateway",
+        "mqtt_ems": "EMS-ESP (Bosch, Junkers, Buderus)"
+      }
+    },
+    "heating_system": {
+      "options": {
+        "radiators": "Grzejniki",
+        "underfloor": "Ogrzewanie podłogowe",
+        "heat_pump": "Pompa ciepła"
+      }
+    },
+    "pid_controller_version": {
+      "options": {
+        "1": "Klasyczny",
+        "2": "Ulepszony",
+        "3": "Adaptacyjny"
+      }
+    },
+    "heating_mode": {
+      "options": {
+        "comfort": "Komfort",
+        "eco": "Eko"
+      }
+    },
+    "cycles_per_hour": {
+      "options": {
+        "1": "1 na godzinę",
+        "2": "2 na godzinę",
+        "3": "3 na godzinę",
+        "4": "4 na godzinę"
+      }
+    },
+    "default_hvac_mode": {
+      "options": {
+        "heat": "Grzanie",
+        "off": "Wyłączony"
+      }
+    },
+    "heat_budget_mode": {
+      "options": {
+        "off": "Wyłączony",
+        "shadow": "Tylko nauka",
+        "on": "Włączony"
+      }
+    },
+    "heat_budget_period": {
+      "options": {
+        "30": "30 minut",
+        "60": "60 minut",
+        "90": "90 minut",
+        "120": "120 minut"
+      }
+    },
+    "legionella_day": {
+      "options": {
+        "off": "Wyłączony",
+        "0": "Poniedziałek",
+        "1": "Wtorek",
+        "2": "Środa",
+        "3": "Czwartek",
+        "4": "Piątek",
+        "5": "Sobota",
+        "6": "Niedziela"
+      }
+    }
+  },
+  "services": {
+    "reset_integral": {
+      "name": "Wyzeruj całkę",
+      "description": "Zeruje człon całkujący regulatora PID wybranej encji klimatu, gdy urósł za bardzo."
+    },
+    "pulse_width_modulation": {
+      "name": "Modulacja PWM",
+      "description": "Wymusza włączenie lub wyłączenie PWM. SAT może zaraz potem zmienić to sam.",
+      "fields": {
+        "enabled": {
+          "name": "Włączona",
+          "description": "Stan, który chcesz wymusić."
+        }
+      }
+    },
+    "measure_loops": {
+      "name": "Zmierz pętle",
+      "description": "Mierzy przepływ wody w każdej pętli: wyłącza termostaty pokojowe i otwiera je po kolei, gdy palnik pracuje na minimalnej mocy. Około 15 minut na pomieszczenie; potem termostaty wracają do poprzednich ustawień, a wynik przychodzi jako powiadomienie."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "control_setpoint_synchro": {
+        "name": "Synchronizacja nastawy"
+      },
+      "relative_modulation_synchro": {
+        "name": "Synchronizacja modulacji"
+      },
+      "central_heating_synchro": {
+        "name": "Synchronizacja ogrzewania"
+      },
+      "boiler_health": {
+        "name": "Stan kotła"
+      },
+      "boiler_fault": {
+        "name": "Usterka kotła",
+        "state_attributes": {
+          "flags": {
+            "name": "Flagi usterek"
+          }
+        }
+      },
+      "flame_health": {
+        "name": "Stan płomienia"
+      },
+      "window": {
+        "name": "Okno"
+      },
+      "heating_control": {
+        "name": "Sterowanie ogrzewaniem",
+        "state_attributes": {
+          "problems": {
+            "name": "Problemy"
+          }
+        }
+      },
+      "master_ch_enabled": {
+        "name": "Termostat: ogrzewanie ({source})"
+      },
+      "master_dhw_enabled": {
+        "name": "Termostat: ciepła woda ({source})"
+      },
+      "master_cooling_enabled": {
+        "name": "Termostat: chłodzenie ({source})"
+      },
+      "master_otc_enabled": {
+        "name": "Termostat: korekta pogodowa ({source})"
+      },
+      "master_ch2_enabled": {
+        "name": "Termostat: ogrzewanie 2 ({source})"
+      },
+      "slave_fault_indication": {
+        "name": "Kocioł: usterka ({source})"
+      },
+      "slave_ch_active": {
+        "name": "Kocioł: ogrzewanie ({source})"
+      },
+      "slave_dhw_active": {
+        "name": "Kocioł: ciepła woda ({source})"
+      },
+      "slave_flame_on": {
+        "name": "Kocioł: płomień ({source})"
+      },
+      "slave_cooling_active": {
+        "name": "Kocioł: chłodzenie ({source})"
+      },
+      "slave_ch2_active": {
+        "name": "Kocioł: ogrzewanie 2 ({source})"
+      },
+      "slave_diagnostic_indication": {
+        "name": "Kocioł: diagnostyka ({source})"
+      },
+      "slave_dhw_present": {
+        "name": "Kocioł: ciepła woda dostępna ({source})"
+      },
+      "slave_control_type": {
+        "name": "Kocioł: rodzaj sterowania ({source})"
+      },
+      "slave_cooling_supported": {
+        "name": "Kocioł: obsługa chłodzenia ({source})"
+      },
+      "slave_dhw_config": {
+        "name": "Kocioł: konfiguracja ciepłej wody ({source})"
+      },
+      "slave_master_low_off_pump": {
+        "name": "Kocioł: sterowanie pompą ({source})"
+      },
+      "slave_ch2_present": {
+        "name": "Kocioł: ogrzewanie 2 dostępne ({source})"
+      },
+      "slave_service_required": {
+        "name": "Kocioł: wymagany serwis ({source})"
+      },
+      "slave_remote_reset": {
+        "name": "Kocioł: zdalny reset ({source})"
+      },
+      "slave_low_water_pressure": {
+        "name": "Kocioł: niskie ciśnienie wody ({source})"
+      },
+      "slave_gas_fault": {
+        "name": "Kocioł: usterka gazu ({source})"
+      },
+      "slave_air_pressure_fault": {
+        "name": "Kocioł: usterka ciśnienia powietrza ({source})"
+      },
+      "slave_water_overtemp": {
+        "name": "Kocioł: przegrzanie wody ({source})"
+      },
+      "remote_transfer_dhw": {
+        "name": "Zdalny odczyt nastawy ciepłej wody ({source})"
+      },
+      "remote_transfer_max_ch": {
+        "name": "Zdalny odczyt maks. nastawy ogrzewania ({source})"
+      },
+      "remote_rw_dhw": {
+        "name": "Zdalny zapis nastawy ciepłej wody ({source})"
+      },
+      "remote_rw_max_ch": {
+        "name": "Zdalny zapis maks. nastawy ogrzewania ({source})"
+      },
+      "rovrd_man_prio": {
+        "name": "Priorytet zmiany ręcznej nad zdalną ({source})"
+      },
+      "rovrd_auto_prio": {
+        "name": "Priorytet programu nad zdalną zmianą ({source})"
+      },
+      "otgw_gpio_a_state": {
+        "name": "Bramka: GPIO A"
+      },
+      "otgw_gpio_b_state": {
+        "name": "Bramka: GPIO B"
+      },
+      "otgw_ignore_transitions": {
+        "name": "Bramka: ignorowanie przejść"
+      },
+      "otgw_ovrd_high_byte": {
+        "name": "Bramka: nadpisanie starszego bajtu"
+      }
+    },
+    "number": {
+      "hot_water_setpoint": {
+        "name": "Temperatura ciepłej wody"
+      }
+    },
+    "sensor": {
+      "boiler_power": {
+        "name": "Moc kotła"
+      },
+      "boiler_consumption": {
+        "name": "Zużycie gazu przez kocioł"
+      },
+      "heating_curve": {
+        "name": "Krzywa grzewcza"
+      },
+      "error_value": {
+        "name": "Odchyłka temperatury"
+      },
+      "boiler_manufacturer": {
+        "name": "Producent kotła"
+      },
+      "flame_status": {
+        "name": "Stan płomienia"
+      },
+      "boiler_status": {
+        "name": "Stan kotła"
+      },
+      "boiler_fault_code": {
+        "name": "Kod usterki kotła"
+      },
+      "simulator_boiler_temperature": {
+        "name": "Temperatura kotła (symulator)"
+      },
+      "simulator_setpoint": {
+        "name": "Nastawa kotła (symulator)"
+      },
+      "control_setpoint": {
+        "name": "Nastawa zasilania ({source})"
+      },
+      "master_memberid": {
+        "name": "Termostat: ID producenta ({source})"
+      },
+      "slave_memberid": {
+        "name": "Kocioł: ID producenta ({source})"
+      },
+      "slave_oem_fault": {
+        "name": "Kocioł: kod usterki producenta ({source})"
+      },
+      "cooling_control": {
+        "name": "Sygnał chłodzenia ({source})"
+      },
+      "control_setpoint_2": {
+        "name": "Nastawa zasilania 2 ({source})"
+      },
+      "room_setpoint_ovrd": {
+        "name": "Nadpisanie temperatury pokoju ({source})"
+      },
+      "slave_max_relative_modulation": {
+        "name": "Kocioł: maksymalna modulacja ({source})"
+      },
+      "slave_max_capacity": {
+        "name": "Kocioł: maksymalna moc ({source})"
+      },
+      "slave_min_mod_level": {
+        "name": "Kocioł: minimalna modulacja ({source})"
+      },
+      "room_setpoint": {
+        "name": "Temperatura docelowa pokoju ({source})"
+      },
+      "relative_mod_level": {
+        "name": "Modulacja ({source})"
+      },
+      "ch_water_pressure": {
+        "name": "Ciśnienie wody w instalacji ({source})"
+      },
+      "dhw_flow_rate": {
+        "name": "Przepływ ciepłej wody ({source})"
+      },
+      "room_setpoint_2": {
+        "name": "Temperatura docelowa pokoju 2 ({source})"
+      },
+      "room_temp": {
+        "name": "Temperatura pokoju ({source})"
+      },
+      "ch_water_temp": {
+        "name": "Temperatura zasilania ({source})"
+      },
+      "dhw_temp": {
+        "name": "Temperatura ciepłej wody ({source})"
+      },
+      "outside_temp": {
+        "name": "Temperatura zewnętrzna ({source})"
+      },
+      "return_water_temp": {
+        "name": "Temperatura powrotu ({source})"
+      },
+      "solar_storage_temp": {
+        "name": "Temperatura zasobnika solarnego ({source})"
+      },
+      "solar_coll_temp": {
+        "name": "Temperatura kolektora słonecznego ({source})"
+      },
+      "ch_water_temp_2": {
+        "name": "Temperatura zasilania 2 ({source})"
+      },
+      "dhw_temp_2": {
+        "name": "Temperatura ciepłej wody 2 ({source})"
+      },
+      "exhaust_temp": {
+        "name": "Temperatura spalin ({source})"
+      },
+      "boiler_fan_speed_setpoint": {
+        "name": "Zadana prędkość wentylatora ({source})"
+      },
+      "boiler_fan_speed": {
+        "name": "Prędkość wentylatora ({source})"
+      },
+      "opentherm_ids": {
+        "name": "Identyfikatory OpenTherm"
+      },
+      "heat_exchanger_temp": {
+        "name": "Temperatura wymiennika ({source})"
+      },
+      "slave_dhw_max_setp": {
+        "name": "Maksymalna nastawa ciepłej wody ({source})"
+      },
+      "slave_dhw_min_setp": {
+        "name": "Minimalna nastawa ciepłej wody ({source})"
+      },
+      "slave_ch_max_setp": {
+        "name": "Kocioł: maksymalna nastawa ogrzewania ({source})"
+      },
+      "slave_ch_min_setp": {
+        "name": "Kocioł: minimalna nastawa ogrzewania ({source})"
+      },
+      "max_ch_setpoint": {
+        "name": "Maksymalna nastawa ogrzewania ({source})"
+      },
+      "oem_diag": {
+        "name": "Kod diagnostyczny producenta ({source})"
+      },
+      "burner_starts": {
+        "name": "Starty palnika ({source})"
+      },
+      "ch_pump_starts": {
+        "name": "Starty pompy ogrzewania ({source})"
+      },
+      "dhw_pump_starts": {
+        "name": "Starty pompy ciepłej wody ({source})"
+      },
+      "dhw_burner_starts": {
+        "name": "Starty palnika na ciepłą wodę ({source})"
+      },
+      "burner_hours": {
+        "name": "Godziny pracy palnika ({source})"
+      },
+      "ch_pump_hours": {
+        "name": "Godziny pracy pompy ogrzewania ({source})"
+      },
+      "dhw_pump_hours": {
+        "name": "Godziny pracy pompy ciepłej wody ({source})"
+      },
+      "dhw_burner_hours": {
+        "name": "Godziny palnika na ciepłą wodę ({source})"
+      },
+      "master_ot_version": {
+        "name": "Termostat: wersja OpenTherm ({source})"
+      },
+      "slave_ot_version": {
+        "name": "Kocioł: wersja OpenTherm ({source})"
+      },
+      "master_product_type": {
+        "name": "Termostat: typ produktu ({source})"
+      },
+      "master_product_version": {
+        "name": "Termostat: wersja produktu ({source})"
+      },
+      "slave_product_type": {
+        "name": "Kocioł: typ produktu ({source})"
+      },
+      "slave_product_version": {
+        "name": "Kocioł: wersja produktu ({source})"
+      },
+      "otgw_mode": {
+        "name": "Bramka: tryb (gateway/monitor)"
+      },
+      "otgw_dhw_ovrd": {
+        "name": "Bramka: nadpisanie ciepłej wody"
+      },
+      "otgw_about": {
+        "name": "Bramka: wersja oprogramowania"
+      },
+      "otgw_build": {
+        "name": "Bramka: kompilacja oprogramowania"
+      },
+      "otgw_setback_temp": {
+        "name": "Bramka: temperatura obniżona"
+      },
+      "otgw_setpoint_ovrd_mode": {
+        "name": "Bramka: tryb nadpisania temperatury pokoju"
+      },
+      "otgw_smart_pwr": {
+        "name": "Bramka: tryb smart power"
+      },
+      "otgw_thermostat_detect": {
+        "name": "Bramka: wykrywanie termostatu"
+      },
+      "otgw_vref": {
+        "name": "Bramka: napięcie odniesienia"
+      },
+      "estimated_water_flow": {
+        "name": "Szacowany przepływ wody"
+      },
+      "flame_starts_last_hour": {
+        "name": "Zapłony w ostatniej godzinie"
+      },
+      "total_starts": {
+        "name": "Starty palnika"
+      },
+      "total_burn_hours": {
+        "name": "Godziny pracy palnika"
+      },
+      "total_heating_kwh": {
+        "name": "Ciepło na ogrzewanie"
+      },
+      "total_hot_water_kwh": {
+        "name": "Ciepło na ciepłą wodę"
+      },
+      "total_gas_m3": {
+        "name": "Szacowane zużycie gazu"
+      },
+      "total_degree_days": {
+        "name": "Stopniodni grzania"
+      },
+      "hot_water_cooling": {
+        "name": "Wychładzanie zasobnika przez ogrzewanie"
+      },
+      "open_loops": {
+        "name": "Otwarte pętle"
+      },
+      "loop_balance": {
+        "name": "Pętle do wyregulowania"
+      },
+      "total_gas_cost": {
+        "name": "Szacowany koszt gazu"
+      },
+      "boiler_efficiency": {
+        "name": "Szacowana sprawność kotła"
+      },
+      "heat_need": {
+        "name": "Zapotrzebowanie na ciepło"
+      },
+      "heat_loss": {
+        "name": "Straty ciepła domu"
+      }
+    },
+    "button": {
+      "scan_opentherm_ids": {
+        "name": "Skanuj identyfikatory OpenTherm"
+      },
+      "calibrate_overshoot_protection": {
+        "name": "Kalibruj ochronę przed przegrzaniem"
+      }
+    }
+  },
+  "exceptions": {
+    "esphome_device_not_found": {
+      "message": "Urządzenie ESPHome {device_id} nie jest urządzeniem głównym w rejestrze urządzeń."
+    },
+    "migration_mqtt_device_missing": {
+      "message": "Nie można przenieść ustawień: urządzenie MQTT {device} już nie istnieje."
+    },
+    "mqtt_unavailable": {
+      "message": "MQTT jest niedostępne."
+    },
+    "serial_connect_failed": {
+      "message": "Nie można połączyć się z bramką {port}: {error}"
+    },
+    "unsupported_preset_mode": {
+      "message": "Tryb {preset_mode} nie jest obsługiwany. Wybierz jeden z: {preset_modes}."
+    },
+    "loop_measurement_running": {
+      "message": "Pomiar pętli już trwa."
+    },
+    "loop_measurement_unavailable": {
+      "message": "Pomiar pętli wymaga termostatów pokojowych lub grzejnikowych, kotła przyjmującego nastawę i SAT w trybie grzania."
+    }
+  },
+  "issues": {
+    "setup_failed": {
+      "title": "SAT {title} nie steruje kotłem",
+      "description": "Uruchomienie {title} się nie udało i Home Assistant próbuje ponownie: {error}\n\nW tym czasie kotłem steruje termostat do niego podłączony."
+    },
+    "low_water_pressure": {
+      "title": "{title}: niskie ciśnienie wody",
+      "description": "Ciśnienie w instalacji wynosi {pressure} bar. Uzupełnij wodę do około 1,2–1,5 bar (na zimno), a jeśli ciśnienie dalej spada, sprawdź szczelność i naczynie wzbiorcze. Komunikat zniknie sam powyżej 0,9 bar."
+    },
+    "boiler_fault": {
+      "title": "{title}: kocioł zgłasza usterkę",
+      "description": "Kocioł zgłasza usterkę (kod producenta {code}). Sprawdź wyświetlacz kotła i instrukcję. Komunikat zniknie sam, gdy kocioł przestanie ją zgłaszać."
+    },
+    "frequent_flame_loss": {
+      "title": "{title}: kocioł często traci płomień",
+      "description": "W ostatniej dobie {count} paleń na ogrzewanie w {title} straciło płomień i kocioł musiał zapalić się ponownie. Kilka to normalne; tyle zwykle oznacza zużytą lub przesuniętą elektrodę jonizacyjną, spaliny zasysane z powrotem (wiatr, nieszczelny przewód), niskie ciśnienie gazu w godzinach szczytu albo palnik do regulacji. Wezwij serwis. Komunikat zniknie sam, gdy płomień przestanie gasnąć."
+    },
+    "cylinder_cools_in_heating": {
+      "title": "{title}: ogrzewanie wychładza zasobnik",
+      "description": "Bez poboru ciepłej wody zasobnik w {title} traci około {drop} K w pierwszych minutach palenia na ogrzewanie (mediana z ostatnich paleń). Woda grzewcza prawdopodobnie dostaje się do wężownicy zasobnika przy starcie ogrzewania: zawór trójdrogowy może nie domykać się albo przełączać nieczysto. Każdy taki spadek przyspiesza następne dogrzanie zasobnika. Zgłoś to przy przeglądzie; komunikat zniknie sam, gdy spadek będzie mniejszy niż 1 K."
+    },
+    "heat_exchanger_fouling": {
+      "title": "{title}: wymiennik może wymagać czyszczenia",
+      "description": "W ustalonych paleniach na ogrzewanie spaliny były w ostatniej dobie o około {gap} K cieplejsze od wody powrotnej. W czystym kotle kondensacyjnym różnica to kilka kelwinów, więc wymiennik albo palnik może wymagać serwisu."
+    },
+    "pressure_falling": {
+      "title": "{title}: ciśnienie wody ciągle spada",
+      "description": "Ciśnienie w {title} spadało w ostatnich dniach o {per_week} bar na tydzień, do {pressure} bar. Poszukaj wycieku lub sprawdź naczynie wzbiorcze, zanim kocioł się zablokuje."
+    },
+    "screed_overheat": {
+      "title": "{title}: za gorąca woda dla podłogi",
+      "description": "{title} przez kilka minut wysyłał do podłogi {flow} °C, powyżej limitu {limit} °C. Sprawdź maksymalną temperaturę ogrzewania w kotle."
+    },
+    "low_water_flow": {
+      "title": "{title}: za mały przepływ wody",
+      "description": "Zasilanie w {title} było w ustalonych paleniach o {spread} K cieplejsze od powrotu. Płynie za mało wody: sprawdź pętle, filtr i czy instalacja nie jest zapowietrzona."
+    },
+    "boiler_service_due": {
+      "title": "{title}: czas na przegląd kotła",
+      "description": "Przegląd {title} był zaplanowany na {due}."
+    },
+    "gas_use_increased": {
+      "title": "{title}: wzrosło zużycie gazu",
+      "description": "{title} zużył w zeszłym tygodniu o {percent} % więcej gazu na stopniodzień niż w poprzednich tygodniach. Sprawdź, czy nie jest otwarte okno, zamknięta pętla albo czy kocioł działa prawidłowo."
+    }
+  }
+}

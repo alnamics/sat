@@ -2,107 +2,116 @@
 
 🇬🇧 [English version](../options.md)
 
-Otwórz stronę integracji i kliknij **Konfiguruj**. Ustawienia są w trzech menu: [General](#general), [Presets](#presets) i [System Configuration](#system-configuration). Niektóre ustawienia pojawiają się tylko wtedy, gdy dotyczą Twojej instalacji.
+Otwórz stronę integracji i kliknij **Konfiguruj**. Ustawienia są podzielone na menu:
 
-Nazwy ustawień w interfejsie są po angielsku, dlatego tutaj podane są w oryginale.
+- [Krzywa grzewcza i PID](#krzywa-grzewcza-i-pid)
+- [Tryby (presety)](#tryby-presety)
+- [Sterowanie i PWM](#sterowanie-i-pwm)
+- [Budżet ciepła](#budżet-ciepła)
+- [Ciepła woda](#ciepła-woda)
+- [Obecność i okna](#obecność-i-okna)
+- [Kocioł i serwis](#kocioł-i-serwis)
 
-Wartości domyślne pasują do większości domów.
+Menu budżetu ciepła, ciepłej wody i obecności nie ma w trybie przełącznika (termostat PID włącz/wyłącz). Niektóre pola pojawiają się tylko wtedy, gdy dotyczą Twojej instalacji. Wartości domyślne pasują do większości domów.
 
-Ustawienia dodane przez ten fork są wymienione w sekcji [Zaawansowane: dodatki MPX](#zaawansowane-dodatki-mpx) i wyjaśnione na stronie [Dodatki MPX](mpx.md).
+Od wersji 5.2.0.32 ustawienia mają polskie nazwy, gdy Home Assistant jest po polsku. W nawiasach podane są nazwy angielskie. Ustawienia dodane przez ten fork oznaczone są ⓜ i wyjaśnione na stronie [Dodatki MPX](mpx.md).
 
-## General
+## Krzywa grzewcza i PID
 
-- **PID Controller Version**: Classic, Improved albo Adaptive (domyślnie). Adaptive stroi się sam. Classic i Improved korzystają z ustawienia Automatic Gains Value poniżej.
-- **Heating Mode**: tylko gdy dodane są pokoje. *Comfort* grzeje pod pokój, któremu najwięcej brakuje do temperatury zadanej. *Eco* grzeje tylko pod główny pokój.
-- **Maximum Setpoint**: najgorętsza woda, o jaką SAT może poprosić. Dla grzejników pasuje 55–75 °C, dla ogrzewania podłogowego 50 °C. Wyższa wartość szybciej nagrzewa dom. Nie może być niższa od wartości ochrony przed przegrzaniem.
-- **Overshoot protection value**: najniższa temperatura wody, jaką kocioł potrafi utrzymać. Ustawia ją [kalibracja](how-it-works.md#kalibracja) albo wpisujesz ją ręcznie.
-- **Heating Curve Coefficient**: jak stroma jest [krzywa grzewcza](how-it-works.md#krzywa-grzewcza) (domyślnie 2,0). Zwiększ, jeśli w zimne dni w domu jest za zimno, zmniejsz, jeśli dom się przegrzewa.
-- **Automatic Gains Value**: jak mocno reagują regulatory Classic i Improved (domyślnie 2,0). Dobrze sprawdza się wartość równa współczynnikowi krzywej grzewczej.
-- **Derivative Time Weight**: dostraja, jak SAT tłumi szybkie zmiany (domyślnie 2,5).
-- **Proportional, Integral, Derivative**: własne wartości PID, widoczne, gdy Automatic Gains jest wyłączone.
-- **Maximum Duty Cycle for Pulse Width Modulation**: długość [cyklu przy małym obciążeniu](how-it-works.md#sterowanie-przy-małym-obciążeniu), gdy Automatic duty cycle jest wyłączone (domyślnie 13 minut).
-- **Contact Sensors**: czujniki otwarcia drzwi i okien. Gdy któryś jest otwarty dłużej niż minimalny czas otwarcia, SAT przełącza się na preset Activity, a po zamknięciu przywraca poprzednią temperaturę zadaną.
+- **Regulator PID** (PID controller): Klasyczny, Ulepszony albo Adaptacyjny (domyślnie). Adaptacyjny stroi się sam; Klasyczny i Ulepszony korzystają z siły automatycznych wzmocnień.
+- **Tryb grzania** (Heating mode): tylko z dodanymi pomieszczeniami. *Komfort* grzeje pod pomieszczenie, któremu najwięcej brakuje do temperatury docelowej, *Eko* tylko pod główne.
+- **Maksymalna temperatura zasilania** (Maximum flow temperature): najgorętsza woda, o jaką SAT poprosi. Dla grzejników 55–75 °C, dla podłogówki 50 °C. Nie może być niższa od wartości ochrony przed przegrzaniem.
+- **Wartość ochrony przed przegrzaniem** (Overshoot protection value): najniższa temperatura zasilania, jaką kocioł utrzymuje na minimalnej mocy. Ustawia ją [kalibracja](how-it-works.md#kalibracja) albo wpisujesz ją ręcznie. SAT wysyła ją w fazach palenia PWM.
+- **Współczynnik krzywej grzewczej** (Heating curve coefficient): nachylenie [krzywej grzewczej](how-it-works.md#krzywa-grzewcza) (domyślnie 2,0). Zwiększ, gdy w mrozy jest za zimno, zmniejsz, gdy dom się przegrzewa.
+- **Siła automatycznych wzmocnień** (Automatic gains value): jak mocno reagują regulatory Klasyczny i Ulepszony (domyślnie 2,0). Dobrze sprawdza się wartość równa współczynnikowi krzywej.
+- **Waga czasowa członu różniczkującego** (Derivative time weight): jak SAT tłumi szybkie zmiany (domyślnie 2,5).
+- **Proporcjonalne, Całkujące, Różniczkujące** (kP, kI, kD): własne wartości PID, widoczne, gdy automatyczne wzmocnienia są wyłączone.
+- **Maksymalny cykl PWM** (Maximum PWM duty cycle): długość [cyklu przy małym obciążeniu](how-it-works.md#sterowanie-przy-małym-obciążeniu), gdy automatyczny cykl jest wyłączony (domyślnie 13 minut).
+- **Czujniki okien i drzwi** (Window and door sensors): gdy któryś jest otwarty dłużej niż minimalny czas otwarcia, SAT przełącza się na tryb Aktywność, a po zamknięciu wraca do poprzedniej temperatury.
 
-## Presets
+## Tryby (presety)
 
-Temperatury zadane od 5 do 35 °C:
+Temperatury docelowe od 5 do 35 °C:
 
-| Preset | Domyślnie |
+| Tryb | Domyślnie |
 |---|---|
-| Activity (Aktywność; używany także przy otwartym oknie) | 10 °C |
-| Away (Poza domem) | 10 °C |
-| Sleep (Sen) | 15 °C |
-| Home (W domu) | 18 °C |
-| Comfort (Komfort) | 20 °C |
+| Aktywność (Activity; także przy otwartym oknie) | 10 °C |
+| Poza domem (Away) | 10 °C |
+| Sen (Sleep) | 15 °C |
+| W domu (Home) | 18 °C |
+| Komfort (Comfort) | 20 °C |
 
-- **Synchronize climates with preset**: stosuje presety Sleep, Away i Activity także do termostatów pokojowych.
-- **Synchronize with thermostat attached to the boiler**: wysyła temperaturę zadaną SAT do termostatu ściennego.
+- **Przekazuj tryb termostatom pokojowym** (Pass the preset to the room thermostats): tryby Sen, Poza domem i Aktywność trafiają też do termostatów pokojowych.
+- **Przekazuj temperaturę docelową termostatowi kotła** (Pass the target to the boiler's thermostat): termostat podłączony do kotła ma tę samą temperaturę docelową i przejmuje sterowanie, gdy Home Assistant przestanie działać.
 
-## System Configuration
+## Sterowanie i PWM
 
-- **Automatic duty cycle**: SAT sam dobiera długość [cyklu przy małym obciążeniu](how-it-works.md#sterowanie-przy-małym-obciążeniu) z liczby cykli na godzinę. Po wyłączeniu długość pochodzi z menu General.
-- **Duty Cycles per hour**: największa liczba cykli kotła na godzinę. 3 albo 4 dla grzejników, 2 albo 3 dla pomp ciepła, od 1 do 4 dla ogrzewania podłogowego (dla przewymiarowanego kotła pasuje 2).
-- **Synchronize climates with mode**: włączenie albo wyłączenie SAT robi to samo z każdym podłączonym termostatem.
-- **Temperature Sensor maximum value age**: jak długo odczyt czujnika uznaje się za aktualny (domyślnie 6 godzin).
-- **Mode when nothing can be restored**: czy SAT startuje w trybie grzania, czy wyłączony, gdy nie ma zapisanego stanu, na przykład przy pierwszym uruchomieniu.
-- **Minimum time for window to be open**: jak długo czujnik otwarcia musi być otwarty, zanim SAT zareaguje (domyślnie 15 sekund).
+- **Automatyczny cykl PWM** (Automatic PWM duty cycle): SAT sam dobiera długość [cyklu przy małym obciążeniu](how-it-works.md#sterowanie-przy-małym-obciążeniu). Po wyłączeniu długość pochodzi z menu Krzywa grzewcza i PID.
+- **Cykle PWM na godzinę** (PWM cycles per hour): najwięcej startów palnika na godzinę. 3 albo 4 dla grzejników, 2 albo 3 dla pomp ciepła, ⓜ od 1 do 4 dla podłogówki (2 dla przewymiarowanego kotła). Budżet ciepła robi ich mniej.
+- **Przekazuj tryb pracy termostatom pokojowym** (Pass the mode to the room thermostats): włączenie albo wyłączenie SAT robi to samo z podłączonymi termostatami.
+- **Tryb po starcie bez zapisanego stanu** (Mode after a start without saved state): Grzanie albo Wyłączony, np. przy pierwszym uruchomieniu.
+- **Maksymalny wiek odczytu temperatury** (Maximum age of a temperature reading): starszy odczyt oznacza, że czujnik przestał raportować (domyślnie 6 godzin).
+- **Minimalny czas otwarcia okna** (Minimum time a window is open): jak długo czujnik okna musi być otwarty, zanim grzanie zostanie wstrzymane (domyślnie 15 sekund).
 
-### Advanced
+### Zaawansowane
 
-Ta sekcja jest domyślnie zwinięta.
+Sekcja jest domyślnie zwinięta.
 
-- **Thermal Comfort**: steruje według temperatury odczuwalnej (Summer Simmer Index), wyliczanej z temperatury i wilgotności. Wymaga czujnika wilgotności.
-- **Force Pulse Width Modulation**: zawsze używa [cykli przy małym obciążeniu](how-it-works.md#sterowanie-przy-małym-obciążeniu), nawet gdy kocioł sam utrzymałby temperaturę. Tylko OTGW.
-- **Minimum Consumption** i **Maximum Consumption**: zużycie gazu przez kocioł na najniższej i najwyższej mocy, z instrukcji kotła. SAT szacuje z nich zużycie gazu oraz moc palnika, gdy kocioł nie podaje swojej mocy.
-- **Climate valve offset**: dla termostatów pokojowych, które nie informują, czy grzeją. Pokój liczy się jako wołający o ciepło, gdy jest co najmniej o tyle poniżej swojej temperatury zadanej (domyślnie 0).
-- **Target Temperature Step**: krok temperatury zadanej SAT (domyślnie 0,5 °C).
-- **Maximum Relative Modulation**: ogranicza moc kotła, w procentach (domyślnie 100).
-- **Sample Time**: najkrótszy czas między dwiema aktualizacjami PID (domyślnie 1 minuta).
-- **Calibration flame timeout** i **Calibration plateau timeout**: jak długo [kalibracja](how-it-works.md#kalibracja) czeka na zapłon palnika (domyślnie 10 minut) i na ustabilizowanie temperatury wody (domyślnie 40 minut, co najmniej 5).
+- **Zawsze używaj PWM** (Always use PWM): cykle przy małym obciążeniu także wtedy, gdy kocioł mógłby zmodulować wystarczająco nisko. Tylko OpenTherm.
+- ⓜ **Ucz się wartości ochrony przed przegrzaniem** (Learn the overshoot protection value, domyślnie wyłączone): [szczegóły](mpx.md#ustawienia-kotła). Bieżącą wartość pokazuje atrybut `minimum_setpoint`. Tylko OpenTherm.
+- ⓜ **Przerwane palenia, po których kończy się faza PWM** (Cut-short burns before a PWM on-phase ends): ile paleń kocioł może sam przerwać w jednej fazie (domyślnie 2; dla przewymiarowanego kotła na podłogówce 1).
+- **Maksymalna modulacja** (Maximum modulation): ogranicza moc kotła, w procentach (domyślnie 100).
+- **Próg otwarcia zaworu termostatu pokojowego** (Room thermostat valve offset): dla termostatów, które nie podają, czy grzeją. Pokój chce ciepła, gdy jest co najmniej o tyle poniżej swojej temperatury docelowej (domyślnie 0).
+- **Krok temperatury docelowej** (Target temperature step): domyślnie 0,5 °C.
+- **Okres próbkowania PID** (PID sample time): najkrótszy czas między dwoma przeliczeniami PID (domyślnie 1 minuta).
+- **Kalibracja: czekanie na płomień** i **czekanie na stałe zasilanie** (Calibration: wait for the flame / for a steady flow): jak długo [kalibracja](how-it-works.md#kalibracja) czeka na zapłon (domyślnie 10 minut) i na ustalenie temperatury wody (domyślnie 40 minut, co najmniej 5).
+- **Temperatura odczuwalna** (Felt temperature): steruje według temperatury odczuwalnej (Summer Simmer Index) z temperatury i wilgotności. Wymaga czujnika wilgotności.
+- **Symulacja** (Simulation): SAT wszystko liczy, ale nic nie wysyła do kotła.
 
-### Zaawansowane: dodatki MPX
+## Budżet ciepła
+
+ⓜ Dla wolnych instalacji, np. podłogówki w wylewce. [Szczegóły](mpx.md#budżet-ciepła).
 
 > [!WARNING]
 > Kod napisany przez AI i niesprawdzony, zobacz [Dodatki MPX](mpx.md). Przy wartościach domyślnych SAT steruje kotłem tak jak oryginalny SAT v2.
 
-Poniżej jest tylko to, czym jest każde ustawienie; jak działają funkcje, wyjaśnia strona [Dodatki MPX](mpx.md). Te ustawienia też są w sekcji Advanced.
+- **Budżet ciepła** (Heat budget): Wyłączony (domyślnie), Tylko nauka albo Włączony. Włączony steruje tylko ogrzewaniem podłogowym.
+- **Straty ciepła domu** (Heat loss of the house): w W/K; 0 oznacza naukę (domyślnie, zalecane).
+- **Okres** (Period): co tyle przybywa kredytu ciepła (domyślnie 60 minut).
+- **Minimalne palenie** (Minimum burn): najkrótszy blok wart zapłonu (domyślnie 10 minut).
+- **Prognoza pogody** (Weather forecast): encja pogody z prognozą godzinową (np. Met.no albo Open-Meteo). Czujnik z samymi bieżącymi wartościami, np. Airly, się nie nadaje.
+- **Harmonogram komfortu** i **Obniżenie poza harmonogramem** (Comfort schedule / Setback outside the schedule): pomocnik harmonogramu włączony w godzinach komfortu i to, o ile chłodniej jest poza nimi (domyślnie 0).
+- **Wyłączenie przy ciepłej pogodzie** (Warm weather shutdown): średnia dobowa temperatura zewnętrzna, przy której ogrzewanie się wyłącza (domyślnie 0: nigdy).
 
-**Kocioł** ([szczegóły](mpx.md#ustawienia-kotła))
+## Ciepła woda
 
-- **Heat per cubic metre of gas**: ile kWh daje kotłowi metr sześcienny gazu (domyślnie 10,2 dla gazu ziemnego; około 24 dla propanu).
-- **Condensing boiler** (domyślnie włączone): do szacowania sprawności kotła, który nie podaje temperatury spalin. Wyłącz dla kotła niekondensacyjnego.
-- **Cut-short burns before ending the PWM on-phase**: ile paleń kocioł może sam przerwać w jednym cyklu przy małym obciążeniu, zanim SAT zakończy fazę ON (domyślnie 2; dla przewymiarowanego kotła na podłogówce 1).
-- **Boiler anti-cycling time**: własny czas oczekiwania kotła przed ponownym zapłonem, z ustawień instalatora (domyślnie 0: nie ustawiono).
-- **Learn overshoot protection value** (domyślnie wyłączone): koryguje skalibrowaną wartość na podstawie tego, jak kończą się palenia przy małym obciążeniu, w zakresie od 30 °C do maksymalnej temperatury zadanej minus 3 °C. Bieżącą wartość pokazuje atrybut `minimum_setpoint`.
-- **Valve opening time**: ile trwa otwarcie siłowników termostatów pokojowych (domyślnie 0: zapalaj kocioł od razu).
-- **Keep heating enabled between PWM on-phases** (domyślnie wyłączone): dla kotłów dwufunkcyjnych, w których wybieg pompy wychładza zasobnik ciepłej wody. Niedostępne w trybie przełącznika.
-- **Duty Cycles per hour**: ogrzewanie podłogowe może zejść do 1.
+ⓜ Dla kotłów, które przyjmują temperaturę ciepłej wody przez OpenTherm. [Szczegóły](mpx.md#ciepła-woda).
 
-**Budżet ciepła** ([szczegóły](mpx.md#budżet-ciepła))
+- **Temperatura ciepłej wody** (Hot water temperature): domyślnie 0, czyli ciepłą wodą zajmuje się kocioł.
+- **Temperatura eko** (Eco temperature) i **Harmonogram ciepłej wody** (Hot water schedule): poza godzinami harmonogramu obowiązuje temperatura eko.
+- **Dzień przegrzewu (legionella)** i **Godzina przegrzewu** (Legionella boost day / start): domyślnie wyłączone.
 
-- **Heat budget**: `Off` (domyślnie), `Learn only (shadow)` albo `On`. `On` steruje tylko ogrzewaniem podłogowym.
-- **Heat budget period**: jeden blok grzania na okres (domyślnie 60 minut).
-- **Heat budget minimum burn**: najkrótszy blok wart zapłonu (domyślnie 10 minut).
-- **Heat loss of the house**: straty ciepła domu w W/K; 0 oznacza naukę (domyślnie).
-- **Weather forecast**: encja pogody z prognozą godzinową (na przykład Met.no albo Open-Meteo). Używa jej także wyłączanie ogrzewania przy cieple. Czujnik podający tylko bieżące wartości, taki jak Airly, się tu nie nadaje.
-- **Comfort schedule** i **Setback**: pomocnik harmonogramu, który jest włączony w godzinach komfortu, oraz to, o ile temperatura zadana spada poza nimi (domyślnie 0: bez obniżenia).
+## Obecność i okna
 
-**Harmonogramy i obecność** ([szczegóły](mpx.md#harmonogramy-i-obecność))
+ⓜ [Szczegóły](mpx.md#harmonogramy-i-obecność).
 
-- **Warm weather shutdown**: średnia dobowa temperatura zewnętrzna, przy której centralne ogrzewanie się wyłącza (domyślnie 0: nigdy).
-- **Presence**, **Distance to home** i **Return distance**: kto liczy się jako obecny w domu, opcjonalny czujnik odległości z integracji Proximity oraz to, jak blisko ktoś musi być, żeby ogrzewanie wróciło.
-- **Detect open windows from the temperature** (domyślnie wyłączone).
+- **Obecność** (Presence): kto liczy się jako obecny w domu. Po 30 minutach nieobecności wszystkich SAT przełącza się na Poza domem.
+- **Odległość od domu** i **Odległość powrotu** (Distance to home / Return distance): opcjonalny czujnik z integracji Proximity i to, jak blisko ktoś musi być, żeby grzanie wróciło.
+- **Wykrywaj otwarte okna po temperaturze** (Detect open windows from the temperature): domyślnie wyłączone.
 
-**Ciepła woda** ([szczegóły](mpx.md#ciepła-woda))
+## Kocioł i serwis
 
-- **Hot water temperature** (domyślnie 0: zostaw ciepłą wodę kotłowi), **Hot water eco temperature** i **Hot water schedule**.
-- **Legionella boost day** (domyślnie wyłączone) i **start**.
+ⓜ [Szczegóły](mpx.md#ustawienia-kotła) i [Monitoring](mpx.md#monitoring).
 
-**Monitoring** ([szczegóły](mpx.md#monitoring))
-
-- **Maximum flow for the screed**: tylko ogrzewanie podłogowe (domyślnie 55 °C; 0 wyłącza sprawdzanie).
-- **Last boiler service** i **Service interval**: do przypomnienia o przeglądzie.
-- **Gas price per cubic metre**: dodaje sensor kosztu gazu (domyślnie 0: wyłączone).
+- **Nie wyłączaj ogrzewania między fazami PWM** (Keep heating enabled between PWM on-phases, domyślnie wyłączone): dla kotłów dwufunkcyjnych, w których wybieg pompy wychładza zasobnik. Nie ma go w trybie przełącznika.
+- **Blokada ponownego zapłonu w kotle** (Boiler anti-cycling time): własna przerwa kotła przed ponownym zapłonem z ustawień instalatora (domyślnie 0: nieustawiona).
+- **Czas otwarcia siłowników** (Valve opening time): ile otwierają się siłowniki termostatów pokojowych (domyślnie 0: kocioł zapala się od razu).
+- **Maksymalne zasilanie dla wylewki** (Maximum flow for the screed): tylko podłogówka (domyślnie 55 °C; 0 wyłącza).
+- **Kocioł kondensacyjny** (Condensing boiler, domyślnie włączone): do szacowania sprawności bez czujnika spalin.
+- **Zużycie gazu na minimalnej i maksymalnej mocy** (Gas use at minimum / maximum power): z instrukcji kotła, w m³/h. SAT szacuje z nich zużycie gazu oraz moc palnika, gdy kocioł jej nie podaje. Tylko OpenTherm.
+- **Ciepło z metra sześciennego gazu** (Heat per cubic metre of gas): domyślnie 10,2 kWh/m³ dla gazu ziemnego, około 24 dla propanu. Tylko OpenTherm.
+- **Cena gazu za metr sześcienny** (Gas price per cubic metre): dodaje sensor kosztu gazu (domyślnie 0: wyłączone).
+- **Ostatni przegląd kotła** i **Odstęp między przeglądami** (Last boiler service / Service interval): do przypomnienia o przeglądzie w Naprawach.
 
 ---
 

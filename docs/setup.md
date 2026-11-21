@@ -110,7 +110,7 @@ The [ESPHome OpenTherm docs](https://esphome.io/components/opentherm.html) list 
 
 - **Inside sensor**: the temperature of the room SAT controls. A sensor that reports two decimals and updates every 30 seconds works best.
 - **Outside sensor**: a temperature sensor or a weather entity. You can pick several, and SAT uses the first one that has a reading.
-- **Humidity sensor** (optional): only used by [Thermal Comfort](options.md#advanced).
+- **Humidity sensor** (optional): only used by [Felt temperature](options.md#advanced).
 
 ## Heating system
 
@@ -124,7 +124,7 @@ Skip this step if SAT is your only thermostat.
 - **Radiators**: radiator thermostats (TRVs) in the same room as the inside sensor.
 - **Rooms**: thermostats in other rooms, each with its own target. SAT heats when any of them asks for heat.
 
-With rooms added, [Heating Mode](options.md#general) decides whether SAT also heats for the other rooms or only for the main one.
+With rooms added, [Heating Mode](options.md#heating-curve-and-pid) decides whether SAT also heats for the other rooms or only for the main one.
 
 ## Calibration
 
@@ -136,7 +136,7 @@ Only for OpenTherm and EMS-ESP. Pick one:
 
 You can calibrate again any time with the **Calibrate overshoot protection** button.
 
-The on/off thermostat asks about **Automatic Gains** instead. Keep them on, or turn them off and enter the PID values in [Options](options.md#general).
+The on/off thermostat asks about **Automatic Gains** instead. Keep them on, or turn them off and enter the PID values in [Options](options.md#heating-curve-and-pid).
 
 ## Manufacturer
 

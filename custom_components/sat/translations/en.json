@@ -157,7 +157,8 @@
         "description": "We have attempted to identify the most suitable manufacturer for your heating system based on your gateway type and device information. However, if this does not match your setup, you can select a different manufacturer from the list.",
         "data": {
           "manufacturer": "Manufacturer"
-        }
+        },
+        "title": "Boiler manufacturer"
       }
     }
   },
@@ -167,162 +168,273 @@
       "calibration_timeout": "The calibration flame timeout must be above zero and the plateau timeout at least 5 minutes."
     },
     "step": {
+      "init": {
+        "title": "SAT settings",
+        "description": "Pick a group of settings.",
+        "menu_options": {
+          "general": "Heating curve and PID",
+          "presets": "Presets",
+          "system_configuration": "Control and PWM",
+          "heat_budget": "Heat budget",
+          "hot_water": "Hot water",
+          "presence": "Presence and windows",
+          "boiler": "Boiler and service"
+        }
+      },
       "general": {
+        "title": "Heating curve and PID",
+        "description": "How SAT works out the flow temperature the house needs.",
         "data": {
-          "automatic_gains_value": "Automatic Gains Value",
-          "derivative": "Derivative (kD)",
-          "derivative_time_weight": "Derivative Time Weight",
-          "duty_cycle": "Maximum Duty Cycle for Pulse Width Modulation",
-          "heating_curve_coefficient": "Heating Curve Coefficient",
-          "heating_curve_version": "Heating Curve Version",
-          "integral": "Integral (kI)",
-          "maximum_setpoint": "Maximum Setpoint",
-          "pid_controller_version": "PID Controller Version",
+          "pid_controller_version": "PID controller",
+          "heating_mode": "Heating mode",
+          "maximum_setpoint": "Maximum flow temperature",
+          "minimum_setpoint": "Overshoot protection value",
+          "heating_curve_coefficient": "Heating curve coefficient",
+          "automatic_gains_value": "Automatic gains value",
+          "derivative_time_weight": "Derivative time weight",
           "proportional": "Proportional (kP)",
-          "window_sensors": "Contact Sensors",
-          "heating_mode": "Heating Mode",
-          "minimum_setpoint": "Overshoot protection value"
+          "integral": "Integral (kI)",
+          "derivative": "Derivative (kD)",
+          "duty_cycle": "Maximum PWM duty cycle",
+          "window_sensors": "Window and door sensors"
         },
         "data_description": {
-          "automatic_gains_value": "The value used for automatic gains in the PID controller.",
-          "derivative": "The derivative term (kD) in the PID controller, responsible for mitigating overshooting.",
-          "derivative_time_weight": "A parameter to adjust the influence of the derivative term over time, particularly useful for reducing undershoot during the warm-up phase when the heating curve coefficient is correctly set.",
-          "duty_cycle": "The maximum duty cycle for Pulse Width Modulation (PWM), controlling the boiler's on-off cycles.",
-          "heating_curve_coefficient": "The coefficient used to adjust the heating curve.",
-          "integral": "The integral term (kI) in the PID controller, responsible for reducing steady-state error.",
-          "maximum_setpoint": "The optimal temperature for efficient boiler operation.",
-          "proportional": "The proportional term (kP) in the PID controller, responsible for the immediate response to errors.",
-          "window_sensors": "Contact Sensors that trigger the system to react when a window or door is open for a period of time.",
-          "minimum_setpoint": "Lowest flow temperature the boiler holds at minimum modulation."
-        },
-        "description": "General settings and configurations.",
-        "title": "General"
-      },
-      "init": {
-        "menu_options": {
-          "general": "General",
-          "presets": "Presets",
-          "system_configuration": "System Configuration"
+          "pid_controller_version": "Adaptive is the newest and adjusts its gains to the house.",
+          "heating_mode": "Comfort heats for the coldest room, Eco for the main thermostat only.",
+          "maximum_setpoint": "The highest flow temperature SAT asks for. For underfloor heating at most 50 °C.",
+          "minimum_setpoint": "The lowest flow temperature the boiler holds at minimum power. SAT sends it in PWM on-phases.",
+          "heating_curve_coefficient": "Steepness of the heating curve: raise it if the house stays cold in frosty weather.",
+          "automatic_gains_value": "How strongly the automatic gains react.",
+          "derivative_time_weight": "Influence of the derivative term over time; it reduces undershoot while warming up.",
+          "proportional": "Reacts to the current room error.",
+          "integral": "Removes a lasting room error.",
+          "derivative": "Damps the response to fast changes.",
+          "duty_cycle": "The longest PWM cycle when the duty cycle is not automatic.",
+          "window_sensors": "While one is open for the minimum time, heating pauses (Activity preset)."
         }
       },
       "presets": {
+        "title": "Presets",
+        "description": "Room temperatures of the presets.",
         "data": {
-          "activity_temperature": "Activity Temperature",
-          "away_temperature": "Away Temperature",
-          "comfort_temperature": "Comfort Temperature",
-          "home_temperature": "Home Temperature",
-          "sleep_temperature": "Sleep Temperature",
-          "push_setpoint_to_thermostat": "Synchronize with thermostat attached to the boiler",
-          "sync_climates_with_preset": "Synchronize climates with preset (sleep / away / activity)"
-        },
-        "description": "Predefined temperature settings for different scenarios or activities.",
-        "title": "Presets"
-      },
-      "system_configuration": {
-        "data": {
-          "cycles_per_hour": "Duty Cycles per hour",
-          "automatic_duty_cycle": "Automatic duty cycle",
-          "sync_climates_with_mode": "Synchronize climates with mode",
-          "overshoot_protection": "Overshoot Protection (with PWM)",
-          "sensor_max_value_age": "Temperature Sensor maximum value age",
-          "window_minimum_open_time": "Minimum time for window to be open",
-          "default_hvac_mode": "Mode when nothing can be restored"
+          "comfort_temperature": "Comfort",
+          "home_temperature": "Home",
+          "sleep_temperature": "Sleep",
+          "away_temperature": "Away",
+          "activity_temperature": "Activity",
+          "sync_climates_with_preset": "Pass the preset to the room thermostats",
+          "push_setpoint_to_thermostat": "Pass the target to the boiler's thermostat"
         },
         "data_description": {
-          "cycles_per_hour": "The maximum amount of duty cycles per hour.",
-          "automatic_duty_cycle": "Enable or disable automatic duty cycle for Pulse Width Modulation (PWM).",
-          "overshoot_protection": "Enable overshoot protection with Pulse Width Modulation (PWM) to prevent boiler temperature overshooting.",
-          "sensor_max_value_age": "The maximum age of the temperature sensor value before considering it as a stall.",
-          "window_minimum_open_time": "The minimum time a window must be open before the system reacts.",
-          "default_hvac_mode": "HVAC mode used on the first start, or when no saved state is available."
+          "activity_temperature": "Also used while a window is open.",
+          "sync_climates_with_preset": "For the Sleep, Away and Activity presets.",
+          "push_setpoint_to_thermostat": "Keeps the room thermostat attached to the boiler on the same target, as a backup if Home Assistant fails."
+        }
+      },
+      "system_configuration": {
+        "title": "Control and PWM",
+        "description": "How SAT switches the burner and reads its sensors.",
+        "data": {
+          "automatic_duty_cycle": "Automatic PWM duty cycle",
+          "cycles_per_hour": "PWM cycles per hour",
+          "sync_climates_with_mode": "Pass the mode to the room thermostats",
+          "default_hvac_mode": "Mode after a start without saved state",
+          "sensor_max_value_age": "Maximum age of a temperature reading",
+          "window_minimum_open_time": "Minimum time a window is open"
         },
-        "description": "For fine-tuning and customization.",
-        "title": "System Configuration",
+        "data_description": {
+          "automatic_duty_cycle": "Lets SAT choose the length of the PWM cycles.",
+          "cycles_per_hour": "The most burner starts per hour PWM may use. The heat budget makes fewer.",
+          "sync_climates_with_mode": "Heat and off are passed to the radiator and room thermostats.",
+          "sensor_max_value_age": "An older reading counts as a stalled sensor.",
+          "window_minimum_open_time": "How long a window sensor must be open before heating pauses."
+        },
         "sections": {
           "advanced": {
             "name": "Advanced",
+            "description": "Leave these at their defaults unless you know why.",
             "data": {
-              "climate_valve_offset": "Climate valve offset",
-              "force_pulse_width_modulation": "Force Pulse Width Modulation",
-              "maximum_consumption": "Maximum Consumption",
-              "maximum_relative_modulation": "Maximum Relative Modulation",
-              "minimum_consumption": "Minimum Consumption",
-              "sample_time": "Sample Time",
-              "simulation": "Simulation",
-              "target_temperature_step": "Target Temperature Step",
-              "thermal_comfort": "Thermal Comfort",
-              "calibration_flame_timeout": "Calibration flame timeout",
-              "calibration_plateau_timeout": "Calibration plateau timeout",
-              "gas_energy_content": "Heat per cubic metre of gas",
-              "pwm_short_burns_threshold": "Cut-short burns before ending the PWM on-phase",
-              "boiler_anti_cycling_time": "Boiler anti-cycling time",
-              "learn_overshoot_protection": "Learn overshoot protection value",
-              "valve_opening_time": "Valve opening time",
-              "keep_heating_in_pwm_off": "Keep heating enabled between PWM on-phases",
-              "heat_budget_mode": "Heat budget",
-              "heat_budget_period": "Heat budget period",
-              "heat_budget_minimum_burn": "Heat budget minimum burn",
-              "heat_loss_coefficient": "Heat loss of the house",
-              "weather_forecast_entity_id": "Weather forecast",
-              "comfort_schedule_entity_id": "Comfort schedule",
-              "setback_temperature": "Setback outside the comfort schedule",
-              "warm_weather_shutdown_temperature": "Warm weather shutdown",
-              "hot_water_schedule_entity_id": "Hot water schedule",
-              "hot_water_comfort_temperature": "Hot water temperature",
-              "hot_water_eco_temperature": "Hot water eco temperature",
-              "legionella_day": "Legionella boost day",
-              "legionella_time": "Legionella boost start",
-              "presence_entity_ids": "Presence",
-              "proximity_entity_id": "Distance to home",
-              "return_distance": "Return distance",
-              "window_detection": "Detect open windows from the temperature",
-              "screed_maximum_temperature": "Maximum flow for the screed",
-              "last_service_date": "Last boiler service",
-              "service_interval": "Service interval",
-              "gas_price": "Gas price per cubic metre",
-              "condensing_boiler": "Condensing boiler"
+              "force_pulse_width_modulation": "Always use PWM",
+              "learn_overshoot_protection": "Learn the overshoot protection value",
+              "pwm_short_burns_threshold": "Cut-short burns before a PWM on-phase ends",
+              "maximum_relative_modulation": "Maximum modulation",
+              "climate_valve_offset": "Room thermostat valve offset",
+              "target_temperature_step": "Target temperature step",
+              "sample_time": "PID sample time",
+              "calibration_flame_timeout": "Calibration: wait for the flame",
+              "calibration_plateau_timeout": "Calibration: wait for a steady flow",
+              "thermal_comfort": "Felt temperature (summer simmer index)",
+              "simulation": "Simulation (do not control the boiler)"
             },
             "data_description": {
-              "climate_valve_offset": "Offset to adjust the opening degree of the climate valve.",
-              "maximum_consumption": "The maximum gas consumption when the boiler is active.",
-              "maximum_relative_modulation": "Representing the highest modulation level for an efficient heating system.",
-              "minimum_consumption": "The minimum gas consumption when the boiler is active.",
-              "sample_time": "The minimum time interval between updates to the PID controller.",
-              "target_temperature_step": "Adjust the target temperature step for fine-tuning comfort levels.",
-              "thermal_comfort": "Enable the use of the Simmer Index for thermal comfort adjustment.",
-              "calibration_flame_timeout": "How long the overshoot protection calibration waits for the burner to light.",
-              "calibration_plateau_timeout": "How long the overshoot protection calibration heats while waiting for a stable flow temperature.",
-              "gas_energy_content": "Heat the boiler gets from one cubic metre of gas, in kWh/m³: about 10.2 for natural gas, 24 for propane. Used for the gas, heat and water flow estimates.",
-              "pwm_short_burns_threshold": "How many burns the boiler may cut short in one PWM on-phase before SAT ends the on-phase early. 1 allows a single burn per on-phase (default 2).",
-              "boiler_anti_cycling_time": "The boiler's own wait before it relights (anti-cycling). SAT waits this long plus a minute before reporting the flame as stuck off, and calibration waits at least this long plus two minutes for the burner to light. 0 keeps the defaults.",
-              "learn_overshoot_protection": "Start from the calibrated value and adjust it during normal operation: up when the boiler stops PWM burns by overheating or cannot light, down when long burns level off below the setpoint. Calibrating again or changing the value starts over.",
-              "valve_opening_time": "How long the valve actuators of the radiator and room thermostats take to open. When a thermostat starts asking for heat and no other one has asked for longer, SAT waits this long before lighting the boiler. 0 lights it at once.",
-              "keep_heating_in_pwm_off": "Leaves central heating enabled at the minimum setpoint in PWM off-phases instead of switching it off. The boiler stays in heating mode, so its pump keeps circulating through the floor and a combi boiler with a hot water cylinder does not swing its diverter valve to the cylinder and cool it with the pump overrun. If the boiler lights during an off-phase anyway, SAT switches heating off between on-phases again for an hour.",
-              "heat_budget_mode": "For slow emitters such as screed underfloor heating. SAT learns how much heat the house loses per degree (from the burner time and the indoor and outdoor temperatures over each day) and, once it knows, burns the heat the next period needs in one block at minimum power, carrying over heat that hot water or a boiler cut-out kept from being delivered. Learn only (shadow) learns and shows its plan in the climate attributes without controlling. Until it has learned (about 36 hours) the normal PWM controls.",
-              "heat_budget_period": "How often the heat budget burns one block. Longer periods mean fewer, longer burns; the screed evens out the room temperature.",
-              "heat_budget_minimum_burn": "The shortest block worth lighting the burner for. Less heat than this is carried into the next period.",
-              "heat_loss_coefficient": "Heat the house loses per degree between inside and outside, in W/K. 0 learns it.",
-              "weather_forecast_entity_id": "A weather entity with an hourly forecast. The heat budget plans with the temperature of the next three hours and, when the forecast has cloud cover, learns how much the sun heats the house.",
-              "comfort_schedule_entity_id": "A schedule helper that is on when the house should be at the target temperature. Outside it the heat budget lowers the target by the setback, starts the recovery early enough to be warm when the schedule turns on (learned from earlier recoveries) and stops an hour early because the screed keeps heating.",
-              "setback_temperature": "How much lower the heat budget keeps the house outside the comfort schedule. With screed floors small setbacks save little.",
-              "warm_weather_shutdown_temperature": "Central heating switches off while the outside temperature averaged over a day is at or above this, and back on 2 °C below it (a forecast keeps it off when warm weather returns soon). Hot water keeps working. 0 keeps heating on.",
-              "hot_water_schedule_entity_id": "A schedule helper that is on in the hours hot water is used. Outside them the eco temperature applies.",
-              "hot_water_comfort_temperature": "The cylinder temperature SAT sends to the boiler; 0 leaves the hot water to the boiler.",
-              "hot_water_eco_temperature": "The cylinder temperature outside the schedule's hours; 0 uses the hot water temperature all day.",
-              "legionella_day": "Once a week the cylinder is held at 60 °C for an hour.",
-              "legionella_time": "When the weekly boost starts, best in the night.",
-              "presence_entity_ids": "People, device trackers, zones or groups. When nobody has been home for 30 minutes SAT switches to the Away preset, and back when someone returns.",
-              "proximity_entity_id": "A distance sensor (Proximity integration). Within the return distance the house counts as occupied again, so a slow floor starts warming early.",
-              "return_distance": "How close someone must be for the heating to come back; 0 waits until they are home.",
-              "window_detection": "Without contact sensors: a room temperature drop of 0.8 °C within 10 minutes or 0.3 °C within 30 minutes switches to the Activity preset until the room stops cooling (2 hours at most). Needs a sensor that reports tenths of a degree.",
-              "screed_maximum_temperature": "Flow water above this for 3 minutes in space heating raises a repair issue. Underfloor heating only; 0 turns it off.",
-              "last_service_date": "A repair issue reminds you when the next service is due.",
-              "service_interval": "Months between boiler services.",
-              "gas_price": "Including distribution, in your currency. Adds an estimated gas cost sensor; 0 turns it off.",
-              "condensing_boiler": "For the efficiency estimate of a boiler that does not report its flue gas temperature: a condensing boiler runs its flue a few kelvin above the return water. Turn off for an older non-condensing boiler, which then gets no estimate without a flue gas sensor."
+              "force_pulse_width_modulation": "Also when the boiler could modulate down far enough.",
+              "learn_overshoot_protection": "Starts from the calibrated value and adjusts it: up when the boiler stops PWM burns by overheating or cannot light, down when long burns level off below it. Calibrating again or changing the value starts over.",
+              "pwm_short_burns_threshold": "1 allows a single burn per on-phase (default 2).",
+              "maximum_relative_modulation": "Caps the boiler's power, in percent.",
+              "climate_valve_offset": "For room thermostats that don't report whether they heat: a room counts as wanting heat while it is at least this much below its target.",
+              "target_temperature_step": "Step of the target temperature in the climate entity.",
+              "sample_time": "The shortest time between two PID updates.",
+              "calibration_flame_timeout": "How long the calibration waits for the burner to light.",
+              "calibration_plateau_timeout": "How long the calibration heats while waiting for a steady flow temperature.",
+              "thermal_comfort": "Controls on the felt temperature from temperature and humidity. Needs a humidity sensor.",
+              "simulation": "SAT calculates everything but sends nothing to the boiler."
             }
           }
         }
+      },
+      "heat_budget": {
+        "title": "Heat budget",
+        "description": "For slow emitters such as screed underfloor heating: SAT learns how much heat the house needs and burns it in long blocks at minimum power.",
+        "data": {
+          "heat_budget_mode": "Heat budget",
+          "heat_loss_coefficient": "Heat loss of the house",
+          "heat_budget_period": "Period",
+          "heat_budget_minimum_burn": "Minimum burn",
+          "weather_forecast_entity_id": "Weather forecast",
+          "comfort_schedule_entity_id": "Comfort schedule",
+          "setback_temperature": "Setback outside the schedule",
+          "warm_weather_shutdown_temperature": "Warm weather shutdown"
+        },
+        "data_description": {
+          "heat_budget_mode": "Learn only shows the plan in the climate attributes without controlling. Until the house is learned (about 36 hours) the normal PWM controls.",
+          "heat_loss_coefficient": "Heat the house loses per degree between inside and outside. 0 learns it (recommended).",
+          "heat_budget_period": "Credit is added every period; longer periods give fewer, longer burns.",
+          "heat_budget_minimum_burn": "The shortest block worth lighting the burner for; less heat waits for the next period.",
+          "weather_forecast_entity_id": "Hourly forecast: the budget plans with the next three hours and learns the solar gain from the cloud cover.",
+          "comfort_schedule_entity_id": "A schedule that is on when the house should be at the target. The recovery starts early enough to be warm on time.",
+          "setback_temperature": "How much cooler the house is kept outside the schedule. A screed floor saves little with large setbacks.",
+          "warm_weather_shutdown_temperature": "Heating switches off while the daily mean outside temperature is at or above this, and back on 2 °C below. Hot water keeps working. 0 keeps heating on."
+        }
+      },
+      "boiler": {
+        "title": "Boiler and service",
+        "description": "What SAT knows about the boiler, the valves and the costs.",
+        "data": {
+          "keep_heating_in_pwm_off": "Keep heating enabled between PWM on-phases",
+          "boiler_anti_cycling_time": "Boiler anti-cycling time",
+          "valve_opening_time": "Valve opening time",
+          "screed_maximum_temperature": "Maximum flow for the screed",
+          "condensing_boiler": "Condensing boiler",
+          "minimum_consumption": "Gas use at minimum power",
+          "maximum_consumption": "Gas use at maximum power",
+          "gas_energy_content": "Heat per cubic metre of gas",
+          "gas_price": "Gas price per cubic metre",
+          "last_service_date": "Last boiler service",
+          "service_interval": "Service interval (months)"
+        },
+        "data_description": {
+          "keep_heating_in_pwm_off": "The pump keeps circulating and a combi boiler does not swing its diverter valve to the cylinder after every burn. SAT disables heating when the water nears the boiler's lowest setpoint, so the boiler does not light briefly.",
+          "boiler_anti_cycling_time": "The boiler's own wait before it relights. 0 keeps the defaults.",
+          "valve_opening_time": "How long the actuators of the room thermostats take to open. SAT waits this long before lighting the boiler for a loop that just opened.",
+          "screed_maximum_temperature": "Flow above this for 3 minutes raises a repair issue. 0 turns it off.",
+          "condensing_boiler": "For the efficiency estimate without a flue gas sensor.",
+          "gas_energy_content": "About 10.2 kWh/m³ for natural gas, 24 for propane. Used for the gas, heat and water flow estimates.",
+          "gas_price": "Including distribution, in your currency. 0 turns the cost sensor off.",
+          "last_service_date": "A repair issue reminds you when the next service is due."
+        }
+      },
+      "hot_water": {
+        "title": "Hot water",
+        "description": "The cylinder temperature SAT sends to the boiler.",
+        "data": {
+          "hot_water_comfort_temperature": "Hot water temperature",
+          "hot_water_eco_temperature": "Eco temperature",
+          "hot_water_schedule_entity_id": "Hot water schedule",
+          "legionella_day": "Legionella boost day",
+          "legionella_time": "Legionella boost start"
+        },
+        "data_description": {
+          "hot_water_comfort_temperature": "0 leaves the hot water to the boiler.",
+          "hot_water_eco_temperature": "Outside the schedule's hours; 0 uses the hot water temperature all day.",
+          "hot_water_schedule_entity_id": "A schedule that is on in the hours hot water is used.",
+          "legionella_day": "Once a week the cylinder is held at 60 °C for an hour.",
+          "legionella_time": "Best in the night."
+        }
+      },
+      "presence": {
+        "title": "Presence and windows",
+        "description": "When nobody is home SAT switches to Away; an open window pauses heating.",
+        "data": {
+          "presence_entity_ids": "Presence",
+          "proximity_entity_id": "Distance to home",
+          "return_distance": "Return distance",
+          "window_detection": "Detect open windows from the temperature"
+        },
+        "data_description": {
+          "presence_entity_ids": "People, device trackers, zones or groups. Away after 30 minutes with nobody home.",
+          "proximity_entity_id": "A distance sensor (Proximity integration), so a slow floor starts warming early.",
+          "return_distance": "How close someone must be for the heating to come back; 0 waits until they are home.",
+          "window_detection": "Without contact sensors: a drop of 0.8 °C in 10 minutes or 0.3 °C in 30 minutes pauses heating until the room stops cooling (2 hours at most). Needs a sensor with tenths of a degree."
+        }
+      }
+    }
+  },
+  "selector": {
+    "mqtt_mode": {
+      "options": {
+        "mqtt_opentherm": "OpenTherm Gateway",
+        "mqtt_ems": "EMS-ESP (Bosch, Junkers, Buderus)"
+      }
+    },
+    "heating_system": {
+      "options": {
+        "radiators": "Radiators",
+        "underfloor": "Underfloor heating",
+        "heat_pump": "Heat pump"
+      }
+    },
+    "pid_controller_version": {
+      "options": {
+        "1": "Classic",
+        "2": "Improved",
+        "3": "Adaptive"
+      }
+    },
+    "heating_mode": {
+      "options": {
+        "comfort": "Comfort",
+        "eco": "Eco"
+      }
+    },
+    "cycles_per_hour": {
+      "options": {
+        "1": "1 per hour",
+        "2": "2 per hour",
+        "3": "3 per hour",
+        "4": "4 per hour"
+      }
+    },
+    "default_hvac_mode": {
+      "options": {
+        "heat": "Heat",
+        "off": "Off"
+      }
+    },
+    "heat_budget_mode": {
+      "options": {
+        "off": "Off",
+        "shadow": "Learn only",
+        "on": "On"
+      }
+    },
+    "heat_budget_period": {
+      "options": {
+        "30": "30 minutes",
+        "60": "60 minutes",
+        "90": "90 minutes",
+        "120": "120 minutes"
+      }
+    },
+    "legionella_day": {
+      "options": {
+        "off": "Off",
+        "0": "Monday",
+        "1": "Tuesday",
+        "2": "Wednesday",
+        "3": "Thursday",
+        "4": "Friday",
+        "5": "Saturday",
+        "6": "Sunday"
       }
     }
   },

@@ -59,7 +59,15 @@ async def test_options_advanced_section(
     await hass.async_block_till_done()
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["menu_options"] == ["general", "presets", "system_configuration"]
+    assert result["menu_options"] == [
+        "general",
+        "presets",
+        "system_configuration",
+        "heat_budget",
+        "hot_water",
+        "presence",
+        "boiler",
+    ]
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "system_configuration"}
@@ -94,6 +102,84 @@ async def test_options_advanced_section(
     assert entry.options["thermal_comfort"] is True
     assert "advanced" not in entry.options
     assert "show_advanced_options" not in caplog.text
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_options_steps_save_their_settings(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=DEFAULT_USER_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    async def configure(step: str, user_input: dict[str, Any]) -> None:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"next_step_id": step}
+        )
+        assert result["step_id"] == step
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input)
+        await hass.async_block_till_done()
+        assert result["type"] == "create_entry"
+
+    await configure(
+        "heat_budget",
+        {
+            "heat_budget_mode": "on",
+            "heat_loss_coefficient": 45,
+            "heat_budget_period": "60",
+            "heat_budget_minimum_burn": "00:10:00",
+            "setback_temperature": 0,
+            "warm_weather_shutdown_temperature": 16,
+            "weather_forecast_entity_id": "weather.home",
+        },
+    )
+    assert entry.options["heat_budget_mode"] == "on"
+    assert entry.options["weather_forecast_entity_id"] == "weather.home"
+
+    # A cleared entity is removed, not kept
+    await configure(
+        "heat_budget",
+        {
+            "heat_budget_mode": "on",
+            "heat_loss_coefficient": 0,
+            "heat_budget_period": "60",
+            "heat_budget_minimum_burn": "00:10:00",
+            "setback_temperature": 0,
+            "warm_weather_shutdown_temperature": 16,
+        },
+    )
+    assert entry.options["weather_forecast_entity_id"] is None
+    assert entry.options["heat_loss_coefficient"] == 0
+
+    await configure(
+        "hot_water",
+        {
+            "hot_water_comfort_temperature": 50,
+            "hot_water_eco_temperature": 0,
+            "legionella_day": "6",
+            "legionella_time": "03:00:00",
+        },
+    )
+    assert entry.options["legionella_day"] == "6"
+
+    await configure("presence", {"return_distance": 5, "window_detection": True})
+    assert entry.options["window_detection"] is True
+    assert entry.options["presence_entity_ids"] == []
+
+    await configure(
+        "boiler",
+        {
+            "keep_heating_in_pwm_off": True,
+            "boiler_anti_cycling_time": "00:10:00",
+            "valve_opening_time": "00:06:00",
+            "screed_maximum_temperature": 55,
+            "condensing_boiler": True,
+            "gas_price": 0,
+            "service_interval": 12,
+        },
+    )
+    assert entry.options["keep_heating_in_pwm_off"] is True
+    assert entry.options["valve_opening_time"] == "00:06:00"
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

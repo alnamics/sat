@@ -134,18 +134,18 @@ The Lumea does not report start and hour counters (IDs 116–123 unknown), the h
 
 ## Settings of this installation
 
-| Setting | Value | Why |
+| Menu → setting | Value | Why |
 |---|---|---|
-| Heating system | Underfloor | screed |
-| Heating mode | Eco | control on the iSense |
-| Overshoot protection | on, 45 °C | the ignition peak does not cut the burn out |
-| Anti-cycling time | 10 min | same as P17 in the boiler |
-| Valve opening time | 6 min | Afriso actuators |
-| Keep heating between PWM phases | on | one cylinder reheat a night instead of five |
-| Heat budget | On | 12–15 minute blocks every 2–3 hours |
-| Heat loss of the house | 0 (learned) | a fixed value only as a fallback, then about 45 W/K |
-| Detect open windows | on | the iSense reports tenths of a degree |
-| Warm weather shutdown | on | heating stops on a warm daily mean |
-| Boiler service | due 1 October 2027 | reminder in Repairs |
+| Heating system | Underfloor heating | screed |
+| Heating curve and PID → Heating mode | Eco | control on the iSense |
+| Heating curve and PID → Overshoot protection value | 45 °C | the ignition peak does not cut the burn out |
+| Boiler and service → Boiler anti-cycling time | 10 min | same as P17 in the boiler |
+| Boiler and service → Valve opening time | 6 min | Afriso actuators |
+| Boiler and service → Keep heating enabled between PWM on-phases | on | one cylinder reheat a night instead of five |
+| Heat budget → Heat budget | On | 12–15 minute blocks every 2–3 hours |
+| Heat budget → Heat loss of the house | 0 (learned) | a fixed value only as a fallback, then about 45 W/K |
+| Heat budget → Warm weather shutdown | on | heating stops on a warm daily mean |
+| Presence and windows → Detect open windows from the temperature | on | the iSense reports tenths of a degree |
+| Boiler and service → Last boiler service | due 1 October 2027 | reminder in Repairs |
 
 Recommended Z-Temp2 settings: report every 300 s (parameter 1) and on a 0.5 °C change (parameter 2), hysteresis 0.5 °C (parameter 10).

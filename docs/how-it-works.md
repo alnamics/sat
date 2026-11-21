@@ -34,15 +34,15 @@ A PID controller needs three settings, called gains. With **Automatic Gains** (o
 - The **Adaptive** controller (default) tunes them while it runs.
 - The **Classic** and **Improved** controllers make them follow the heating curve, so they get stronger as it gets colder outside.
 
-You can also turn Automatic Gains off and enter your own values in [Options](options.md#general). Only worth it if you know PID tuning.
+You can also turn Automatic Gains off and enter your own values in [Options](options.md#heating-curve-and-pid). Only worth it if you know PID tuning.
 
-With several rooms, the [Heating Mode](options.md#general) decides which rooms SAT listens to.
+With several rooms, the [Heating Mode](options.md#heating-curve-and-pid) decides which rooms SAT listens to.
 
 ## Low-load control
 
 Every boiler has a lowest power. On mild days the house needs less heat than that, so the boiler overheats the water, shuts off, and starts again a few minutes later. This short-cycling wastes gas and wears out the boiler.
 
-When the water temperature SAT wants is below what the boiler can hold, it switches to planned cycles (Pulse Width Modulation, or PWM): it runs the boiler at a low water temperature for part of each cycle, then lets it rest. The share of time on follows how much heat the house needs. With Automatic duty cycle on (the default), a cycle is an hour divided by the [cycles per hour](options.md#system-configuration), so 15 minutes at 4 per hour.
+When the water temperature SAT wants is below what the boiler can hold, it switches to planned cycles (Pulse Width Modulation, or PWM): it runs the boiler at a low water temperature for part of each cycle, then lets it rest. The share of time on follows how much heat the house needs. With Automatic duty cycle on (the default), a cycle is an hour divided by the [cycles per hour](options.md#control-and-pwm), so 15 minutes at 4 per hour.
 
 The low water temperature it runs at is the **overshoot protection value**, which [calibration](#calibration) measures.
 

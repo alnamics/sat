@@ -32,7 +32,7 @@ Ta strona pokazuje na jednym konkretnym mieszkaniu, co SAT robi z kotłem: kiedy
 | Połączenie | OpenTherm Gateway (OTGW) z modułem Ethernet, przez port szeregowy |
 | Termostat | De Dietrich AD289 iSense na OpenTherm, przez bramkę; jego temperatura (0,1 °C) to główny czujnik SAT |
 
-Parametry kotła (numer z iSense; na panelu kotła o jeden większy). SAT odczytuje je przez OpenTherm (sensor *OpenTherm IDs*):
+Parametry kotła (numer z iSense; na panelu kotła o jeden większy). SAT odczytuje je przez OpenTherm (sensor *Identyfikatory OpenTherm*):
 
 | P | Znaczenie | Wartość |
 |---|---|---|
@@ -78,7 +78,7 @@ Woda nie dochodzi do 45 °C, więc kocioł nie przerywa palenia na limicie tempe
 ## Przerwa między blokami
 
 - SAT wysyła 10 °C, kocioł podnosi to do swojego minimum **25 °C** (P30).
-- **Ogrzewanie zostaje włączone** (*Keep heating between PWM phases*): pompa krąży, a zawór trójdrogowy nie przełącza się na zasobnik po każdym bloku. Bez tego zasobnik tracił 2–3 K przy każdym cyklu i dogrzewał się kilka razy w nocy.
+- **Ogrzewanie zostaje włączone** (*Nie wyłączaj ogrzewania między fazami PWM*): pompa krąży, a zawór trójdrogowy nie przełącza się na zasobnik po każdym bloku. Bez tego zasobnik tracił 2–3 K przy każdym cyklu i dogrzewał się kilka razy w nocy.
 - Woda stygnie z około 35 do 26 °C. **Przy 26 °C SAT wyłącza ogrzewanie do następnego bloku**, bo przy 25 °C kocioł zapaliłby się na kilkanaście sekund.
 - Jeśli kocioł mimo to zapali się w przerwie (np. gdy skończy mu się 10-minutowa blokada), krótkie palenie też wyłącza ogrzewanie do następnego bloku.
 
@@ -125,26 +125,26 @@ Wartości z 21 listopada (+5 °C na zewnątrz):
 | `heat_block_minutes` | 13 | długość następnego bloku |
 | `flame_losses_24h` | 2–6 | zaniki płomienia w ostatniej dobie |
 | `flue_return_gap` | 2,7 K | czysty wymiennik, pełna kondensacja |
-| *Fan speed* | 19–58 Hz | 19 Hz to minimum, 58 Hz zapłon |
+| *Prędkość wentylatora* | 19–58 Hz | 19 Hz to minimum, 58 Hz zapłon |
 | *Estimated water flow* | około 15 l/min | przy otwartych pętlach |
-| *OpenTherm IDs* | 28 | identyfikatory, na które kocioł odpowiada; atrybuty: parametry kotła i kody usterek |
+| *Identyfikatory OpenTherm* | 28 | identyfikatory, na które kocioł odpowiada; atrybuty: parametry kotła i kody usterek |
 
 Lumea nie podaje liczników startów i godzin (ID 116–123 nieznane), temperatury wymiennika (34) ani prądu jonizacji (36). SAT liczy starty, godziny, ciepło i gaz sam.
 
 ## Ustawienia tej instalacji
 
-| Ustawienie | Wartość | Dlaczego |
+| Menu → ustawienie | Wartość | Dlaczego |
 |---|---|---|
-| Heating system | Underfloor | wylewka |
-| Heating mode | Eco | regulacja według iSense |
-| Overshoot protection | włączona, 45 °C | skok przy zapłonie nie przerywa palenia |
-| Anti-cycling time | 10 min | tyle samo co P17 w kotle |
-| Valve opening time | 6 min | siłowniki Afriso |
-| Keep heating between PWM phases | włączone | jedno dogrzanie zasobnika na noc zamiast pięciu |
-| Heat budget | On | bloki 12–15 min co 2–3 godziny |
-| Heat loss of the house | 0 (uczy się) | stała wartość tylko jako zabezpieczenie, wtedy około 45 W/K |
-| Detect open windows | włączone | iSense podaje 0,1 °C |
-| Warm weather shutdown | włączone | ogrzewanie wyłącza się przy ciepłej średniej dobowej |
-| Boiler service | przegląd do 1.10.2027 | przypomnienie w Naprawach |
+| Instalacja grzewcza | Ogrzewanie podłogowe | wylewka |
+| Krzywa grzewcza i PID → Tryb grzania | Eko | regulacja według iSense |
+| Krzywa grzewcza i PID → Wartość ochrony przed przegrzaniem | 45 °C | skok przy zapłonie nie przerywa palenia |
+| Kocioł i serwis → Blokada ponownego zapłonu w kotle | 10 min | tyle samo co P17 w kotle |
+| Kocioł i serwis → Czas otwarcia siłowników | 6 min | siłowniki Afriso |
+| Kocioł i serwis → Nie wyłączaj ogrzewania między fazami PWM | włączone | jedno dogrzanie zasobnika na noc zamiast pięciu |
+| Budżet ciepła → Budżet ciepła | Włączony | bloki 12–15 min co 2–3 godziny |
+| Budżet ciepła → Straty ciepła domu | 0 (nauka) | stała wartość tylko jako zabezpieczenie, wtedy około 45 W/K |
+| Budżet ciepła → Wyłączenie przy ciepłej pogodzie | włączone | ogrzewanie wyłącza się przy ciepłej średniej dobowej |
+| Obecność i okna → Wykrywaj otwarte okna po temperaturze | włączone | iSense podaje 0,1 °C |
+| Kocioł i serwis → Ostatni przegląd kotła | przegląd do 1.10.2027 | przypomnienie w Naprawach |
 
 Zalecane ustawienia termostatów Z-Temp2: raport co 300 s (parametr 1) i przy zmianie o 0,5 °C (parametr 2), histereza 0,5 °C (parametr 10).

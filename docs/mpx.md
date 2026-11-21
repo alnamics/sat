@@ -7,7 +7,7 @@
 > person or run for long on a real boiler. It passes the automated tests; that is all that is
 > known. Use it at your own risk, turn features on one at a time and watch the boiler.
 
-This page lists what this fork (versions with a fourth number, such as 5.2.0.5) adds to [SAT v2](https://github.com/bellini666/SAT). The settings themselves are in [Options](options.md#advanced-mpx-additions) (System Configuration → Advanced); this page explains what they do and how they fit together.
+This page lists what this fork (versions with a fourth number, such as 5.2.0.5) adds to [SAT v2](https://github.com/bellini666/SAT). The settings themselves are in [Options](options.md) (the Control and PWM, Heat budget, Hot water, Presence and windows, and Boiler and service menus); this page explains what they do and how they fit together.
 
 **Defaults.** With every new option at its default SAT controls the boiler exactly as upstream SAT v2. What runs regardless are the totals, the efficiency and flow estimates, the loop monitor and the repair issues: they read the boiler and raise issues, but do not control anything. A failure in any of them is logged once and the heating control carries on without it.
 
@@ -34,29 +34,29 @@ Screed is slow: it stores hours of heat. It does not matter to the room whether 
 |---|---|---|
 | Boiler anti-cycling time | 0 | The boiler's own wait before it relights (installer setting, for example P17 on De Dietrich). SAT waits this plus a minute before calling the flame stuck off, calibration waits this plus two minutes for the burner to light, and the heat budget never plans a pause shorter than it. |
 | Valve opening time | 0 | How long the actuators of your room thermostats take to open (thermal actuators: 3–6 minutes). When a room starts asking for heat and none asked before, SAT waits this long before lighting the boiler. A boiler that is already burning is not affected. |
-| Cut-short burns before ending the PWM on-phase | 2 | How many burns the boiler may stop by overheating in one PWM on-phase. 1 suits an oversized boiler on underfloor heating. |
-| Learn overshoot protection value | off | Adjusts the overshoot protection value from how PWM burns end: up 1 °C when the boiler cuts a burn out or the burner does not light because the water is already warmer than the setpoint, down 0.5 °C when a burn of at least 10 minutes levels off 2 °C or more below it. It stays between 30 °C and the maximum setpoint minus 3 °C; calibrating again or changing the value starts over. |
+| Cut-short burns before a PWM on-phase ends | 2 | How many burns the boiler may stop by overheating in one PWM on-phase. 1 suits an oversized boiler on underfloor heating. |
+| Learn the overshoot protection value | off | Adjusts the overshoot protection value from how PWM burns end: up 1 °C when the boiler cuts a burn out or the burner does not light because the water is already warmer than the setpoint, down 0.5 °C when a burn of at least 10 minutes levels off 2 °C or more below it. It stays between 30 °C and the maximum setpoint minus 3 °C; calibrating again or changing the value starts over. |
 | Keep heating enabled between PWM on-phases | off | Leaves central heating enabled at the minimum setpoint in PWM off-phases, so a combi boiler does not swing its diverter valve to the hot water cylinder, where a long pump overrun would cool the cylinder. Many boilers raise a low setpoint to their own minimum (the Lumea and other Baxi boards to 25 °C, reported as ID 49 and as the setpoint the boiler accepted) and light once the water cools to it. SAT disables heating for the rest of the off-phase when the water comes within 1 K of that minimum; if the burner still lights more than 90 seconds into an off-phase, a short burn (the boiler's anti-cycling ran out) disables heating for the rest of that off-phase, and a longer one for an hour, with a warning. A short pump overrun on the boiler solves the same problem more simply. |
-| Duty cycles per hour (underfloor) | 1–4 | Underfloor heating may go down to one cycle per hour. |
+| PWM cycles per hour (underfloor) | 1–4 | Underfloor heating may go down to one cycle per hour. |
 | Heat per cubic metre of gas | 10.2 | kWh/m³ for the gas, heat and efficiency estimates; about 24 for propane. |
 | Condensing boiler | on | For the efficiency estimate of a boiler without a flue gas sensor. |
 
 ### Burner power
 
-The heat and gas totals, the water flow and the heat budget need the burner's heat output. SAT takes it from the boiler's maximum capacity and minimum modulation level when it reports them (OpenTherm), otherwise from the **Minimum** and **Maximum Consumption** settings. When neither is known, the heat and gas totals stay at zero rather than being made up; the heat budget still works, counting in units of the minimum power.
+The heat and gas totals, the water flow and the heat budget need the burner's heat output. SAT takes it from the boiler's maximum capacity and minimum modulation level when it reports them (OpenTherm), otherwise from the **Gas use at minimum and maximum power** settings. When neither is known, the heat and gas totals stay at zero rather than being made up; the heat budget still works, counting in units of the minimum power.
 
 OpenTherm defines the relative modulation as a share of the range between minimum and maximum power, but many boilers report a share of the maximum and read, say, 16 % at their minimum. Taken as a share of the range that would nearly double the power at the minimum. So SAT learns what the boiler reads while it is held at minimum modulation in settled burns and counts from there. A boiler whose lowest reading over many burns equals its own minimum modulation level is recognised too. Until it has seen such burns it assumes the OpenTherm meaning.
 
 ## Heat budget
 
-`Off`, `Learn only (shadow)` or `On`. For slow emitters (screed underfloor heating) with a boiler whose minimum power is above what the house usually needs. `On` only drives underfloor heating; with radiators or a heat pump it learns as in shadow mode, because hour-long blocks would make fast emitters swing.
+Off, Learn only or On. For slow emitters (screed underfloor heating) with a boiler whose minimum power is above what the house usually needs. On only drives underfloor heating; with radiators or a heat pump it learns as in Learn only mode, because hour-long blocks would make fast emitters swing.
 
 **The model.** Each hour SAT records the heat burned for space heating, the indoor-outdoor temperature difference, the sun and the change of the indoor temperature. Over a running day of such hours it fits *heat + S × sun = H × (indoor − outdoor) × hours + stored heat* in two steps, each with recursive least squares: H, the heat loss of the house (W/K), from the dark hours (at least 8 of them), then S, the heat the sun brings in full sun, from the sunny hours on top of H. Learned together from one day, where the sun shines on the mildest hours, the two traded off against each other (S climbed to its limit while H fell). H is an effective value: heat from neighbours, people, appliances and a warm cylinder lowers it, which is what the budget needs. A day evens out the heat the screed stores and gives back. An hour measured at least half is scaled to the whole hour, a shorter one is left out, and the window survives restarts; the hour being measured is saved every 5 minutes and continues after a restart of up to 15 minutes. The first fit comes after 20 hours of data and the budget counts as ready after twelve fits, so about a day and a half after it is switched on (`heat_budget_ready`). With a fixed **Heat loss of the house** it is ready at once.
 
 **The dispatch.** The heat the next period needs is *H × (target − outdoor) − S × sun*, plus a PI correction on the room error, counted as a shift of the outside temperature: 8 K per kelvin of room error, and an integral of 1 K per 1.5 kelvin-hours (at most ±8 K) that takes up what the model gets wrong. The integral only works within 0.5 °C of the target and once the budget is ready, so a change of target does not wind it up. In the simulation a target moved by 1 °C is reached in about 6 to 8 hours. With a weather forecast, the outdoor temperature is the measured one plus the forecast's trend over the next 3 hours (at most ±5 K), so a forecast that runs warmer or colder than your sensor does not bias the heat. That heat is burned in one block at minimum power:
 
-- one block per **Heat budget period** (60 minutes: about one ignition an hour);
-- a need smaller than the **Heat budget minimum burn** is carried into the next period (`heat_credit_kwh`), as is what a block could not deliver, up to one period at minimum power;
+- credit every **Period** (60 minutes: about one ignition an hour);
+- a need smaller than the **Minimum burn** is carried into the next period (`heat_credit_kwh`), as is what a block could not deliver, up to one period at minimum power;
 - a hot water request does not shorten a block: it runs on until its heat is delivered;
 - two burns the boiler cuts out by overheating end a block; four flame losses (burns that end far below the setpoint, see Monitoring) end it too, with the heat not delivered carried over;
 - a hot water reheat in the last third of a period starts the next block right away, while the boiler is warm (`hot_water_piggybacks`);
@@ -65,13 +65,13 @@ OpenTherm defines the relative modulation as a share of the range between minimu
 - after the target is lowered by 0.2 °C or more the house coasts: nothing burns until the room is within 0.2 °C of the new target (`heat_budget_coasting`);
 - while all room valves are closed no heat is owed, so reopened valves do not start a block for the time they were closed.
 
-Until the budget is ready the normal control runs, with its own Force PWM setting. Once ready, SAT always uses low-load cycles, as Force PWM does.
+Until the budget is ready the normal control runs, with its own Always use PWM setting. Once ready, SAT always uses low-load cycles, as Always use PWM does.
 
 **Overload.** The budget only burns at minimum power. When the need stays 10 % above it for two hours while the room is at least 0.2 °C below target, as on a cold day in a larger or less insulated house, SAT hands control back to the heating curve with the boiler's own modulation, and takes it again once the need has stayed below 85 % of the minimum power for an hour (`heat_budget_overloaded`).
 
-**Comfort schedule and setback.** With a schedule helper that is on in comfort hours, the heat budget lowers its target by the **Setback** outside them. The recovery starts early by a learned time (Seem et al.: *hours = a × temperature rise + b × recent demand*), and comfort ends an hour early because the screed keeps heating. The setback only acts while the heat budget controls.
+**Comfort schedule and setback.** With a schedule helper that is on in comfort hours, the heat budget lowers its target by the **Setback outside the schedule**. The recovery starts early by a learned time (Seem et al.: *hours = a × temperature rise + b × recent demand*), and comfort ends an hour early because the screed keeps heating. The setback only acts while the heat budget controls.
 
-**Shadow mode** learns and shows the plan while the normal control runs. Two sensors carry the history: **Heat need** (kW, with the heat credit and the block length as attributes) and **Heat loss of the house** (W/K). The climate's attributes show the rest (`heat_budget_ready`, `solar_gain_kw`, `heat_block_active`, `heat_budget_target`, `learning_samples`). Use it for a few days before `On`.
+**Learn only** learns and shows the plan while the normal control runs. Two sensors carry the history: **Heat need** (kW, with the heat credit and the block length as attributes) and **Heat loss of the house** (W/K). The climate's attributes show the rest (`heat_budget_ready`, `solar_gain_kw`, `heat_block_active`, `heat_budget_target`, `learning_samples`). Use it for a few days before `On`.
 
 In a simulation of an 87 m² flat (H = 0.12 kW/K, 5.3 kW minimum power) the budget cut the burner starts from about 60–75 to about 26 a day at the same gas use, with the room mostly within about ±0.5 °C of the target. A simulation is not a house.
 
@@ -85,7 +85,7 @@ In a simulation of an 87 m² flat (H = 0.12 kW/K, 5.3 kW minimum power) the budg
 
 For boilers that accept a hot water setpoint over OpenTherm.
 
-- **Hot water temperature** (0 = leave hot water to the boiler) and **Hot water eco temperature**: with a **Hot water schedule** helper, the eco temperature applies outside its hours. A cooler cylinder loses less heat through its jacket, and the boiler condenses better while reheating it.
+- **Hot water temperature** (0 = leave hot water to the boiler) and **Eco temperature**: with a **Hot water schedule** helper, the eco temperature applies outside its hours. A cooler cylinder loses less heat through its jacket, and the boiler condenses better while reheating it.
 - **Legionella boost**: on the chosen day and time the cylinder is heated to 60 °C (or the boiler's own maximum when that is lower) and held there for an hour, or the boost gives up after 4 hours. One boost per week.
 - SAT writes the setpoint when its value changes and once after each start, so a temperature set by hand stays until the next change. It does not check that the boiler accepted it. Attributes `hot_water_setpoint_sent`, `hot_water_legionella_boost` and `hot_water_last_boost_week`.
 - **Reheats the boiler does not flag**: some boilers, the De Dietrich Lumea among them, reheat the cylinder without setting the hot water flag. A burn whose water rises more than 10 °C since ignition and above both its setpoint and 25 °C by more than 10 °C counts as hot water after 20 seconds. Keep heating between PWM phases, the heat budget, the totals, the efficiency and the loop measurement all use this, and a heating burn the boiler stopped for such a reheat up to 5 minutes later is not counted as cut short.

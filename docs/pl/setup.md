@@ -110,9 +110,9 @@ Pozostałe encje wymienia [dokumentacja ESPHome OpenTherm](https://esphome.io/co
 
 ## Czujniki
 
-- **Inside sensor**: temperatura pokoju, którym steruje SAT. Najlepiej działa czujnik podający dwa miejsca po przecinku i aktualizujący się co 30 sekund.
-- **Outside sensor**: czujnik temperatury albo encja pogody. Możesz wybrać kilka, a SAT użyje pierwszego, który ma odczyt.
-- **Humidity sensor** (opcjonalnie): używany tylko przez [Thermal Comfort](options.md#advanced).
+- **Czujnik temperatury wewnętrznej**: temperatura pokoju, którym steruje SAT. Najlepiej działa czujnik podający dwa miejsca po przecinku i aktualizujący się co 30 sekund.
+- **Czujnik temperatury zewnętrznej**: czujnik temperatury albo encja pogody. Możesz wybrać kilka, a SAT użyje pierwszego, który ma odczyt.
+- **Czujnik wilgotności** (opcjonalnie): używany tylko przez [Temperaturę odczuwalną](options.md#zaawansowane).
 
 ## System grzewczy
 
@@ -122,23 +122,23 @@ Grzejniki, ogrzewanie podłogowe albo pompa ciepła. Od tego zależy [krzywa grz
 
 Pomiń ten krok, jeśli SAT jest Twoim jedynym termostatem.
 
-- **Thermostat**: termostat ścienny. Gdy zmienisz jego temperaturę zadaną, SAT pójdzie za nią.
-- **Radiators**: termostaty grzejnikowe (głowice) w tym samym pokoju co czujnik wewnętrzny.
-- **Rooms**: termostaty w innych pokojach, każdy z własną temperaturą zadaną. SAT grzeje, gdy którykolwiek z nich woła o ciepło.
+- **Termostat**: termostat ścienny. Gdy zmienisz jego temperaturę zadaną, SAT pójdzie za nią.
+- **Grzejniki**: termostaty grzejnikowe (głowice) w tym samym pokoju co czujnik wewnętrzny.
+- **Pomieszczenia**: termostaty w innych pokojach, każdy z własną temperaturą zadaną. SAT grzeje, gdy którykolwiek z nich woła o ciepło.
 
-Gdy dodane są pokoje, [Heating Mode](options.md#general) decyduje, czy SAT grzeje też pod pozostałe pokoje, czy tylko pod główny.
+Gdy dodane są pokoje, [Tryb grzania](options.md#krzywa-grzewcza-i-pid) decyduje, czy SAT grzeje też pod pozostałe pokoje, czy tylko pod główny.
 
 ## Kalibracja
 
 Tylko dla OpenTherm i EMS-ESP. Wybierz jedno:
 
-- **Calibrate and determine your overshoot protection value** (zalecane): SAT uruchamia kocioł na najniższej mocy i mierzy temperaturę wody, na której się ustala. Trwa to do około 50 minut. Zobacz [Kalibracja](how-it-works.md#kalibracja).
-- **Manually enter the overshoot protection value**: jeśli już znasz tę wartość. [Ta dyskusja](https://github.com/Alexwijn/SAT/discussions/36) wyjaśnia, jak znaleźć ją ręcznie.
-- **Manually enter PID values**: niezalecane. Tylko dla osób, które znają się na strojeniu PID.
+- **Zmierz wartość ochrony przed przegrzaniem** (zalecane): SAT uruchamia kocioł na najniższej mocy i mierzy temperaturę wody, na której się ustala. Trwa to do około 50 minut. Zobacz [Kalibracja](how-it-works.md#kalibracja).
+- **Wpisz wartość ochrony przed przegrzaniem ręcznie**: jeśli już znasz tę wartość. [Ta dyskusja](https://github.com/Alexwijn/SAT/discussions/36) wyjaśnia, jak znaleźć ją ręcznie.
+- **Wpisz wartości PID ręcznie**: niezalecane. Tylko dla osób, które znają się na strojeniu PID.
 
-Kalibrację możesz powtórzyć w dowolnej chwili przyciskiem **Calibrate overshoot protection**.
+Kalibrację możesz powtórzyć w dowolnej chwili przyciskiem **Kalibruj ochronę przed przegrzaniem**.
 
-Termostat dwustanowy pyta zamiast tego o **Automatic Gains**. Zostaw je włączone albo wyłącz i wpisz wartości PID w [Opcjach](options.md#general).
+Termostat dwustanowy pyta zamiast tego o **Automatyczne wzmocnienia**. Zostaw je włączone albo wyłącz i wpisz wartości PID w [Opcjach](options.md#krzywa-grzewcza-i-pid).
 
 ## Producent
 
