@@ -53,6 +53,7 @@ from .const import (
     CONF_DEVICE,
     CONF_DUTY_CYCLE,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
+    CONF_FROST_PROTECTION_TEMPERATURE,
     CONF_GAS_ENERGY_CONTENT,
     CONF_GAS_PRICE,
     CONF_HEAT_BUDGET_MINIMUM_BURN,
@@ -1127,6 +1128,13 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
         schema[vol.Required(CONF_DEFAULT_HVAC_MODE, default=options[CONF_DEFAULT_HVAC_MODE])] = (
             _choice("default_hvac_mode", [climate.HVACMode.HEAT, climate.HVACMode.OFF])
         )
+        if self._takes_setpoint:
+            schema[
+                vol.Required(
+                    CONF_FROST_PROTECTION_TEMPERATURE,
+                    default=options[CONF_FROST_PROTECTION_TEMPERATURE],
+                )
+            ] = _number(0, 15, 0.5, "°C")
         schema[
             vol.Required(CONF_SENSOR_MAX_VALUE_AGE, default=options[CONF_SENSOR_MAX_VALUE_AGE])
         ] = selector.TimeSelector()

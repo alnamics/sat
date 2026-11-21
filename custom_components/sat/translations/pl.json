@@ -238,6 +238,7 @@
           "automatic_duty_cycle": "Automatyczny cykl PWM",
           "cycles_per_hour": "Cykle PWM na godzinę",
           "sync_climates_with_mode": "Przekazuj tryb pracy termostatom pokojowym",
+          "frost_protection_temperature": "Ochrona przed zamarzaniem przy wyłączonym SAT",
           "default_hvac_mode": "Tryb po starcie bez zapisanego stanu",
           "sensor_max_value_age": "Maksymalny wiek odczytu temperatury",
           "window_minimum_open_time": "Minimalny czas otwarcia okna"
@@ -246,6 +247,7 @@
           "automatic_duty_cycle": "SAT sam dobiera długość cykli PWM.",
           "cycles_per_hour": "Najwięcej startów palnika na godzinę w PWM. Budżet ciepła robi ich mniej.",
           "sync_climates_with_mode": "Grzanie i wyłączenie trafia do termostatów grzejnikowych i pokojowych.",
+          "frost_protection_temperature": "Gdy SAT jest wyłączony, a w pokoju spadnie do tej temperatury, kocioł grzeje wodą 30 °C, aż będzie o 1 °C cieplej; potem sterowanie wraca do termostatu kotła. 0 wyłącza.",
           "sensor_max_value_age": "Starszy odczyt oznacza, że czujnik przestał raportować.",
           "window_minimum_open_time": "Jak długo czujnik okna musi być otwarty, zanim grzanie zostanie wstrzymane."
         },

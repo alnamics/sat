@@ -5,6 +5,8 @@ deriving the block length from flow temperatures, the heat budget works in energ
 
 * a grey-box energy balance, learned online with recursive least squares, gives the heat loss
   coefficient H (kW/K) and, when a weather forecast with cloud cover is available, a solar gain S;
+* with the forecast's wind speed it also learns how much more the house loses in wind, and uses
+  that once the wind has varied enough to show a clear effect;
 * the heat the house needs over the next period follows from H, the forecast outdoor temperature
   and a slow PI correction on the room error;
 * the burner delivers that heat in one block per period at its minimum power, and heat that a hot
@@ -57,6 +59,14 @@ DARK_SUN_HOURS = 0.02
 LEARNING_MINIMUM_DARK_HOURS = 8
 LEARNING_MINIMUM_SUN_HOURS = 0.5
 SOLAR_GAIN_BOUNDS = (0.0, 3.0)
+# Wind: the heat loss rises by this share per km/h above the usual wind. It is learned from the
+# dark hours on top of H and used only once the wind has varied and the effect is clear
+WIND_SENSITIVITY_BOUNDS = (0.0, 0.02)
+WIND_MEAN_HOURS = 96.0
+WIND_MINIMUM_UPDATES = 48
+WIND_MINIMUM_SPREAD = 4.0
+WIND_MINIMUM_SENSITIVITY = 0.003
+WIND_FACTOR_BOUNDS = (0.8, 1.5)
 # Before anything is learned an 87 m² flat loses roughly this much per kelvin
 DEFAULT_HEAT_LOSS_KW_PER_K = 0.12
 
@@ -170,6 +180,8 @@ class HeatBudgetInputs:
     outdoor_forecast_now: float | None = None
     solar: float | None = None
     solar_forecast: float | None = None
+    # km/h
+    wind: float | None = None
     cut_short_burn_ends: tuple[float, ...] = ()
     flame_loss_ends: tuple[float, ...] = ()
     comfort: bool | None = None
@@ -188,6 +200,10 @@ class _Hour:
     indoor_start: float | None = None
     indoor_end: float | None = None
     wall_end: float | None = None
+    # Wind speed times the temperature difference, the wind speed, and the seconds it was known
+    wind_kelvin_hours: float = 0.0
+    wind_hours: float = 0.0
+    wind_seconds: float = 0.0
 
     def to_list(self) -> list[float | None]:
         return [
@@ -198,11 +214,19 @@ class _Hour:
             self.indoor_start,
             self.indoor_end,
             self.wall_end,
+            self.wind_kelvin_hours,
+            self.wind_hours,
+            self.wind_seconds,
         ]
+
+    @property
+    def has_wind(self) -> bool:
+        return self.seconds > 0 and self.wind_seconds >= MINIMUM_HOUR_COVERAGE * self.seconds
 
     @classmethod
     def from_list(cls, values: object) -> _Hour | None:
-        if not isinstance(values, list) or len(values) != len(cls.__slots__):
+        # Hours saved before the wind was recorded have seven values
+        if not isinstance(values, list) or len(values) not in (7, len(cls.__slots__)):
             return None
         numbers = [float(value) for value in values if isinstance(value, int | float)]
         if len(numbers) != len(values):
@@ -295,6 +319,10 @@ class HeatBudget:
             [DEFAULT_HEAT_LOSS_KW_PER_K], [0.01], LEARNING_FORGETTING
         )
         self._solar_learner = _RecursiveLeastSquares([0.0], [0.25], LEARNING_FORGETTING)
+        self._wind_learner = _RecursiveLeastSquares([0.0], [1e-4], LEARNING_FORGETTING)
+        self._wind_mean: float | None = None
+        self._wind_square = 0.0
+        self._wind: float | None = None
         self._hours: deque[_Hour] = deque(maxlen=LEARNING_WINDOW_HOURS)
         self._hour = _Hour()
         self._hour_started: float | None = None
@@ -386,6 +414,12 @@ class HeatBudget:
         else:
             self._learner.load(heat_loss)
             self._solar_learner.load(data.get("solar_gain") or {})
+        wind = data.get("wind") or {}
+        if isinstance(wind, dict):
+            self._wind_learner.load(wind)
+            mean, square = wind.get("mean"), wind.get("square")
+            if isinstance(mean, int | float) and isinstance(square, int | float):
+                self._wind_mean, self._wind_square = float(mean), float(square)
         self._clamp_parameters()
 
     async def async_save(self) -> None:
@@ -401,6 +435,11 @@ class HeatBudget:
         return {
             "heat_loss": self._learner.to_dict(),
             "solar_gain": self._solar_learner.to_dict(),
+            "wind": {
+                **self._wind_learner.to_dict(),
+                "mean": self._wind_mean,
+                "square": self._wind_square,
+            },
             "preheat": self._preheat.to_dict(),
             "integral": self._integral,
             "demand": self._demand,
@@ -422,6 +461,35 @@ class HeatBudget:
     def solar_gain(self) -> float:
         """Heat gained in full sun in kW."""
         return self._solar_learner.theta[0]
+
+    @property
+    def wind_sensitivity(self) -> float:
+        """Learned rise of the heat loss per km/h above the usual wind."""
+        return self._wind_learner.theta[0]
+
+    @property
+    def wind_spread(self) -> float | None:
+        """Standard deviation of the hourly wind speed over the last days, in km/h."""
+        if self._wind_mean is None:
+            return None
+        return math.sqrt(max(0.0, self._wind_square - self._wind_mean**2))
+
+    @property
+    def wind_correction_active(self) -> bool:
+        spread = self.wind_spread
+        return (
+            self._fixed_heat_loss is None
+            and self._wind_learner.updates >= WIND_MINIMUM_UPDATES
+            and spread is not None
+            and spread >= WIND_MINIMUM_SPREAD
+            and self.wind_sensitivity >= WIND_MINIMUM_SENSITIVITY
+        )
+
+    def _wind_factor(self, wind: float | None) -> float:
+        if wind is None or self._wind_mean is None or not self.wind_correction_active:
+            return 1.0
+        factor = 1.0 + self.wind_sensitivity * (wind - self._wind_mean)
+        return min(max(factor, WIND_FACTOR_BOUNDS[0]), WIND_FACTOR_BOUNDS[1])
 
     @property
     def ready(self) -> bool:
@@ -449,6 +517,9 @@ class HeatBudget:
             "heat_budget_ready": self.ready,
             "heat_loss_w_per_k": round(self.heat_loss * 1000),
             "solar_gain_kw": round(self.solar_gain, 2),
+            "wind_speed_kmh": None if self._wind is None else round(self._wind),
+            "wind_heat_loss_percent_per_10kmh": round(self.wind_sensitivity * 1000, 1),
+            "wind_correction_active": self.wind_correction_active,
             "heat_need_kw": round(self._need, 2),
             "heat_credit_kwh": round(self._credit, 2),
             "heat_block_minutes": round(self._planned_on / 60),
@@ -470,6 +541,7 @@ class HeatBudget:
         dt = 0.0 if self._last_update is None else now - self._last_update
         self._last_update = now
         self._minimum_power = max(1.0, inputs.minimum_power_kw)
+        self._wind = inputs.wind
 
         delivered = 0.0
         if inputs.flame_active and not inputs.hot_water_active:
@@ -593,7 +665,9 @@ class HeatBudget:
         solar = inputs.solar_forecast if inputs.solar_forecast is not None else inputs.solar
         error = target - indoor
 
-        base = self.heat_loss * (target - outdoor) - self.solar_gain * (solar or 0.0)
+        base = self.heat_loss * (target - outdoor) * self._wind_factor(
+            inputs.wind
+        ) - self.solar_gain * (solar or 0.0)
         need = base + self.heat_loss * (PROPORTIONAL_GAIN * error + self._integral)
 
         # The integral only winds further while the burner can still follow it
@@ -700,6 +774,12 @@ class HeatBudget:
             self._hour.heat_kwh += delivered
             self._hour.kelvin_hours += (inputs.indoor - inputs.outdoor) * hours
             self._hour.sun_hours += (inputs.solar or 0.0) * hours
+            if inputs.wind is not None:
+                self._hour.wind_kelvin_hours += (
+                    (inputs.indoor - inputs.outdoor) * inputs.wind * hours
+                )
+                self._hour.wind_hours += inputs.wind * hours
+                self._hour.wind_seconds += dt
             self._hour.seconds += dt
             self._hour.indoor_end = inputs.indoor
             self._hour.wall_end = wall
@@ -740,6 +820,10 @@ class HeatBudget:
         hour.heat_kwh *= scale
         hour.kelvin_hours *= scale
         hour.sun_hours *= scale
+        hour.wind_kelvin_hours *= scale
+        hour.wind_hours *= scale
+        hour.wind_seconds *= scale
+        self._track_wind(hour)
         self._hours.append(hour)
         self._save()
         if len(self._hours) < LEARNING_MINIMUM_HOURS:
@@ -764,13 +848,41 @@ class HeatBudget:
                 self._solar_learner.update(
                     [sun_hours], self.heat_loss * kelvin_hours + stored - heat
                 )
+        if self._learner.updates > 0 and self._wind_mean is not None:
+            self._fit_wind([h for h in dark if h.has_wind])
         self._clamp_parameters()
+
+    def _track_wind(self, hour: _Hour) -> None:
+        """Average the hourly wind over the last days: the wind effect is measured from there."""
+        if not hour.has_wind:
+            return
+        speed = hour.wind_hours / (hour.wind_seconds / SECONDS_PER_HOUR)
+        if self._wind_mean is None:
+            self._wind_mean, self._wind_square = speed, speed**2
+            return
+        weight = 1 / WIND_MEAN_HOURS
+        self._wind_mean += (speed - self._wind_mean) * weight
+        self._wind_square += (speed**2 - self._wind_square) * weight
+
+    def _fit_wind(self, hours: list[_Hour]) -> None:
+        # What H does not explain in the dark hours, against the wind above its usual level:
+        # heat - stored - H * kelvin_hours = H * w * (wind_kelvin_hours - mean * kelvin_hours)
+        if len(hours) < LEARNING_MINIMUM_DARK_HOURS or self._wind_mean is None:
+            return
+        heat, kelvin_hours, stored = _balance(hours)
+        wind_kelvin_hours = sum(h.wind_kelvin_hours * h.seconds / h.wind_seconds for h in hours)
+        x = self.heat_loss * (wind_kelvin_hours - self._wind_mean * kelvin_hours)
+        if abs(x) < 1e-6:  # noqa: PLR2004
+            return
+        self._wind_learner.update([x], heat - stored - self.heat_loss * kelvin_hours)
 
     def _clamp_parameters(self) -> None:
         theta = self._learner.theta
         theta[0] = min(max(theta[0], HEAT_LOSS_BOUNDS[0]), HEAT_LOSS_BOUNDS[1])
         solar = self._solar_learner.theta
         solar[0] = min(max(solar[0], SOLAR_GAIN_BOUNDS[0]), SOLAR_GAIN_BOUNDS[1])
+        wind = self._wind_learner.theta
+        wind[0] = min(max(wind[0], WIND_SENSITIVITY_BOUNDS[0]), WIND_SENSITIVITY_BOUNDS[1])
         a, b = self._preheat.theta
         self._preheat.theta = [min(max(a, 0.1), PREHEAT_MAXIMUM_HOURS), min(max(b, 0.0), 4.0)]
 

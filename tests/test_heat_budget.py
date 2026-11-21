@@ -396,3 +396,54 @@ def test_closed_valves_build_up_no_heat_debt() -> None:
     burn(budget, now, 60)
     on_time, _ = budget.duty_cycle
     assert on_time < 3600
+
+
+def windy_days(budget: HeatBudget, sensitivity: float) -> None:
+    """Dark days of a flat losing 50 W/K, more on the windier days, fitted every hour."""
+    for day in range(12):
+        wind = (5.0, 30.0, 12.0, 35.0, 8.0, 22.0)[day % 6]
+        for hour in range(24):
+            kelvin_hours = 16.0
+            measured = _Hour(
+                heat_kwh=0.05 * kelvin_hours * (1 + sensitivity * (wind - 20.0)),
+                kelvin_hours=kelvin_hours,
+                seconds=3600.0,
+                indoor_start=22.0,
+                indoor_end=22.0,
+                wall_end=float(day * 24 + hour),
+                wind_kelvin_hours=kelvin_hours * wind,
+                wind_hours=wind,
+                wind_seconds=3600.0,
+            )
+            budget._track_wind(measured)
+            budget._hours.append(measured)
+            budget._fit()
+
+
+def test_the_wind_effect_is_learned_and_used_once_clear() -> None:
+    budget = HeatBudget()
+    windy_days(budget, 0.01)
+
+    assert abs(budget.heat_loss - 0.05) < 0.005
+    assert abs(budget.wind_sensitivity - 0.01) < 0.003
+    assert budget.wind_correction_active
+    assert budget.attributes["wind_heat_loss_percent_per_10kmh"] > 7
+
+    # More heat in a gale than in a calm
+    assert budget._wind_factor(0.0) < 1 < budget._wind_factor(50.0)
+
+
+def test_a_house_the_wind_does_not_reach_gets_no_correction() -> None:
+    budget = HeatBudget()
+    windy_days(budget, 0.0)
+
+    assert budget.wind_sensitivity < 0.001
+    assert not budget.wind_correction_active
+    assert budget._wind_factor(50.0) == 1.0
+
+
+def test_hours_saved_before_the_wind_are_loaded() -> None:
+    hour = _Hour.from_list([1.2, 20.0, 0.1, 3600.0, 21.9, 22.0, 1_763_200_000.0])
+    assert hour is not None
+    assert hour.wind_seconds == 0.0
+    assert not hour.has_wind

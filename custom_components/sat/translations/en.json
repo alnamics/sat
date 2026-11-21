@@ -238,6 +238,7 @@
           "automatic_duty_cycle": "Automatic PWM duty cycle",
           "cycles_per_hour": "PWM cycles per hour",
           "sync_climates_with_mode": "Pass the mode to the room thermostats",
+          "frost_protection_temperature": "Frost protection while off",
           "default_hvac_mode": "Mode after a start without saved state",
           "sensor_max_value_age": "Maximum age of a temperature reading",
           "window_minimum_open_time": "Minimum time a window is open"
@@ -246,6 +247,7 @@
           "automatic_duty_cycle": "Lets SAT choose the length of the PWM cycles.",
           "cycles_per_hour": "The most burner starts per hour PWM may use. The heat budget makes fewer.",
           "sync_climates_with_mode": "Heat and off are passed to the radiator and room thermostats.",
+          "frost_protection_temperature": "While SAT is off, a room this cold is heated with 30 °C water until it is 1 °C warmer; then the boiler is handed back. 0 turns it off.",
           "sensor_max_value_age": "An older reading counts as a stalled sensor.",
           "window_minimum_open_time": "How long a window sensor must be open before heating pauses."
         },

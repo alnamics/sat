@@ -37,6 +37,7 @@ from homeassistant.const import (
     STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
+    UnitOfSpeed,
 )
 from homeassistant.core import (
     CoreState,
@@ -56,6 +57,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import SpeedConverter
 
 from .area import SENSOR_TEMPERATURE_ID, Areas, is_heating_blocked
 from .boiler_diagnostics import BoilerDiagnostics
@@ -68,6 +70,7 @@ from .const import (
     CONF_CONDENSING_BOILER,
     CONF_DEFAULT_HVAC_MODE,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
+    CONF_FROST_PROTECTION_TEMPERATURE,
     CONF_GAS_ENERGY_CONTENT,
     CONF_GAS_PRICE,
     CONF_HEAT_BUDGET_MINIMUM_BURN,
@@ -201,6 +204,10 @@ WARM_WEATHER_RESTORE_AGE = timedelta(hours=6)
 DISTANCE_TO_KM = {"m": 0.001, "km": 1.0, "mi": 1.609344, "ft": 0.0003048, "yd": 0.0009144}
 
 _LOGGER = logging.getLogger(__name__)
+
+# Frost protection while SAT is off: the flow it heats with, and the rise that ends it
+FROST_PROTECTION_SETPOINT = 30.0
+FROST_PROTECTION_HYSTERESIS = 1.0
 
 
 PARALLEL_UPDATES = 0
@@ -466,6 +473,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self, coordinator: SatDataUpdateCoordinator, config_options: dict[str, Any]
     ) -> None:
         """Set up warm weather shutdown, hot water, presence, window and service settings."""
+        # While SAT is off, a room this cold is heated anyway (0 turns it off)
+        self._frost_temperature = float(config_options.get(CONF_FROST_PROTECTION_TEMPERATURE) or 0)
+        self._frost_active = False
+
         threshold = float(config_options.get(CONF_WARM_WEATHER_SHUTDOWN) or 0)
         self.warm_weather = (
             WarmWeatherShutdown(threshold)
@@ -603,7 +614,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._async_update_sensor_values()
 
         if self.hvac_mode == HVACMode.OFF:
-            self._attr_hvac_action = HVACAction.OFF
+            self._attr_hvac_action = HVACAction.HEATING if self._frost_active else HVACAction.OFF
         elif not self._coordinator.device_active or self._heating_is_kept_on:
             # Heating left enabled through a PWM off-phase is not heating the house
             self._attr_hvac_action = HVACAction.IDLE
@@ -974,8 +985,42 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             **self._extras_attributes(),
         }
 
+    async def _async_frost_protection(self) -> None:
+        """Heat a room that gets this cold while SAT is off, then hand the boiler back."""
+        indoor = self.native_current_temperature
+        threshold = self._frost_temperature
+        if self.control_paused or threshold <= 0 or indoor is None:
+            active = False
+        elif indoor <= threshold:
+            active = True
+        elif indoor >= threshold + FROST_PROTECTION_HYSTERESIS:
+            active = False
+        else:
+            active = self._frost_active
+
+        if active:
+            if not self._frost_active:
+                _LOGGER.warning(
+                    "The room is at %.1f °C while SAT is off; heating for frost protection.", indoor
+                )
+            setpoint = min(FROST_PROTECTION_SETPOINT, self._coordinator.maximum_setpoint)
+            self._setpoint = setpoint
+            # Refreshed every loop, so the gateway keeps the override
+            await self._coordinator.async_set_control_setpoint(setpoint)
+            await self._coordinator.async_set_heater_state(DeviceState.ON)
+        elif self._frost_active:
+            _LOGGER.info("Frost protection ended at %.1f °C.", indoor or 0.0)
+            self._setpoint = None
+            await self._coordinator.async_set_heater_state(DeviceState.OFF)
+            await self._coordinator.async_release_control()
+
+        if active != self._frost_active:
+            self._frost_active = active
+            self.async_write_ha_state()
+
     def _extras_attributes(self) -> dict[str, Any]:
         attributes: dict[str, Any] = {}
+        attributes["frost_protection_active"] = self._frost_active
         if self.warm_weather is not None:
             attributes.update(self.warm_weather.attributes)
         if self.hot_water_schedule is not None:
@@ -1603,6 +1648,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 or self.control_paused
                 or not self._coordinator.online
             ):
+                if self.hvac_mode == HVACMode.OFF and self._coordinator.online:
+                    await self._async_run_guarded("frost protection", self._async_frost_protection)
                 return
 
             await self._async_run_guarded("presence", self._async_update_presence)
@@ -1830,6 +1877,19 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             )
         self._weather_forecast = forecast
 
+    def _wind_speed(self) -> float | None:
+        """Return the current wind speed of the weather forecast entity, in km/h."""
+        if (
+            not self._weather_forecast_entity_id
+            or (state := self.hass.states.get(self._weather_forecast_entity_id)) is None
+        ):
+            return None
+        speed = float_value(state.attributes.get(weather.ATTR_WEATHER_WIND_SPEED))
+        unit = state.attributes.get(weather.ATTR_WEATHER_WIND_SPEED_UNIT)
+        if speed is None or speed < 0 or unit not in {member.value for member in UnitOfSpeed}:
+            return None
+        return SpeedConverter.convert(speed, unit, UnitOfSpeed.KILOMETERS_PER_HOUR)
+
     def _heat_budget_inputs(self) -> HeatBudgetInputs:
         """Collect what the heat budget needs for this control step."""
         coordinator = self._coordinator
@@ -1882,6 +1942,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             outdoor_forecast_now=temperatures[0] if temperatures else None,
             solar=solar,
             solar_forecast=sum(sunshine) / len(sunshine) if sunshine else None,
+            wind=self._wind_speed(),
             cut_short_burn_ends=coordinator.flame.cut_short_burn_ends,
             flame_loss_ends=coordinator.flame.flame_loss_ends,
             comfort=comfort,
@@ -2518,6 +2579,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 self._last_control_at = dt_util.utcnow()
 
             self._attr_hvac_mode = HVACMode.HEAT
+            # The normal control takes the frost protection over
+            self._frost_active = False
         elif hvac_mode == HVACMode.OFF:
             await self.async_cancel_calibration()
             if self._loop_measurement_task is not None:

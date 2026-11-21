@@ -50,6 +50,7 @@ Target temperatures from 5 to 35 °C:
 - **PWM cycles per hour**: the most burner starts per hour. 3 or 4 for radiators, 2 or 3 for heat pumps, ⓜ 1 to 4 for underfloor heating (2 suits an oversized boiler). The heat budget makes fewer.
 - **Pass the mode to the room thermostats**: turning SAT on or off does the same to every attached thermostat.
 - **Mode after a start without saved state**: heat or off, such as on first start.
+- ⓜ **Frost protection while off**: while SAT is off, a room this cold is heated with 30 °C water until it is 1 °C warmer (default 6 °C; 0 turns it off). Not in switch mode.
 - **Maximum age of a temperature reading**: an older reading counts as a stalled sensor (default 6 hours).
 - **Minimum time a window is open**: how long a window sensor must stay open before heating pauses (default 15 seconds).
 
@@ -79,7 +80,7 @@ This section is collapsed by default.
 - **Heat loss of the house**: in W/K; 0 learns it (default, recommended).
 - **Period**: how often heat credit is added (default 60 minutes).
 - **Minimum burn**: the shortest block worth lighting the burner for (default 10 minutes).
-- **Weather forecast**: a weather entity with an hourly forecast (Met.no or Open-Meteo, for example). A sensor with current values only, such as Airly, doesn't work here.
+- **Weather forecast**: a weather entity with an hourly forecast; its wind speed is used to learn the wind effect (Met.no or Open-Meteo, for example). A sensor with current values only, such as Airly, doesn't work here.
 - **Comfort schedule** and **Setback outside the schedule**: a schedule helper that is on in the comfort hours, and how much cooler it is outside them (default 0).
 - **Warm weather shutdown**: the daily mean outside temperature at which central heating switches off (default 0: never).
 

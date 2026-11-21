@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from homeassistant.components.climate import PRESET_AWAY, HVACMode
+from homeassistant.components.climate import PRESET_AWAY, HVACAction, HVACMode
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
 from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
@@ -624,4 +624,38 @@ async def test_a_room_target_change_keeps_the_pwm_phase(
 
     assert climate.max_error.entity_id == ROOM
     assert climate.pwm.status == PWMStatus.OFF
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_frost_protection_heats_while_off(hass: HomeAssistant) -> None:
+    hass.states.async_set("sensor.test_inside_sensor", "5.5")
+    hass.states.async_set("sensor.test_outside_sensor", "-10.0")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=SatFlowHandler.VERSION,
+        data={**DEFAULT_USER_DATA, CONF_MINIMUM_SETPOINT: 30, CONF_MAXIMUM_SETPOINT: 55},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    climate = entry.runtime_data.climate
+    coordinator = entry.runtime_data.coordinator
+    await climate.async_set_hvac_mode(HVACMode.OFF)
+    await climate.async_control_heating_loop()
+
+    assert climate.hvac_action == HVACAction.HEATING
+    assert coordinator.setpoint == 30
+    assert coordinator.device_active
+    assert climate.extra_state_attributes is not None
+    assert climate.extra_state_attributes["frost_protection_active"] is True
+
+    # Half a degree warmer is not enough; a degree ends it
+    hass.states.async_set("sensor.test_inside_sensor", "6.5")
+    await climate.async_control_heating_loop()
+    assert climate.hvac_action == HVACAction.HEATING
+    hass.states.async_set("sensor.test_inside_sensor", "7.0")
+    await climate.async_control_heating_loop()
+    assert climate.hvac_action == HVACAction.OFF
+    assert not coordinator.device_active
     assert await hass.config_entries.async_unload(entry.entry_id)

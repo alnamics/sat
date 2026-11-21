@@ -80,6 +80,7 @@ CONF_WEATHER_FORECAST_ENTITY_ID = "weather_forecast_entity_id"
 CONF_COMFORT_SCHEDULE_ENTITY_ID = "comfort_schedule_entity_id"
 CONF_SETBACK_TEMPERATURE = "setback_temperature"
 CONF_WARM_WEATHER_SHUTDOWN = "warm_weather_shutdown_temperature"
+CONF_FROST_PROTECTION_TEMPERATURE = "frost_protection_temperature"
 CONF_HOT_WATER_SCHEDULE_ENTITY_ID = "hot_water_schedule_entity_id"
 CONF_HOT_WATER_COMFORT_TEMPERATURE = "hot_water_comfort_temperature"
 CONF_HOT_WATER_ECO_TEMPERATURE = "hot_water_eco_temperature"
@@ -190,6 +191,7 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_SETBACK_TEMPERATURE: 0.0,
     # 0 keeps central heating on whatever the weather
     CONF_WARM_WEATHER_SHUTDOWN: 0.0,
+    CONF_FROST_PROTECTION_TEMPERATURE: 6.0,
     CONF_HOT_WATER_SCHEDULE_ENTITY_ID: None,
     # 0 leaves the hot water temperature to the boiler
     CONF_HOT_WATER_COMFORT_TEMPERATURE: 0.0,

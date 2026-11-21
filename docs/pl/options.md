@@ -50,6 +50,7 @@ Temperatury docelowe od 5 do 35 °C:
 - **Cykle PWM na godzinę** (PWM cycles per hour): najwięcej startów palnika na godzinę. 3 albo 4 dla grzejników, 2 albo 3 dla pomp ciepła, ⓜ od 1 do 4 dla podłogówki (2 dla przewymiarowanego kotła). Budżet ciepła robi ich mniej.
 - **Przekazuj tryb pracy termostatom pokojowym** (Pass the mode to the room thermostats): włączenie albo wyłączenie SAT robi to samo z podłączonymi termostatami.
 - **Tryb po starcie bez zapisanego stanu** (Mode after a start without saved state): Grzanie albo Wyłączony, np. przy pierwszym uruchomieniu.
+- ⓜ **Ochrona przed zamarzaniem przy wyłączonym SAT** (Frost protection while off): gdy SAT jest wyłączony, a w pokoju jest tak zimno, kocioł grzeje wodą 30 °C, aż będzie o 1 °C cieplej (domyślnie 6 °C; 0 wyłącza). Nie ma jej w trybie przełącznika.
 - **Maksymalny wiek odczytu temperatury** (Maximum age of a temperature reading): starszy odczyt oznacza, że czujnik przestał raportować (domyślnie 6 godzin).
 - **Minimalny czas otwarcia okna** (Minimum time a window is open): jak długo czujnik okna musi być otwarty, zanim grzanie zostanie wstrzymane (domyślnie 15 sekund).
 
@@ -79,7 +80,7 @@ Sekcja jest domyślnie zwinięta.
 - **Straty ciepła domu** (Heat loss of the house): w W/K; 0 oznacza naukę (domyślnie, zalecane).
 - **Okres** (Period): co tyle przybywa kredytu ciepła (domyślnie 60 minut).
 - **Minimalne palenie** (Minimum burn): najkrótszy blok wart zapłonu (domyślnie 10 minut).
-- **Prognoza pogody** (Weather forecast): encja pogody z prognozą godzinową (np. Met.no albo Open-Meteo). Czujnik z samymi bieżącymi wartościami, np. Airly, się nie nadaje.
+- **Prognoza pogody** (Weather forecast): encja pogody z prognozą godzinową; jej prędkość wiatru służy do nauki wpływu wiatru (np. Met.no albo Open-Meteo). Czujnik z samymi bieżącymi wartościami, np. Airly, się nie nadaje.
 - **Harmonogram komfortu** i **Obniżenie poza harmonogramem** (Comfort schedule / Setback outside the schedule): pomocnik harmonogramu włączony w godzinach komfortu i to, o ile chłodniej jest poza nimi (domyślnie 0).
 - **Wyłączenie przy ciepłej pogodzie** (Warm weather shutdown): średnia dobowa temperatura zewnętrzna, przy której ogrzewanie się wyłącza (domyślnie 0: nigdy).
 
