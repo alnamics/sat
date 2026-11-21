@@ -43,6 +43,9 @@ PRESSURE_STEADY_PER_DAY = -0.003
 PRESSURE_FALLING_MINIMUM_DROP = 0.1
 
 FAULT_SECONDS = 60.0
+# Heating burns that lost their flame in a day: a few happen, this many want a service visit
+FLAME_LOSSES_PER_DAY = 6
+FLAME_LOSSES_CLEARED = 2
 # Flue gas above return in settled burns; averaged over a day of burning
 FOULING_GAP = 12.0
 FOULING_CLEARED = 9.0
@@ -173,6 +176,7 @@ class BoilerDiagnostics:
         near_minimum_power: bool = True,
         system_temperature: float | None = None,
         hot_water: bool = False,
+        flame_losses_last_day: int = 0,
     ) -> None:
         dt = (
             0.0 if self._last_update is None else min(now - self._last_update, MAXIMUM_STEP_SECONDS)
@@ -183,6 +187,7 @@ class BoilerDiagnostics:
         if pressure is not None and today is not None and not hot_water:
             self._update_pressure_trend(dt, today, pressure, system_temperature)
         self._update_fault(now, fault=fault, fault_code=fault_code)
+        self._update_flame_losses(flame_losses_last_day)
         self._update_fouling(
             dt,
             exhaust=exhaust,
@@ -264,6 +269,12 @@ class BoilerDiagnostics:
         else:
             self._fault_since = None
             self._set("boiler_fault", active=False)
+
+    def _update_flame_losses(self, losses: int) -> None:
+        if losses >= FLAME_LOSSES_PER_DAY:
+            self._set("frequent_flame_loss", active=True, placeholders={"count": str(losses)})
+        elif losses <= FLAME_LOSSES_CLEARED:
+            self._set("frequent_flame_loss", active=False)
 
     def _update_fouling(
         self,

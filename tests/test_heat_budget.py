@@ -178,6 +178,41 @@ def test_comfort_ends_an_hour_early() -> None:
     assert budget.effective_target == 20.5
 
 
+def test_the_heat_loss_comes_from_dark_hours_and_the_sun_from_the_rest() -> None:
+    # A flat losing 50 W/K that gains 1 kW in full sun; the sun shines on the mild hours
+    budget = HeatBudget()
+    for hour in range(24):
+        sun = 0.3 if 9 <= hour < 15 else 0.0
+        kelvin_hours = 10.0 if sun else 16.0
+        budget._hours.append(
+            _Hour(
+                heat_kwh=0.05 * kelvin_hours - 1.0 * sun,
+                kelvin_hours=kelvin_hours,
+                sun_hours=sun,
+                seconds=3600.0,
+                indoor_start=22.0,
+                indoor_end=22.0,
+                wall_end=float(hour),
+            )
+        )
+    for _ in range(30):
+        budget._fit()
+
+    assert abs(budget.heat_loss - 0.05) < 0.002
+    assert abs(budget.solar_gain - 1.0) < 0.05
+
+
+def test_a_heat_loss_learned_with_the_sun_is_kept() -> None:
+    budget = HeatBudget()
+    budget._load_learners(
+        {"heat_loss": {"theta": [0.055, 2.8], "p": [[0.01, 0], [0, 0.25]], "updates": 90}}
+    )
+
+    assert budget.heat_loss == 0.055
+    assert budget.solar_gain == 2.8
+    assert budget.ready
+
+
 def test_the_solar_elevation_matches_warsaw() -> None:
     noon_november = datetime(2026, 11, 14, 11, 0, tzinfo=UTC)
     noon_june = datetime(2026, 6, 21, 10, 55, tzinfo=UTC)

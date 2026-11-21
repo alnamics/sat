@@ -77,7 +77,6 @@ Poniżej jest tylko to, czym jest każde ustawienie; jak działają funkcje, wyj
 - **Boiler anti-cycling time**: własny czas oczekiwania kotła przed ponownym zapłonem, z ustawień instalatora (domyślnie 0: nie ustawiono).
 - **Learn overshoot protection value** (domyślnie wyłączone): koryguje skalibrowaną wartość na podstawie tego, jak kończą się palenia przy małym obciążeniu, w zakresie od 30 °C do maksymalnej temperatury zadanej minus 3 °C. Bieżącą wartość pokazuje atrybut `minimum_setpoint`.
 - **Valve opening time**: ile trwa otwarcie siłowników termostatów pokojowych (domyślnie 0: zapalaj kocioł od razu).
-- **Warm-up modulation** (domyślnie 0, wyłączone): pozwala zimnemu paleniu modulować do tej wartości przez pierwsze minuty, gdy płomień gaśnie na minimalnej mocy. Niedostępne w trybie przełącznika.
 - **Keep heating enabled between PWM on-phases** (domyślnie wyłączone): dla kotłów dwufunkcyjnych, w których wybieg pompy wychładza zasobnik ciepłej wody. Niedostępne w trybie przełącznika.
 - **Duty Cycles per hour**: ogrzewanie podłogowe może zejść do 1.
 

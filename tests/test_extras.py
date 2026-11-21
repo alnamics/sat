@@ -13,7 +13,7 @@ from custom_components.sat.hot_water_schedule import (
 )
 from custom_components.sat.presence import Occupancy, PresenceTracker, is_home
 from custom_components.sat.warm_weather import WarmWeatherShutdown
-from custom_components.sat.window_detection import TemperatureDropDetector
+from custom_components.sat.window_detection import STARTUP_SECONDS, TemperatureDropDetector
 
 # A Sunday
 SUNDAY = datetime(2026, 11, 15, 0, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
@@ -110,8 +110,15 @@ def test_presence() -> None:
     assert tracker.update(6000, home=True, distance_km=0) == Occupancy.HOME
 
 
-def test_a_fast_temperature_drop_means_an_open_window() -> None:
+def settled_detector() -> TemperatureDropDetector:
+    """Return a detector whose start-up readings have settled by time 0."""
     detector = TemperatureDropDetector()
+    detector.update(-STARTUP_SECONDS, None)
+    return detector
+
+
+def test_a_fast_temperature_drop_means_an_open_window() -> None:
+    detector = settled_detector()
 
     # Slow cooling of a floor heated room is not a window
     for minute in range(60):
@@ -124,7 +131,7 @@ def test_a_fast_temperature_drop_means_an_open_window() -> None:
 
 
 def test_airing_a_room_for_a_long_time_pauses_the_heating() -> None:
-    detector = TemperatureDropDetector()
+    detector = settled_detector()
     # The room cools by a tenth every quarter of an hour while a window stays open
     readings = [(0, 22.7), (600, 22.6), (1140, 22.5), (1680, 22.4), (2700, 22.3), (3720, 22.2)]
     readings += [(4740, 22.1), (5820, 22.0), (7140, 21.9), (8280, 21.8), (9000, 21.9)]
@@ -146,7 +153,7 @@ def test_airing_a_room_for_a_long_time_pauses_the_heating() -> None:
 
 
 def test_steady_slow_cooling_is_not_a_window() -> None:
-    detector = TemperatureDropDetector()
+    detector = settled_detector()
     # 0.4 K an hour for ten hours, as a sensor that reports tenths shows it
     for step in range(1200):
         temperature = round((22.0 - 0.4 * step * 30 / 3600) * 10) / 10
@@ -193,6 +200,26 @@ def test_an_absence_continues_after_a_restart() -> None:
     assert tracker.state == Occupancy.AWAY
     assert tracker.update(1030, home=False, distance_km=None) == Occupancy.AWAY
     assert tracker.update(1060, home=True, distance_km=None) == Occupancy.HOME
+
+
+def test_the_readings_right_after_a_start_are_not_a_window() -> None:
+    detector = TemperatureDropDetector()
+    # A sensor that reports something else for a moment while Home Assistant starts
+    assert not detector.update(0, 22.4)
+    assert not detector.update(30, 21.0)
+    assert not detector.update(60, 22.4)
+    for now in range(90, 1800, 30):
+        assert not detector.update(now, 22.4)
+
+
+def test_a_sensor_step_is_not_a_window() -> None:
+    detector = settled_detector()
+    for now in range(0, 1200, 30):
+        assert not detector.update(now, 22.4)
+    # One reading far off, then back
+    assert not detector.update(1200, 19.0)
+    for now in range(1230, 3000, 30):
+        assert not detector.update(now, 22.4)
 
 
 def test_a_window_pause_continues_after_a_restart() -> None:

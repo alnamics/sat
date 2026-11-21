@@ -24,6 +24,11 @@ FURTHER_DROP_SECONDS = 1500.0
 # How long heating stays paused after the last drop
 HOLD_SECONDS = 1800.0
 MAXIMUM_PAUSE_SECONDS = 7200.0
+# After a start the readings settle first: a sensor that is not set up yet, or reports from the
+# wrong source for a moment, would otherwise look like a fast drop
+STARTUP_SECONDS = 600.0
+# No window moves the air temperature this much between two readings; such a step is the sensor
+SENSOR_STEP = 1.5
 
 
 class TemperatureDropDetector:
@@ -35,6 +40,8 @@ class TemperatureDropDetector:
         self._open_until: float | None = None
         self._opened_at: float | None = None
         self._lowest: tuple[float, float] | None = None
+        self._first_update: float | None = None
+        self._last_reading: float | None = None
 
     @property
     def open(self) -> bool:
@@ -47,6 +54,16 @@ class TemperatureDropDetector:
         self._lowest = None
 
     def update(self, now: float, temperature: float | None) -> bool:
+        if self._first_update is None:
+            self._first_update = now
+        if temperature is not None:
+            # A step to or from a reading this far off is the sensor, not the room
+            step = self._last_reading is not None and abs(temperature - self._last_reading) > (
+                SENSOR_STEP
+            )
+            self._last_reading = temperature
+            if step or now - self._first_update < STARTUP_SECONDS:
+                temperature = None
         if temperature is not None:
             self._samples.append((now, temperature))
         while self._samples and now - self._samples[0][0] > SLOW_WINDOW_SECONDS:

@@ -43,6 +43,32 @@ async def test_a_non_condensing_boiler_is_not_reported(hass: HomeAssistant) -> N
     assert not ir.async_get(hass).async_get_issue(DOMAIN, "heat_exchanger_fouling_entry")
 
 
+async def test_frequent_flame_losses_raise_an_issue(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+
+    def update(losses: int) -> None:
+        diagnostics.update(
+            0.0,
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=None,
+            settled_heating_burn=False,
+            flame_losses_last_day=losses,
+        )
+
+    update(5)
+    assert not ir.async_get(hass).async_get_issue(DOMAIN, "frequent_flame_loss_entry")
+    update(7)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "frequent_flame_loss_entry")
+    # It stays up until the flame holds again
+    update(4)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "frequent_flame_loss_entry")
+    update(1)
+    assert not ir.async_get(hass).async_get_issue(DOMAIN, "frequent_flame_loss_entry")
+
+
 async def test_low_water_pressure_raises_an_issue(hass: HomeAssistant) -> None:
     diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
     run(diagnostics, 0.5, pressure=0.6)
