@@ -35,8 +35,11 @@ _LOGGER = logging.getLogger(__name__)
 
 SECONDS_PER_HOUR = 3600.0
 
-# Heat stored per kelvin in the rooms and the screed of a flat; only corrects the 24 h balance
+# Heat stored per kelvin in the rooms and the screed, which corrects the 24 h balance. It
+# starts at a flat's value and is learned alongside H from the days the room temperature
+# changed (a new target, a setback); it is never less certain than at the start
 BUILDING_CAPACITY_KWH_PER_K = 4.0
+BUILDING_CAPACITY_BOUNDS = (1.0, 20.0)
 # Learning: one record per hour, a balance over the last day, about four days of memory
 LEARNING_WINDOW_HOURS = 24
 LEARNING_FORGETTING = 0.99
@@ -234,15 +237,16 @@ class _Hour:
         return cls(*numbers)
 
 
-def _balance(hours: list[_Hour]) -> tuple[float, float, float]:
+def _warming(hours: list[_Hour]) -> float:
+    """Sum of each hour's own indoor temperature change, so a missing hour leaves no jump."""
+    return sum((h.indoor_end or 0.0) - (h.indoor_start or 0.0) for h in hours)
+
+
+def _balance(hours: list[_Hour], capacity: float) -> tuple[float, float, float]:
     """Return the heat, the kelvin hours and the heat stored in the house over these hours."""
     heat = sum(h.heat_kwh for h in hours)
     kelvin_hours = sum(h.kelvin_hours for h in hours)
-    # Each hour's own temperature change, so a missing hour leaves no false jump
-    stored = BUILDING_CAPACITY_KWH_PER_K * sum(
-        (h.indoor_end or 0.0) - (h.indoor_start or 0.0) for h in hours
-    )
-    return heat, kelvin_hours, stored
+    return heat, kelvin_hours, capacity * _warming(hours)
 
 
 class _RecursiveLeastSquares:
@@ -255,7 +259,7 @@ class _RecursiveLeastSquares:
             [variance[i] if i == j else 0.0 for j in range(size)] for i in range(size)
         ]
         self.forgetting = forgetting
-        self.limit = max(variance) * COVARIANCE_LIMIT_FACTOR
+        self.limits = [value * COVARIANCE_LIMIT_FACTOR for value in variance]
         self.updates = 0
 
     def update(self, x: list[float], y: float) -> None:
@@ -274,9 +278,8 @@ class _RecursiveLeastSquares:
         ]
         # A parameter that is never excited (no sun without a forecast) would see its
         # covariance grow without bound under forgetting
-        largest = max(self.p[i][i] for i in range(size))
-        if largest > self.limit:
-            factor = self.limit / largest
+        factor = min(self.limits[i] / self.p[i][i] for i in range(size) if self.p[i][i] > 0)
+        if factor < 1:
             self.p = [[value * factor for value in row] for row in self.p]
         self.updates += 1
 
@@ -316,8 +319,11 @@ class HeatBudget:
         # ones on top of it: learned together from one day, where the sun and the mild hours
         # come at the same time, the two traded off against each other
         self._learner = _RecursiveLeastSquares(
-            [DEFAULT_HEAT_LOSS_KW_PER_K], [0.01], LEARNING_FORGETTING
+            [DEFAULT_HEAT_LOSS_KW_PER_K, BUILDING_CAPACITY_KWH_PER_K],
+            [0.01, 1.0],
+            LEARNING_FORGETTING,
         )
+        self._learner.limits[1] = 1.0
         self._solar_learner = _RecursiveLeastSquares([0.0], [0.25], LEARNING_FORGETTING)
         self._wind_learner = _RecursiveLeastSquares([0.0], [1e-4], LEARNING_FORGETTING)
         self._wind_mean: float | None = None
@@ -404,16 +410,21 @@ class HeatBudget:
         _LOGGER.debug("Loaded heat budget: H=%.3f kW/K.", self.heat_loss)
 
     def _load_learners(self, data: dict[str, Any]) -> None:
+        balance = data.get("heat_balance")
         heat_loss = data.get("heat_loss") or {}
         theta = heat_loss.get("theta") if isinstance(heat_loss, dict) else None
-        if isinstance(theta, list) and len(theta) == 2:  # noqa: PLR2004 - learned together before
-            # Keep what was learned; the variances start over for the separate learners
-            self._learner.theta = [float(theta[0])]
-            self._learner.updates = int(heat_loss.get("updates", 0))
-            self._solar_learner.theta = [float(theta[1])]
-        else:
-            self._learner.load(heat_loss)
+        if isinstance(balance, dict):
+            self._learner.load(balance)
             self._solar_learner.load(data.get("solar_gain") or {})
+        elif isinstance(theta, list) and theta:
+            # Keep what was learned: H alone, or H with the sun when both were learned together;
+            # the variances start over
+            self._learner.theta[0] = float(theta[0])
+            self._learner.updates = int(heat_loss.get("updates", 0))
+            if len(theta) == 2:  # noqa: PLR2004
+                self._solar_learner.theta = [float(theta[1])]
+            else:
+                self._solar_learner.load(data.get("solar_gain") or {})
         wind = data.get("wind") or {}
         if isinstance(wind, dict):
             self._wind_learner.load(wind)
@@ -433,7 +444,7 @@ class HeatBudget:
 
     def _data_to_save(self) -> dict[str, Any]:
         return {
-            "heat_loss": self._learner.to_dict(),
+            "heat_balance": self._learner.to_dict(),
             "solar_gain": self._solar_learner.to_dict(),
             "wind": {
                 **self._wind_learner.to_dict(),
@@ -458,9 +469,18 @@ class HeatBudget:
         return self._learner.theta[0]
 
     @property
+    def heat_capacity(self) -> float:
+        """Heat stored per kelvin of room temperature, in kWh/K."""
+        return self._learner.theta[1]
+
+    @property
     def solar_gain(self) -> float:
         """Heat gained in full sun in kW."""
         return self._solar_learner.theta[0]
+
+    def set_minimum_off(self, seconds: float) -> None:
+        """Take a boiler relight wait learned from its burns."""
+        self._minimum_off = max(0.0, float(seconds))
 
     @property
     def wind_sensitivity(self) -> float:
@@ -516,6 +536,8 @@ class HeatBudget:
         return {
             "heat_budget_ready": self.ready,
             "heat_loss_w_per_k": round(self.heat_loss * 1000),
+            "heat_capacity_kwh_per_k": round(self.heat_capacity, 1),
+            "minimum_pause_minutes": round(self._minimum_off / 60),
             "solar_gain_kw": round(self.solar_gain, 2),
             "wind_speed_kmh": None if self._wind is None else round(self._wind),
             "wind_heat_loss_percent_per_10kmh": round(self.wind_sensitivity * 1000, 1),
@@ -838,11 +860,12 @@ class HeatBudget:
         dark = [h for h in self._hours if h.sun_hours <= DARK_SUN_HOURS]
         sunny = [h for h in self._hours if h.sun_hours > DARK_SUN_HOURS]
         if len(dark) >= LEARNING_MINIMUM_DARK_HOURS:
-            heat, kelvin_hours, stored = _balance(dark)
+            heat, kelvin_hours, _ = _balance(dark, 0.0)
             if kelvin_hours > 0:
-                self._learner.update([kelvin_hours], heat - stored)
+                # The heat is what the house lost plus what it stored
+                self._learner.update([kelvin_hours, _warming(dark)], heat)
         if self._learner.updates > 0 and sunny:
-            heat, kelvin_hours, stored = _balance(sunny)
+            heat, kelvin_hours, stored = _balance(sunny, self.heat_capacity)
             sun_hours = sum(h.sun_hours for h in sunny)
             if sun_hours >= LEARNING_MINIMUM_SUN_HOURS:
                 self._solar_learner.update(
@@ -869,7 +892,7 @@ class HeatBudget:
         # heat - stored - H * kelvin_hours = H * w * (wind_kelvin_hours - mean * kelvin_hours)
         if len(hours) < LEARNING_MINIMUM_DARK_HOURS or self._wind_mean is None:
             return
-        heat, kelvin_hours, stored = _balance(hours)
+        heat, kelvin_hours, stored = _balance(hours, self.heat_capacity)
         wind_kelvin_hours = sum(h.wind_kelvin_hours * h.seconds / h.wind_seconds for h in hours)
         x = self.heat_loss * (wind_kelvin_hours - self._wind_mean * kelvin_hours)
         if abs(x) < 1e-6:  # noqa: PLR2004
@@ -879,6 +902,7 @@ class HeatBudget:
     def _clamp_parameters(self) -> None:
         theta = self._learner.theta
         theta[0] = min(max(theta[0], HEAT_LOSS_BOUNDS[0]), HEAT_LOSS_BOUNDS[1])
+        theta[1] = min(max(theta[1], BUILDING_CAPACITY_BOUNDS[0]), BUILDING_CAPACITY_BOUNDS[1])
         solar = self._solar_learner.theta
         solar[0] = min(max(solar[0], SOLAR_GAIN_BOUNDS[0]), SOLAR_GAIN_BOUNDS[1])
         wind = self._wind_learner.theta

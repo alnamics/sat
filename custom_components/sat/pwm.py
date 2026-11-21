@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import TYPE_CHECKING
 
-from .const import HEATER_STARTUP_TIMEFRAME, MINIMUM_SETPOINT, BoilerStatus, PWMStatus
+from .const import HEATER_STARTUP_TIMEFRAME, BoilerStatus, PWMStatus
 from .flame import Flame
-from .setpoint_adjuster import SetpointAdjuster
 
 if TYPE_CHECKING:
     from homeassistant.core import State
@@ -22,6 +21,8 @@ _LOGGER = logging.getLogger(__name__)
 SECONDS_PER_HOUR = 3600
 FLAME_SETTLE_SECONDS = 6
 SHORT_FLAME_CYCLE_SECONDS = 60
+# Settled burns level off this far above what PWM can still deliver
+SETTLED_FLOW_MARGIN = 3.0
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -76,9 +77,8 @@ class PWM:
         self._min_duty_cycle_percentage: float = self._duty_cycle_lower_threshold / 2
         self._max_duty_cycle_percentage: float = 1 - self._min_duty_cycle_percentage
 
-        # Initialize some helpers
-        self._setpoint: float | None = None
-        self._setpoint_adjuster = SetpointAdjuster()
+        # The flow a settled burn levels off at, less a margin; unknown while the burns are short
+        self._settled_flow: float | None = None
 
         # The cycles per hour limit spans resets, otherwise every PID reset would start a new cycle
         self._current_cycle: int = 0
@@ -113,8 +113,7 @@ class PWM:
         """Disable the PWM control."""
         self.reset()
         self._enabled = False
-        self._setpoint = None
-        self._setpoint_adjuster.reset()
+        self._settled_flow = None
 
     async def update(
         self, boiler: BoilerState, flame: FlameState, requested_setpoint: float | None
@@ -169,7 +168,7 @@ class PWM:
                 self._last_boiler_temperature = boiler.flow_temperature
                 _LOGGER.debug("Updated last boiler temperature to %.1f°C", boiler.flow_temperature)
 
-        # Control the adjusted setpoint
+        # Follow the flow of settled burns, at most a kelvin per update
         if (
             flame.is_active
             and boiler.status
@@ -181,37 +180,25 @@ class PWM:
             and flame.latest_on_time_seconds is not None
             and flame.latest_on_time_seconds > FLAME_SETTLE_SECONDS
         ):
-            target = boiler.flow_temperature - 3
-            self._setpoint = self._setpoint_adjuster.adjust(target_setpoint=target)
-            _LOGGER.debug(
-                "Adjusting setpoint for active flame - "
-                "Flow temp: %.1f°C, Target: %.1f°C, New setpoint: %.1f°C",
-                boiler.flow_temperature,
-                target,
-                self._setpoint,
-            )
+            target = boiler.flow_temperature - SETTLED_FLOW_MARGIN
+            if self._settled_flow is None:
+                self._settled_flow = target
+            else:
+                step = min(max(target - self._settled_flow, -1.0), 1.0)
+                self._settled_flow += step
         elif flame.is_inactive and (
             flame.average_on_time_seconds is None
             or flame.average_on_time_seconds < SHORT_FLAME_CYCLE_SECONDS
         ):
-            target = boiler.flow_temperature + 10
-            self._setpoint = self._setpoint_adjuster.force(target_setpoint=target)
-            _LOGGER.debug(
-                "Forcing setpoint up due to short flame cycles - "
-                "Flow temp: %.1f°C, Target: %.1f°C, New setpoint: %.1f°C",
-                boiler.flow_temperature,
-                target,
-                self._setpoint,
-            )
-        elif self._setpoint_adjuster.current is not None:
-            self._setpoint = self._setpoint_adjuster.current
-            _LOGGER.debug("Maintaining current setpoint at %.1f°C", self._setpoint)
+            # Short burns mean the boiler is too big for the load: PWM stays on until a settled
+            # burn shows the flow again
+            self._settled_flow = None
 
         if (
-            # Check if we are above the overshoot temperature
+            # The house wants more than the boiler settles at: modulating is better than PWM
             boiler.status == BoilerStatus.COOLING_DOWN
-            and self._setpoint is not None
-            and math.floor(requested_setpoint) > math.floor(self._setpoint)
+            and self._settled_flow is not None
+            and math.floor(requested_setpoint) > math.floor(self._settled_flow)
         ):
             _LOGGER.info("Setpoint stabilization detected, disabling Pulse Width Modulation.")
             self.disable()
@@ -406,6 +393,6 @@ class PWM:
         )
 
     @property
-    def setpoint(self) -> float:
-        """Returns the adjusted setpoint when running an ON duty cycle."""
-        return self._setpoint or MINIMUM_SETPOINT
+    def settled_flow(self) -> float | None:
+        """The flow of settled burns less a margin, which PWM is ended above."""
+        return self._settled_flow

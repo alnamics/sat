@@ -246,40 +246,16 @@ async def test_closed_valves_keep_the_pwm_enabled(hass: HomeAssistant) -> None:
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_disable_clears_the_adjusted_setpoint(hass: HomeAssistant) -> None:
-    entry, climate, coordinator = await setup_climate(
-        hass, {CONF_FORCE_PULSE_WIDTH_MODULATION: True}
-    )
+async def test_disable_clears_the_settled_flow(hass: HomeAssistant) -> None:
+    entry, climate, _ = await setup_climate(hass, {CONF_FORCE_PULSE_WIDTH_MODULATION: True})
     assert climate.pwm is not None
-    await coordinator.async_set_boiler_temperature(57)
-    await climate.async_set_hvac_mode(HVACMode.HEAT)
-    await climate.async_set_target_temperature(21.0)
-    await hass.async_block_till_done()
-    assert climate.pwm.setpoint > MINIMUM_SETPOINT
-
-    climate.pwm.disable()
-
-    assert climate.pwm.setpoint == MINIMUM_SETPOINT
-    assert await hass.config_entries.async_unload(entry.entry_id)
-
-
-async def test_reset_keeps_the_adjusted_setpoint(hass: HomeAssistant) -> None:
-    entry, climate, coordinator = await setup_climate(
-        hass, {CONF_FORCE_PULSE_WIDTH_MODULATION: True}
-    )
-    assert climate.pwm is not None
-    await coordinator.async_set_boiler_temperature(57)
-    await climate.async_set_hvac_mode(HVACMode.HEAT)
-    await climate.async_set_target_temperature(21.0)
-    await hass.async_block_till_done()
-    adjusted = climate.pwm.setpoint
-    assert adjusted > MINIMUM_SETPOINT
+    climate.pwm._settled_flow = 40.0
 
     climate.pwm.reset()
-    assert climate.pwm.setpoint == adjusted
+    assert climate.pwm.settled_flow == 40.0
 
-    await climate.async_control_heating_loop()
-    assert climate.pwm.setpoint == adjusted
+    climate.pwm.disable()
+    assert climate.pwm.settled_flow is None
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

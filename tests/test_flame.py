@@ -811,3 +811,51 @@ def test_a_cut_out_near_the_setpoint_is_still_cut_short(freezer: FrozenDateTimeF
 
     assert len(flame.cut_short_burn_ends) == 1
     assert flame.flame_loss_ends == ()
+
+
+def test_the_boilers_relight_wait_is_learned(freezer: FrozenDateTimeFactory) -> None:
+    flame = Flame()
+    assert flame.learned_relight_wait_seconds is None
+
+    for _ in range(4):
+        flame.update(boiler_state(True, setpoint=45.0, flow=35.0))
+        freezer.tick(timedelta(seconds=300))
+        flame.update(boiler_state(True, setpoint=45.0, flow=38.0))
+        # The burn ends and the boiler holds the flame off for 10 minutes despite the demand
+        for _ in range(60):
+            flame.update(boiler_state(False, setpoint=45.0, flow=33.0))
+            freezer.tick(timedelta(seconds=10))
+        flame.update(boiler_state(True, setpoint=45.0, flow=33.0))
+
+    wait = flame.learned_relight_wait_seconds
+    assert wait is not None
+    assert 590 <= wait <= 620
+
+
+def test_a_relight_without_waiting_tells_nothing(freezer: FrozenDateTimeFactory) -> None:
+    flame = Flame()
+    for _ in range(4):
+        flame.update(boiler_state(True, setpoint=45.0, flow=35.0))
+        freezer.tick(timedelta(seconds=300))
+        flame.update(boiler_state(False, demand=False, setpoint=10.0, flow=33.0))
+        freezer.tick(timedelta(seconds=1800))
+        flame.update(boiler_state(False, setpoint=45.0, flow=30.0))
+        freezer.tick(timedelta(seconds=10))
+        flame.update(boiler_state(True, setpoint=45.0, flow=30.0))
+
+    assert flame.learned_relight_wait_seconds is None
+
+
+@pytest.mark.parametrize(("floor", "hot_water"), [(None, True), (30.0, False)])
+def test_the_hot_water_limit_follows_the_boilers_lowest_setpoint(
+    freezer: FrozenDateTimeFactory, floor: float | None, hot_water: bool
+) -> None:
+    # A boiler raising an off-phase setpoint of 10 °C to its minimum burns up to 37 °C
+    flame = Flame()
+    flame.set_setpoint_floor(floor)
+    flame.update(boiler_state(False, setpoint=10.0, flow=24.0), PWM_OFF)
+    for flow in (24.0, 28.0, 32.0, 35.0, 37.0, 37.0):
+        flame.update(boiler_state(True, setpoint=10.0, flow=flow), PWM_OFF)
+        freezer.tick(timedelta(seconds=5))
+
+    assert flame.hot_water_burn is hot_water

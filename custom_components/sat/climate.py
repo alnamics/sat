@@ -404,11 +404,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # Learn the heat loss of the house and dose the burner in blocks of one period
         self._heat_budget_mode = str(config_options.get(CONF_HEAT_BUDGET_MODE) or HEAT_BUDGET_OFF)
         self.heat_budget: HeatBudget | None = None
+        self._anti_cycling_configured = True
         if self._heat_budget_mode != HEAT_BUDGET_OFF and coordinator.supports_setpoint_management:
             anti_cycling = convert_time_str_to_seconds(
                 config_options.get(CONF_BOILER_ANTI_CYCLING_TIME) or "00:00:00"
             )
             heat_loss = float(config_options.get(CONF_HEAT_LOSS_COEFFICIENT) or 0) / 1000
+            # Without a configured wait the budget learns it from the boiler's relights
+            self._anti_cycling_configured = anti_cycling > 0
             self.heat_budget = HeatBudget(
                 period_seconds=int(config_options[CONF_HEAT_BUDGET_PERIOD]) * 60,
                 minimum_burn_seconds=convert_time_str_to_seconds(
@@ -2396,6 +2399,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         if self.heat_budget is None:
             return
 
+        if not self._anti_cycling_configured and (
+            learned := self._coordinator.learned_relight_wait_seconds
+        ):
+            self.heat_budget.set_minimum_off(learned)
         self.heat_budget.update(self._heat_budget_inputs())
         overloaded = self._driving_budget is not None and self.heat_budget.overloaded
         if overloaded != self._budget_overloaded:

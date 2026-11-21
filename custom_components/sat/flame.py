@@ -74,7 +74,12 @@ class Flame:
     # A heating burn cuts out 5 to 7 °C above its setpoint; a Remeha preheat runs ~20 °C above
     UNFLAGGED_HOT_WATER_MARGIN: float = 10.0
     # Boilers heat to their own minimum, often 25 °C, when the setpoint is lower
+    # Without the boiler's own lowest heating setpoint (OpenTherm ID 49)
     UNFLAGGED_HOT_WATER_SETPOINT_FLOOR: float = 25.0
+    # The boiler's relight wait is learned from heating burns that had to wait for the flame
+    RELIGHT_WAIT_MINIMUM_HELD_SECONDS: float = 60.0
+    RELIGHT_WAIT_BOUNDS: tuple[float, float] = (120.0, 1800.0)
+    RELIGHT_WAIT_MINIMUM_SAMPLES: int = 3
     UNFLAGGED_HOT_WATER_SETTLE_SECONDS: float = 20.0
     EXPECTED_MODULATING_DUTY_RATIO_WHEN_HEATING: float = 0.60
 
@@ -162,6 +167,9 @@ class Flame:
         self._on_durations_window: deque[tuple[float, float]] = deque()
         self._pwm_burns_cut_short: deque[tuple[float, bool]] = deque(maxlen=3)
         self._flame_losses: deque[float] = deque(maxlen=200)
+        self._relight_waits: deque[float] = deque(maxlen=10)
+        self._last_burn_heating = False
+        self._setpoint_floor = self.UNFLAGGED_HOT_WATER_SETPOINT_FLOOR
 
         # Health
         self._health_status: FlameStatus = FlameStatus.INSUFFICIENT_DATA
@@ -207,6 +215,13 @@ class Flame:
             [*(ended + offset for ended in data.get("flame_losses", [])), *self._flame_losses],
             maxlen=self._flame_losses.maxlen,
         )
+        self._relight_waits = deque(
+            [
+                *(float(wait) for wait in data.get("relight_waits", [])),
+                *self._relight_waits,
+            ],
+            maxlen=self._relight_waits.maxlen,
+        )
 
         _LOGGER.debug("Loaded %d flame cycles from storage.", len(self._on_durations_window))
 
@@ -225,6 +240,7 @@ class Flame:
                 (ended + offset, value) for ended, value in self._pwm_burns_cut_short
             ],
             "flame_losses": [ended + offset for ended in self._flame_losses],
+            "relight_waits": list(self._relight_waits),
         }
 
     @property
@@ -297,7 +313,7 @@ class Flame:
             or self._burn_highest_setpoint is None
         ):
             return False
-        heating_limit = max(self._burn_highest_setpoint, self.UNFLAGGED_HOT_WATER_SETPOINT_FLOOR)
+        heating_limit = max(self._burn_highest_setpoint, self._setpoint_floor)
         return (
             self._burn_peak_flow - self._burn_ignition_flow > self.UNFLAGGED_HOT_WATER_MARGIN
             and self._burn_peak_flow > heating_limit + self.UNFLAGGED_HOT_WATER_MARGIN
@@ -343,6 +359,21 @@ class Flame:
     def flame_loss_ends(self) -> tuple[float, ...]:
         """When heating burns lost their flame well below the setpoint, oldest first."""
         return tuple(self._flame_losses)
+
+    def set_setpoint_floor(self, minimum: float | None) -> None:
+        """Take the boiler's lowest heating setpoint, which it raises lower setpoints to."""
+        self._setpoint_floor = (
+            float(minimum)
+            if minimum is not None and 10 <= minimum <= 60  # noqa: PLR2004
+            else self.UNFLAGGED_HOT_WATER_SETPOINT_FLOOR
+        )
+
+    @property
+    def learned_relight_wait_seconds(self) -> float | None:
+        """How long the boiler waits before it relights for heating, once seen often enough."""
+        if len(self._relight_waits) < self.RELIGHT_WAIT_MINIMUM_SAMPLES:
+            return None
+        return median(self._relight_waits)
 
     @property
     def flame_losses_last_day(self) -> int:
@@ -400,6 +431,7 @@ class Flame:
 
         # OFF -> ON
         if currently_active and not previously_active:
+            self._learn_relight_wait(now)
             pwm = self._fresh_pulse_width_modulation_state(now)
             hot_water = (
                 self._hot_water_seen_monotonic is not None
@@ -472,6 +504,7 @@ class Flame:
                 self._burn_hot_water = True
                 self._pwm_planned_on_seconds = None
                 self._forgive_cut_out_before_hot_water(now)
+            self._last_burn_heating = not self._burn_hot_water
 
             self._prune_cycles_window(now)
             self._prune_median_window(now)
@@ -566,6 +599,26 @@ class Flame:
             self._last_update_monotonic = now
             self._recompute_health(now)
             return
+
+    def _learn_relight_wait(self, now: float) -> None:
+        """Record the relight wait shown by a heating burn that had to wait under demand."""
+        held = self._waited_for_flame_seconds + (
+            now - self._waiting_for_flame_since_monotonic
+            if self._waiting_for_flame_since_monotonic is not None
+            else 0.0
+        )
+        if (
+            not self._last_burn_heating
+            or self._flame_off_monotonic is None
+            or held < self.RELIGHT_WAIT_MINIMUM_HELD_SECONDS
+            or (self._hot_water_seen_monotonic or 0.0) > self._flame_off_monotonic
+        ):
+            return
+        wait = now - self._flame_off_monotonic
+        low, high = self.RELIGHT_WAIT_BOUNDS
+        if low <= wait <= high:
+            self._relight_waits.append(round(wait))
+            _LOGGER.debug("The boiler relit %.0f s after the last heating burn.", wait)
 
     def _recompute_health(self, now: float) -> None:
         state = self._last_boiler_state

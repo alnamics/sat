@@ -447,3 +447,34 @@ def test_hours_saved_before_the_wind_are_loaded() -> None:
     assert hour is not None
     assert hour.wind_seconds == 0.0
     assert not hour.has_wind
+
+
+def test_the_heat_capacity_is_learned_from_days_the_room_changed() -> None:
+    # A house losing 50 W/K that stores 8 kWh per kelvin; the room rises and falls by a degree
+    budget = HeatBudget()
+    for day in range(10):
+        warming = (1.0, -1.0, 0.5, -0.5, 0.0)[day % 5] / 24
+        for hour in range(24):
+            start = 21.0 + warming * hour
+            budget._hours.append(
+                _Hour(
+                    heat_kwh=0.05 * 16.0 + 8.0 * warming,
+                    kelvin_hours=16.0,
+                    seconds=3600.0,
+                    indoor_start=start,
+                    indoor_end=start + warming,
+                    wall_end=float(day * 24 + hour),
+                )
+            )
+            budget._fit()
+
+    assert abs(budget.heat_loss - 0.05) < 0.003
+    assert abs(budget.heat_capacity - 8.0) < 1.0
+
+
+def test_a_steady_room_keeps_the_starting_capacity() -> None:
+    budget = HeatBudget()
+    windy_days(budget, 0.0)
+
+    assert budget.heat_capacity == 4.0
+    assert budget.attributes["heat_capacity_kwh_per_k"] == 4.0

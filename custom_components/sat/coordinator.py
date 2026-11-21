@@ -261,6 +261,11 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         return self._flame.flame_losses_last_day
 
     @property
+    def learned_relight_wait_seconds(self) -> float | None:
+        """The boiler's own wait before relighting for heating, learned from its burns."""
+        return self._flame.learned_relight_wait_seconds
+
+    @property
     def flame(self) -> FlameState:
         return FlameState(
             is_active=self._flame.is_active,
@@ -553,6 +558,7 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         # shortcut: a burn that ends during an outage is recorded with the outage included,
         # upgrade if outages turn out to be long
         if self.online and self.flame_reported:
+            self._flame.set_setpoint_floor(self.minimum_heating_setpoint)
             self._flame.update(boiler_state=self.boiler, pwm_state=pwm_state)
 
             if self._overshoot_learner is not None:
