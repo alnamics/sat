@@ -159,7 +159,7 @@ _LOGGER = logging.getLogger(__name__)
 
 def _choice(
     key: str, values: list[str], mode: SelectSelectorMode = SelectSelectorMode.DROPDOWN
-) -> selector.SelectSelector:
+) -> Any:  # noqa: ANN401
     """Return a drop-down whose labels come from the translations (selector.<key>)."""
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
@@ -168,9 +168,7 @@ def _choice(
     )
 
 
-def _number(
-    minimum: float, maximum: float, step: float, unit: str | None = None
-) -> selector.NumberSelector:
+def _number(minimum: float, maximum: float, step: float, unit: str | None = None) -> Any:  # noqa: ANN401
     """Return a number typed into a box, with its unit."""
     config = selector.NumberSelectorConfig(
         min=minimum, max=maximum, step=step, mode=selector.NumberSelectorMode.BOX
@@ -1206,7 +1204,7 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
     @property
     def _takes_setpoint(self) -> bool:
         """Whether the boiler takes a flow setpoint (everything but a plain switch)."""
-        return self.config_entry.data.get(CONF_MODE) != MODE_SWITCH
+        return bool(self.config_entry.data.get(CONF_MODE) != MODE_SWITCH)
 
     def _optional(self, key: str, options: dict[str, Any]) -> vol.Optional:
         return vol.Optional(key, description={"suggested_value": options.get(key)})

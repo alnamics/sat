@@ -243,7 +243,7 @@ async def test_cycles_per_hour_follow_the_heating_system(hass: HomeAssistant) ->
     schema = result["data_schema"]
     assert schema is not None
     cycles = next(value for key, value in schema.schema.items() if key == "cycles_per_hour")
-    assert [option["value"] for option in cycles.config["options"]] == ["2", "3"]
+    assert cycles.config["options"] == ["2", "3"]
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
