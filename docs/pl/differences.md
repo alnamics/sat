@@ -19,7 +19,7 @@ Domena integracji to nadal `sat`, więc SAT v2 zastępuje oryginał w tym samym 
 
 ## Równiejsze grzanie
 
-- PWM ma margines 2 °C przed wyłączeniem (bez dynamicznej minimalnej temperatury zadanej), a limit cykli na godzinę obowiązuje także po resetach.
+- PWM ma margines 2 °C przed wyłączeniem, a limit cykli na godzinę obowiązuje także po resetach.
 - Zmiana temperatury zadanej w pokoju i pobór ciepłej wody nie zakłócają cyklu PWM, a zamknięte zawory nie wyłączają PWM.
 - Gdy kocioł wciąż przerywa palenia, PWM wcześniej kończy fazę ON.
 - Poprawki PID: człon różniczkujący wygasa, zamiast się zawieszać, małe zmiany w obrębie czasu próbkowania nie giną, a systemy podłogowe dostają wzmocnienia dla podłogówki.

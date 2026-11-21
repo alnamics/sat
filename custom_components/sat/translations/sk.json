@@ -167,7 +167,6 @@
           "heating_curve_version": "Verzia vykurovacej krivky",
           "integral": "Integračná (kI)",
           "maximum_setpoint": "Maximálna požadovaná hodnota",
-          "dynamic_minimum_setpoint_version": "Verzia regulátora minimálnej požadovanej hodnoty",
           "pid_controller_version": "Verzia PID regulátora",
           "proportional": "Proporcionálna (kP)",
           "window_sensors": "Kontaktné senzory",
@@ -230,7 +229,6 @@
             "name": "Rozšírené",
             "data": {
               "climate_valve_offset": "Offset klimatizačného ventilu",
-              "dynamic_minimum_setpoint": "Dynamická minimálna nastavená hodnota (experimentálna)",
               "force_pulse_width_modulation": "Vynútená modulácia šírky impulzu",
               "maximum_consumption": "Maximálna spotreba",
               "maximum_relative_modulation": "Maximálna relatívna modulácia",
@@ -242,7 +240,6 @@
             },
             "data_description": {
               "climate_valve_offset": "Offset na nastavenie stupňa otvorenia klimatizačného ventilu.",
-              "dynamic_minimum_setpoint": "Aktivuje dynamické nastavenie požadovanej hodnoty na základe teploty spiatočky kotla, čo tiež pomáha identifikovať, či sú nejaké ventily zatvorené.",
               "maximum_consumption": "Maximálna spotreba plynu, keď je kotol aktívny.",
               "maximum_relative_modulation": "Predstavuje najvyššiu úroveň modulácie pre efektívny vykurovací systém.",
               "minimum_consumption": "Minimálna spotreba plynu, keď je kotol aktívny.",

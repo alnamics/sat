@@ -81,7 +81,6 @@ async def test_options_advanced_section(
             "advanced": {
                 "simulation": False,
                 "thermal_comfort": True,
-                "dynamic_minimum_setpoint": False,
                 "climate_valve_offset": 0,
                 "target_temperature_step": 0.5,
                 "maximum_relative_modulation": 100,
@@ -124,7 +123,6 @@ async def test_options_reject_calibration_timeouts_without_a_plateau(
             "advanced": {
                 "simulation": False,
                 "thermal_comfort": False,
-                "dynamic_minimum_setpoint": False,
                 "climate_valve_offset": 0,
                 "target_temperature_step": 0.5,
                 "maximum_relative_modulation": 100,

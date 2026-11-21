@@ -20,7 +20,6 @@ Ustawienia dodane przez ten fork są wymienione w sekcji [Zaawansowane: dodatki 
 - **Automatic Gains Value**: jak mocno reagują regulatory Classic i Improved (domyślnie 2,0). Dobrze sprawdza się wartość równa współczynnikowi krzywej grzewczej.
 - **Derivative Time Weight**: dostraja, jak SAT tłumi szybkie zmiany (domyślnie 2,5).
 - **Proportional, Integral, Derivative**: własne wartości PID, widoczne, gdy Automatic Gains jest wyłączone.
-- **Minimum Setpoint Controller Version** i **Adjustment Factor for Return Temperature**: ustawienia funkcji [Dynamic Minimum Setpoint](#advanced), widoczne, gdy jest włączona. Wersja decyduje, czy funkcja śledzi temperaturę powrotu, czy kotła. Współczynnik zacznij od wartości między 0,1 a 0,5 (domyślnie 0,2).
 - **Maximum Duty Cycle for Pulse Width Modulation**: długość [cyklu przy małym obciążeniu](how-it-works.md#sterowanie-przy-małym-obciążeniu), gdy Automatic duty cycle jest wyłączone (domyślnie 13 minut).
 - **Contact Sensors**: czujniki otwarcia drzwi i okien. Gdy któryś jest otwarty dłużej niż minimalny czas otwarcia, SAT przełącza się na preset Activity, a po zamknięciu przywraca poprzednią temperaturę zadaną.
 
@@ -53,7 +52,6 @@ Temperatury zadane od 5 do 35 °C:
 Ta sekcja jest domyślnie zwinięta.
 
 - **Thermal Comfort**: steruje według temperatury odczuwalnej (Summer Simmer Index), wyliczanej z temperatury i wilgotności. Wymaga czujnika wilgotności.
-- **Dynamic Minimum Setpoint (Experimental)**: gdy część zaworów jest zamknięta, przy sterowaniu przy małym obciążeniu woda może wracać cieplejsza, niż się oczekuje. Ta funkcja obserwuje temperaturę powrotu i dopasowuje do niej temperaturę zadaną.
 - **Force Pulse Width Modulation**: zawsze używa [cykli przy małym obciążeniu](how-it-works.md#sterowanie-przy-małym-obciążeniu), nawet gdy kocioł sam utrzymałby temperaturę. Tylko OTGW.
 - **Minimum Consumption** i **Maximum Consumption**: zużycie gazu przez kocioł na najniższej i najwyższej mocy, z instrukcji kotła. SAT szacuje z nich zużycie gazu oraz moc palnika, gdy kocioł nie podaje swojej mocy.
 - **Climate valve offset**: dla termostatów pokojowych, które nie informują, czy grzeją. Pokój liczy się jako wołający o ciepło, gdy jest co najmniej o tyle poniżej swojej temperatury zadanej (domyślnie 0).

@@ -12,8 +12,6 @@ from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.sat.climate import SatClimate
 from custom_components.sat.const import (
-    CONF_DYNAMIC_MINIMUM_SETPOINT,
-    CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
     CONF_HEATING_CURVE_COEFFICIENT,
     CONF_HEATING_SYSTEM,
@@ -109,16 +107,6 @@ async def test_enabled_attribute_matches_the_effective_state(hass: HomeAssistant
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_dynamic_minimum_setpoint_starts_from_the_options_value(hass: HomeAssistant) -> None:
-    entry, climate, coordinator = await setup_climate(
-        hass, {CONF_DYNAMIC_MINIMUM_SETPOINT: True, CONF_MINIMUM_SETPOINT: 40}
-    )
-
-    assert coordinator.minimum_setpoint == 40
-    assert climate.minimum_setpoint.current == 40
-    assert await hass.config_entries.async_unload(entry.entry_id)
-
-
 async def test_full_duty_cycle_stays_on(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -142,38 +130,8 @@ async def test_full_duty_cycle_stays_on(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_dynamic_minimum_setpoint_below_the_overshoot_value_still_enables_pwm(
-    hass: HomeAssistant,
-) -> None:
-    entry, climate, coordinator = await setup_climate(hass, {CONF_DYNAMIC_MINIMUM_SETPOINT: True})
-    await coordinator.async_set_boiler_temperature(57)
-    climate.minimum_setpoint.warming_up(replace(coordinator.boiler, return_temperature=200))
-    climate.minimum_setpoint.calculate(
-        replace(coordinator.boiler, return_temperature=0), PWMStatus.ON
-    )
-    assert climate.minimum_setpoint.current < coordinator.minimum_setpoint
-
-    await climate.async_set_target_temperature(21.0)
-    await climate.async_set_hvac_mode(HVACMode.HEAT)
-    await climate.async_control_heating_loop()
-
-    assert climate.pulse_width_modulation_enabled
-    assert climate.setpoint == coordinator.minimum_setpoint
-    assert await hass.config_entries.async_unload(entry.entry_id)
-
-
-@pytest.mark.parametrize(
-    ("options", "enabled"),
-    [
-        ({CONF_DYNAMIC_MINIMUM_SETPOINT: True, CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION: 2}, True),
-        ({CONF_DYNAMIC_MINIMUM_SETPOINT: True, CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION: 1}, False),
-        ({}, False),
-    ],
-)
-async def test_overshoot_handling_enables_pwm_only_for_dynamic_minimum_setpoint_v2(
-    hass: HomeAssistant, options: dict[str, Any], enabled: bool
-) -> None:
-    entry, climate, coordinator = await setup_climate(hass, {**options, CONF_MINIMUM_SETPOINT: 30})
+async def test_overshoot_handling_alone_does_not_enable_pwm(hass: HomeAssistant) -> None:
+    entry, climate, coordinator = await setup_climate(hass, {CONF_MINIMUM_SETPOINT: 30})
     await climate.async_set_target_temperature(21.0)
     await climate.async_set_hvac_mode(HVACMode.HEAT)
     await coordinator.async_set_control_setpoint(60)
@@ -183,18 +141,14 @@ async def test_overshoot_handling_enables_pwm_only_for_dynamic_minimum_setpoint_
 
     await climate.async_control_heating_loop()
 
-    assert climate.pulse_width_modulation_enabled is enabled
+    assert not climate.pulse_width_modulation_enabled
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_a_flow_settled_below_the_setpoint_does_not_enable_pwm(hass: HomeAssistant) -> None:
     entry, climate, coordinator = await setup_climate(
         hass,
-        {
-            CONF_DYNAMIC_MINIMUM_SETPOINT: True,
-            CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION: 2,
-            CONF_MINIMUM_SETPOINT: 30,
-        },
+        {CONF_MINIMUM_SETPOINT: 30},
     )
     await climate.async_set_target_temperature(21.0)
     await climate.async_set_hvac_mode(HVACMode.HEAT)

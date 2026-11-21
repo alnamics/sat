@@ -219,7 +219,6 @@
             "name": "Avançado",
             "data": {
               "climate_valve_offset": "Offset da válvula do clima",
-              "dynamic_minimum_setpoint": "Setpoint Mínimo Dinâmico (Experimental)",
               "force_pulse_width_modulation": "Forçar Modulação por Largura de Pulso",
               "maximum_consumption": "Consumo Máximo",
               "maximum_relative_modulation": "Modulação Relativa Máxima",
@@ -231,7 +230,6 @@
             },
             "data_description": {
               "climate_valve_offset": "Offset para ajustar o grau de abertura da válvula do clima.",
-              "dynamic_minimum_setpoint": "Ativa o ajuste dinâmico do setpoint com base na temperatura de retorno da caldeira, o que também ajuda a identificar se alguma válvula está fechada.",
               "maximum_consumption": "O consumo máximo de gás quando a caldeira está ativa.",
               "maximum_relative_modulation": "Representa o nível máximo de modulação para um sistema de aquecimento eficiente.",
               "minimum_consumption": "O consumo mínimo de gás quando a caldeira está ativa.",

@@ -219,7 +219,6 @@
             "name": "Avanzadas",
             "data": {
               "climate_valve_offset": "Compensación de la Válvula Climática",
-              "dynamic_minimum_setpoint": "Punto de Ajuste Mínimo Dinámico (Experimental)",
               "force_pulse_width_modulation": "Forzar Modulación de Ancho de Pulso",
               "maximum_consumption": "Consumo Máximo",
               "maximum_relative_modulation": "Modulación Relativa Máxima",
@@ -231,7 +230,6 @@
             },
             "data_description": {
               "climate_valve_offset": "Compensación para ajustar el grado de apertura de la válvula climática.",
-              "dynamic_minimum_setpoint": "Activa el ajuste dinámico del punto de consigna mínimo basado en la temperatura de retorno de la caldera, lo que también ayuda a identificar si alguna válvula está cerrada.",
               "maximum_consumption": "El consumo máximo de gas cuando la caldera está activa.",
               "maximum_relative_modulation": "Representa el nivel más alto de modulación para un sistema de calefacción eficiente.",
               "minimum_consumption": "El consumo mínimo de gas cuando la caldera está activa.",

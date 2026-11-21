@@ -41,7 +41,6 @@ from .coordinator_factory import SatDataUpdateCoordinatorFactory
 from .flame import flame_store
 from .heat_budget import heat_budget_store
 from .loop_measurement import loop_measurement_store
-from .minimum_setpoint import minimum_setpoint_store
 from .mqtt import mqtt_store
 from .mqtt.ems import SatEmsMqttCoordinator
 from .mqtt.opentherm import SatOpenThermMqttCoordinator
@@ -156,7 +155,8 @@ async def async_release_control(entry: SatConfigEntry) -> None:
 
 async def async_remove_entry(hass: HomeAssistant, entry: SatConfigEntry) -> None:
     hass.data.get(DOMAIN, {}).pop(f"setup_failed_{entry.entry_id}", None)
-    await minimum_setpoint_store(hass, entry.entry_id).async_remove()
+    # Left over from the dynamic minimum setpoint, which the heat budget replaced
+    await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.minimum_setpoint").async_remove()
     await flame_store(hass, entry.entry_id).async_remove()
     await overshoot_learner_store(hass, entry.entry_id).async_remove()
     await heat_budget_store(hass, entry.entry_id).async_remove()

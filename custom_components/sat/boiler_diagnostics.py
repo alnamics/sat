@@ -12,12 +12,17 @@
 * on underfloor heating, a large flow/return spread in settled burns, which means too little
   water moves (closed loops, a blocked filter or air). Radiators run such spreads by design;
 * a boiler service that is due;
-* gas use per degree day clearly above the weeks before.
+* gas use per degree day clearly above the weeks before;
+* a hot water cylinder that cools when a heating burn starts: with no tap open it should lose
+  well under a kelvin in ten minutes, so a regular drop of a few kelvin means heating water
+  gets into the cylinder coil (a diverter valve that does not close fully).
 """
 
 from __future__ import annotations
 
 import calendar
+from collections import deque
+from statistics import median
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import issue_registry as ir
@@ -63,6 +68,15 @@ SCREED_ISSUE_HOLD_SECONDS = 24 * SECONDS_PER_HOUR
 LOW_FLOW_SPREAD = 20.0
 LOW_FLOW_CLEARED_SPREAD = 12.0
 LOW_FLOW_SECONDS = 300.0
+
+# Cylinder temperature fall in the first minutes of a heating burn
+CYLINDER_WINDOW_SECONDS = 600.0
+# A shorter burn says too little
+CYLINDER_MINIMUM_BURN_SECONDS = 180.0
+CYLINDER_SAMPLES = 10
+CYLINDER_MINIMUM_SAMPLES = 5
+CYLINDER_DROP = 2.0
+CYLINDER_DROP_CLEARED = 1.0
 
 GAS_USE_INCREASED = 1.3
 GAS_USE_NORMAL = 1.15
@@ -117,6 +131,9 @@ class BoilerDiagnostics:
         self._screed_hot_since: float | None = None
         self._screed_last: float | None = None
         self._low_flow_since: float | None = None
+        self._cylinder_idle: float | None = None
+        self._cylinder_burn: tuple[float, float] | None = None
+        self._cylinder_drops: deque[float] = deque(maxlen=CYLINDER_SAMPLES)
         self._active: dict[str, bool] = {}
 
     async def async_initialize(self) -> None:
@@ -129,6 +146,11 @@ class BoilerDiagnostics:
         gap, hours = data.get("flue_return_gap"), data.get("flue_return_gap_hours")
         if isinstance(gap, int | float) and isinstance(hours, int | float):
             self._gap, self._gap_hours = float(gap), max(0.0, float(hours))
+        drops = data.get("cylinder_drops")
+        if isinstance(drops, list):
+            self._cylinder_drops.extend(
+                float(drop) for drop in drops if isinstance(drop, int | float)
+            )
 
     async def async_save(self) -> None:
         if self._store is not None:
@@ -139,11 +161,19 @@ class BoilerDiagnostics:
             "pressure": self._pressure.to_dict(),
             "flue_return_gap": self._gap,
             "flue_return_gap_hours": self._gap_hours,
+            "cylinder_drops": list(self._cylinder_drops),
         }
 
     @property
     def flue_return_gap(self) -> float | None:
         return None if self._gap is None else round(self._gap, 1)
+
+    @property
+    def cylinder_drop(self) -> float | None:
+        """Median fall of the cylinder temperature in the first minutes of a heating burn."""
+        if len(self._cylinder_drops) < CYLINDER_MINIMUM_SAMPLES:
+            return None
+        return round(median(self._cylinder_drops), 1)
 
     @property
     def pressure_trend_per_week(self) -> float | None:
@@ -155,6 +185,7 @@ class BoilerDiagnostics:
         return {
             "flue_return_gap": self.flue_return_gap,
             "pressure_trend_bar_per_week": self.pressure_trend_per_week,
+            "cylinder_drop_at_heating_start": self.cylinder_drop,
             "boiler_service_due": None if self._service_due is None else str(self._service_due),
             "active_issues": sorted(key for key, on in self._active.items() if on),
         }
@@ -177,6 +208,7 @@ class BoilerDiagnostics:
         system_temperature: float | None = None,
         hot_water: bool = False,
         flame_losses_last_day: int = 0,
+        cylinder_temperature: float | None = None,
     ) -> None:
         dt = (
             0.0 if self._last_update is None else min(now - self._last_update, MAXIMUM_STEP_SECONDS)
@@ -195,6 +227,9 @@ class BoilerDiagnostics:
             settled=settled_heating_burn and near_minimum_power,
         )
         self._update_screed(now, flow=flow, heating_burn=heating_burn)
+        self._update_cylinder(
+            now, temperature=cylinder_temperature, heating_burn=heating_burn, hot_water=hot_water
+        )
         if self._underfloor:
             self._update_low_flow(
                 now, flow=flow, return_temperature=return_temperature, settled=settled_heating_burn
@@ -312,6 +347,51 @@ class BoilerDiagnostics:
                 )
             elif self._gap < FOULING_CLEARED:
                 self._set("heat_exchanger_fouling", active=False)
+
+    def _update_cylinder(
+        self, now: float, *, temperature: float | None, heating_burn: bool, hot_water: bool
+    ) -> None:
+        if temperature is None or hot_water:
+            # A reheat or a tap says nothing about the heating water
+            self._cylinder_burn = None
+            if hot_water:
+                self._cylinder_idle = None
+            return
+
+        if not heating_burn:
+            if self._cylinder_burn is not None:
+                start, before = self._cylinder_burn
+                self._cylinder_burn = None
+                if now - start >= CYLINDER_MINIMUM_BURN_SECONDS:
+                    self._add_cylinder_drop(before - temperature)
+            self._cylinder_idle = temperature
+            return
+
+        if self._cylinder_burn is None:
+            if self._cylinder_idle is None:
+                return
+            self._cylinder_burn = (now, self._cylinder_idle)
+            self._cylinder_idle = None
+            return
+
+        start, before = self._cylinder_burn
+        if now - start >= CYLINDER_WINDOW_SECONDS:
+            self._cylinder_burn = None
+            self._add_cylinder_drop(before - temperature)
+
+    def _add_cylinder_drop(self, drop: float) -> None:
+        self._cylinder_drops.append(round(drop, 2))
+        if self._store is not None:
+            self._store.async_delay_save(self._data, 1)
+
+        if (drop := self.cylinder_drop) is None:
+            return
+        if drop >= CYLINDER_DROP:
+            self._set(
+                "cylinder_cools_in_heating", active=True, placeholders={"drop": f"{drop:.1f}"}
+            )
+        elif drop <= CYLINDER_DROP_CLEARED:
+            self._set("cylinder_cools_in_heating", active=False)
 
     def _update_screed(self, now: float, *, flow: float | None, heating_burn: bool) -> None:
         if self._screed_limit is None:

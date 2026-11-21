@@ -67,8 +67,6 @@ from .const import (
     CONF_COMFORT_SCHEDULE_ENTITY_ID,
     CONF_CONDENSING_BOILER,
     CONF_DEFAULT_HVAC_MODE,
-    CONF_DYNAMIC_MINIMUM_SETPOINT,
-    CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
     CONF_GAS_ENERGY_CONTENT,
     CONF_GAS_PRICE,
@@ -115,8 +113,6 @@ from .const import (
     CONTROL_LOOP_STALL_TIME,
     DEADBAND,
     DOMAIN,
-    DYNAMIC_MINIMUM_SETPOINT_VERSION_1,
-    DYNAMIC_MINIMUM_SETPOINT_VERSION_2,
     HEAT_BUDGET_OFF,
     HEAT_BUDGET_ON,
     HEAT_BUDGET_SHADOW,
@@ -157,7 +153,6 @@ from .relative_modulation import RelativeModulation, RelativeModulationState
 from .summer_simmer import SummerSimmer
 from .util import (
     create_heating_curve_controller,
-    create_minimum_setpoint_controller,
     create_pid_controller,
     create_pwm_controller,
 )
@@ -358,11 +353,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         )
         self._climate_valve_offset = float(config_options[CONF_CLIMATE_VALVE_OFFSET])
         self._attr_target_temperature_step = float(config_options[CONF_TARGET_TEMPERATURE_STEP])
-        self._dynamic_minimum_setpoint = bool(config_options.get(CONF_DYNAMIC_MINIMUM_SETPOINT))
         self._sync_climates_with_mode = bool(config_options.get(CONF_SYNC_CLIMATES_WITH_MODE))
         self._sync_climates_with_preset = bool(config_options.get(CONF_SYNC_CLIMATES_WITH_PRESET))
         self._maximum_relative_modulation = int(config_options[CONF_MAXIMUM_RELATIVE_MODULATION])
-        self._minimum_setpoint_version = int(config_options[CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION])
         self._force_pulse_width_modulation = bool(
             config_options.get(CONF_FORCE_PULSE_WIDTH_MODULATION)
         )
@@ -400,11 +393,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         # Create a Heating Curve controller with given configuration options
         self.heating_curve = create_heating_curve_controller(config_entry.data, config_options)
-
-        # Create the Minimum Setpoint controller
-        self.minimum_setpoint = create_minimum_setpoint_controller(
-            coordinator.minimum_setpoint, config_options
-        )
 
         # Learn the heat loss of the house and dose the burner in blocks of one period
         self._heat_budget_mode = str(config_options.get(CONF_HEAT_BUDGET_MODE) or HEAT_BUDGET_OFF)
@@ -563,8 +551,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self.heating_curve.update(self.native_target_temperature, outside_temperature)
 
         self.async_on_remove(async_at_started(self.hass, self._async_started))
-
-        await self.minimum_setpoint.async_initialize(self.hass, self._config_entry.entry_id)
 
         await self.boiler_stats.async_initialize(self.hass, self._config_entry.entry_id)
         self.boiler_diagnostics = BoilerDiagnostics(
@@ -1162,14 +1148,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         if not self._overshoot_protection or self._calculated_setpoint is None:
             return False
 
-        if not self._dynamic_minimum_setpoint:
-            hysteresis = PWM_HYSTERESIS if self.pwm.status != PWMStatus.IDLE else 0.0
-            return self._coordinator.minimum_setpoint + hysteresis > self._calculated_setpoint
-
-        if self._minimum_setpoint_version == DYNAMIC_MINIMUM_SETPOINT_VERSION_1:
-            return self.minimum_setpoint_value > self._calculated_setpoint
-
-        return self.pwm.enabled
+        hysteresis = PWM_HYSTERESIS if self.pwm.status != PWMStatus.IDLE else 0.0
+        return self._coordinator.minimum_setpoint + hysteresis > self._calculated_setpoint
 
     @property
     def control_problems(self) -> list[str]:
@@ -1227,17 +1207,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     @property
     def minimum_setpoint_value(self) -> float:
-        """Get the minimum allowable setpoint temperature."""
-        if self._dynamic_minimum_setpoint:
-            # Version 1: Use MinimumSetpoint controller
-            if self._minimum_setpoint_version == DYNAMIC_MINIMUM_SETPOINT_VERSION_1:
-                return max(self.minimum_setpoint.current, self._coordinator.minimum_setpoint)
-
-            # Version 2: Use Pulse Width Modulation controller
-            if self._minimum_setpoint_version == DYNAMIC_MINIMUM_SETPOINT_VERSION_2:
-                return max(self.pwm.setpoint, self._coordinator.minimum_setpoint)
-
-        # Default to coordinator's minimum setpoint
+        """The setpoint of a PWM on-phase: the overshoot protection value."""
         return self._coordinator.minimum_setpoint
 
     def _calculate_control_setpoint(self) -> float:
@@ -1779,15 +1749,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             # Control our areas
             await self.areas.async_control_heating_loops()
-
-            # Control our dynamic minimum setpoint (version 1)
-            if not self._coordinator.heating_hot_water and self._coordinator.flame_active:
-                # Calculate the base return temperature
-                if self._coordinator.device_status == BoilerStatus.HEATING_UP:
-                    self.minimum_setpoint.warming_up(self._coordinator.boiler)
-
-                # Calculate the dynamic minimum setpoint
-                self.minimum_setpoint.calculate(self._coordinator.boiler, self.pwm.status)
 
             # If the setpoint is high, turn on the heater; the off-phase check runs every time
             # so it sees each off-phase start
@@ -2332,6 +2293,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 fault=coordinator.boiler_fault_reported,
                 fault_code=coordinator.boiler_fault_code_reported,
                 flame_losses_last_day=coordinator.flame_losses_last_day,
+                cylinder_temperature=coordinator.hot_water_temperature,
                 exhaust=coordinator.exhaust_temperature,
                 return_temperature=coordinator.return_temperature,
                 settled_heating_burn=settled

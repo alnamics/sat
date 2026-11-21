@@ -19,7 +19,7 @@ The integration domain is still `sat`, so SAT v2 replaces the original in place.
 
 ## Steadier heating
 
-- PWM has a 2 °C margin before switching off (without dynamic minimum setpoint), and the cycles-per-hour limit holds across resets.
+- PWM has a 2 °C margin before switching off, and the cycles-per-hour limit holds across resets.
 - Room target changes and hot water runs don't disturb the PWM cycle, and closed valves keep PWM enabled.
 - When the boiler keeps cutting burns short, PWM ends the on-phase early.
 - PID fixes: the derivative fades instead of sticking, small changes inside the sample time aren't lost, and underfloor systems get underfloor gains.

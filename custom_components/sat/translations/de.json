@@ -218,7 +218,6 @@
             "name": "Erweitert",
             "data": {
               "climate_valve_offset": "Klimaventil-Offset",
-              "dynamic_minimum_setpoint": "Dynamischer Minimaler Sollwert (Experimentell)",
               "force_pulse_width_modulation": "Pulsweitenmodulation erzwingen",
               "maximum_consumption": "Maximalverbrauch",
               "maximum_relative_modulation": "Maximale relative Modulation",
@@ -230,7 +229,6 @@
             },
             "data_description": {
               "climate_valve_offset": "Offset zur Anpassung des Öffnungsgrads des Klimaventils.",
-              "dynamic_minimum_setpoint": "Aktiviert die dynamische Sollwertanpassung basierend auf der Rücklauftemperatur des Kessels, was auch hilft zu identifizieren, ob Ventile geschlossen sind.",
               "maximum_consumption": "Der maximale Gasverbrauch, wenn der Kessel aktiv ist.",
               "maximum_relative_modulation": "Die höchste Modulationsstufe für ein effizientes Heizsystem darstellen.",
               "minimum_consumption": "Der minimale Gasverbrauch, wenn der Kessel aktiv ist.",

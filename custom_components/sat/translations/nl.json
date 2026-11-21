@@ -219,7 +219,6 @@
             "name": "Geavanceerd",
             "data": {
               "climate_valve_offset": "Offset van Klimaatklep",
-              "dynamic_minimum_setpoint": "Dynamisch Minimaal Setpoint (Experimenteel)",
               "force_pulse_width_modulation": "Dwing Pulsbreedtemodulatie af",
               "maximum_consumption": "Maximaal Verbruik",
               "maximum_relative_modulation": "Maximale Relatieve Modulatie",
@@ -231,7 +230,6 @@
             },
             "data_description": {
               "climate_valve_offset": "Offset om de openingsgraad van de klimaatklep aan te passen.",
-              "dynamic_minimum_setpoint": "Activeert de dynamische aanpassing van de minimale instelwaarde op basis van de retourtemperatuur van de ketel, wat ook helpt te identificeren of er kleppen gesloten zijn.",
               "maximum_consumption": "Het maximale gasverbruik wanneer de ketel actief is.",
               "maximum_relative_modulation": "Vertegenwoordigt het hoogste modulatieniveau voor een efficiënt verwarmingssysteem.",
               "minimum_consumption": "Het minimale gasverbruik wanneer de ketel actief is.",

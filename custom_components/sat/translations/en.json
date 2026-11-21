@@ -177,7 +177,6 @@
           "heating_curve_version": "Heating Curve Version",
           "integral": "Integral (kI)",
           "maximum_setpoint": "Maximum Setpoint",
-          "dynamic_minimum_setpoint_version": "Minimum Setpoint Controller Version",
           "pid_controller_version": "PID Controller Version",
           "proportional": "Proportional (kP)",
           "window_sensors": "Contact Sensors",
@@ -244,7 +243,6 @@
             "name": "Advanced",
             "data": {
               "climate_valve_offset": "Climate valve offset",
-              "dynamic_minimum_setpoint": "Dynamic Minimum Setpoint (Experimental)",
               "force_pulse_width_modulation": "Force Pulse Width Modulation",
               "maximum_consumption": "Maximum Consumption",
               "maximum_relative_modulation": "Maximum Relative Modulation",
@@ -286,7 +284,6 @@
             },
             "data_description": {
               "climate_valve_offset": "Offset to adjust the opening degree of the climate valve.",
-              "dynamic_minimum_setpoint": "Activates the dynamic setpoint adjustment based on the boiler's return temperature, which also helps identify if any valves are closed.",
               "maximum_consumption": "The maximum gas consumption when the boiler is active.",
               "maximum_relative_modulation": "Representing the highest modulation level for an efficient heating system.",
               "minimum_consumption": "The minimum gas consumption when the boiler is active.",
@@ -792,6 +789,10 @@
     "frequent_flame_loss": {
       "title": "{title}: the boiler often loses its flame",
       "description": "{count} heating burns of {title} lost their flame in the last day and the boiler had to light again. A few are normal; this many usually mean a worn or misplaced ionisation electrode, flue gas drawn back into the air intake (wind, a leaking flue), low gas pressure at peak times or a burner that needs calibrating. Have the boiler serviced. This issue clears itself when the flame holds again."
+    },
+    "cylinder_cools_in_heating": {
+      "title": "{title}: heating cools the hot water cylinder",
+      "description": "With no hot water drawn, the cylinder of {title} has cooled by about {drop} K in the first minutes of a heating burn (median of the last burns). Heating water probably reaches the cylinder coil when heating starts: the diverter valve may not close fully or not switch cleanly. Each drop brings the next cylinder reheat forward. Mention it at the next service; the issue clears itself when the drop is below 1 K."
     },
     "heat_exchanger_fouling": {
       "title": "{title}: the heat exchanger may need cleaning",

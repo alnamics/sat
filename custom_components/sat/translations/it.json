@@ -219,7 +219,6 @@
             "name": "Avanzate",
             "data": {
               "climate_valve_offset": "Offset della Valvola Climatica",
-              "dynamic_minimum_setpoint": "Setpoint Minimo Dinamico (Sperimentale)",
               "force_pulse_width_modulation": "Forzare la Modulazione di Larghezza di Impulso",
               "maximum_consumption": "Consumo Massimo",
               "maximum_relative_modulation": "Modulazione Relativa Massima",
@@ -231,7 +230,6 @@
             },
             "data_description": {
               "climate_valve_offset": "Offset per regolare il grado di apertura della valvola climatica.",
-              "dynamic_minimum_setpoint": "Attiva la regolazione dinamica del punto di impostazione minimo in base alla temperatura di ritorno della caldaia, che aiuta anche a identificare se delle valvole sono chiuse.",
               "maximum_consumption": "Il consumo massimo di gas quando la caldaia è attiva.",
               "maximum_relative_modulation": "Rappresenta il livello di modulazione più alto per un sistema di riscaldamento efficiente.",
               "minimum_consumption": "Il consumo minimo di gas quando la caldaia è attiva.",

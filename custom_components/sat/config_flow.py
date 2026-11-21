@@ -52,8 +52,6 @@ from .const import (
     CONF_DERIVATIVE_TIME_WEIGHT,
     CONF_DEVICE,
     CONF_DUTY_CYCLE,
-    CONF_DYNAMIC_MINIMUM_SETPOINT,
-    CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
     CONF_GAS_ENERGY_CONTENT,
     CONF_GAS_PRICE,
@@ -82,7 +80,6 @@ from .const import (
     CONF_MAXIMUM_SETPOINT,
     CONF_MINIMUM_CONSUMPTION,
     CONF_MINIMUM_SETPOINT,
-    CONF_MINIMUM_SETPOINT_ADJUSTMENT_FACTOR,
     CONF_MODE,
     CONF_MQTT_TOPIC,
     CONF_NAME,
@@ -938,22 +935,6 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             )
         )
 
-        if options[CONF_DYNAMIC_MINIMUM_SETPOINT]:
-            schema[
-                vol.Required(
-                    CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION,
-                    default=str(options[CONF_DYNAMIC_MINIMUM_SETPOINT_VERSION]),
-                )
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    mode=SelectSelectorMode.DROPDOWN,
-                    options=[
-                        selector.SelectOptionDict(value="1", label="Return Temperature"),
-                        selector.SelectOptionDict(value="2", label="Boiler Temperature"),
-                    ],
-                )
-            )
-
         if len(self.config_entry.data.get(CONF_ROOMS, [])) > 0:
             schema[vol.Required(CONF_HEATING_MODE, default=str(options[CONF_HEATING_MODE]))] = (
                 selector.SelectSelector(
@@ -1012,14 +993,6 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             schema[vol.Required(CONF_PROPORTIONAL, default=options[CONF_PROPORTIONAL])] = str
             schema[vol.Required(CONF_INTEGRAL, default=options[CONF_INTEGRAL])] = str
             schema[vol.Required(CONF_DERIVATIVE, default=options[CONF_DERIVATIVE])] = str
-
-        if options[CONF_DYNAMIC_MINIMUM_SETPOINT]:
-            schema[
-                vol.Required(
-                    CONF_MINIMUM_SETPOINT_ADJUSTMENT_FACTOR,
-                    default=options[CONF_MINIMUM_SETPOINT_ADJUSTMENT_FACTOR],
-                )
-            ] = selector.NumberSelector(selector.NumberSelectorConfig(min=0.1, max=0.5, step=0.1))
 
         if not options[CONF_AUTOMATIC_DUTY_CYCLE]:
             schema[vol.Required(CONF_DUTY_CYCLE, default=options[CONF_DUTY_CYCLE])] = (
@@ -1212,9 +1185,6 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
         advanced: dict[Marker, Any] = {
             vol.Required(CONF_SIMULATION, default=options[CONF_SIMULATION]): bool,
             vol.Required(CONF_THERMAL_COMFORT, default=options[CONF_THERMAL_COMFORT]): bool,
-            vol.Required(
-                CONF_DYNAMIC_MINIMUM_SETPOINT, default=options[CONF_DYNAMIC_MINIMUM_SETPOINT]
-            ): bool,
         }
 
         if self.config_entry.data.get(CONF_MODE) in [

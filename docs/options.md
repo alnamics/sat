@@ -18,7 +18,6 @@ The settings this fork adds are listed under [Advanced: MPX additions](#advanced
 - **Automatic Gains Value**: how strongly the Classic and Improved controllers react (default 2.0). Setting it equal to the heating curve coefficient works well.
 - **Derivative Time Weight**: fine-tunes how SAT damps fast changes (default 2.5).
 - **Proportional, Integral, Derivative**: your own PID values, shown when Automatic Gains is off.
-- **Minimum Setpoint Controller Version** and **Adjustment Factor for Return Temperature**: settings of [Dynamic Minimum Setpoint](#advanced), shown when it's on. The version picks whether it follows the return or the boiler temperature. Start the factor between 0.1 and 0.5 (default 0.2).
 - **Maximum Duty Cycle for Pulse Width Modulation**: the length of a [low-load cycle](how-it-works.md#low-load-control) when Automatic duty cycle is off (default 13 minutes).
 - **Contact Sensors**: door and window sensors. When one stays open longer than the minimum open time, SAT switches to the Activity preset, then restores the previous target once it closes.
 
@@ -51,7 +50,6 @@ Target temperatures from 5 to 35 °C:
 This section is collapsed by default.
 
 - **Thermal Comfort**: controls on the "feels like" temperature (Summer Simmer Index), from temperature and humidity. Needs the humidity sensor.
-- **Dynamic Minimum Setpoint (Experimental)**: with some valves closed, the water can come back hotter than expected during low-load control. This watches the return temperature and adjusts the setpoint to match.
 - **Force Pulse Width Modulation**: always use [low-load cycles](how-it-works.md#low-load-control), even when the boiler could hold the temperature itself. OTGW only.
 - **Minimum Consumption** and **Maximum Consumption**: your boiler's gas use at its lowest and highest power, from its manual. SAT uses them to estimate gas consumption, and the burner power when the boiler does not report its capacity.
 - **Climate valve offset**: for room thermostats that don't report whether they're heating. A room counts as wanting heat while it's at least this much below its target (default 0).

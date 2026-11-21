@@ -15,7 +15,6 @@ from .const import (
     CONF_HEATING_CURVE_COEFFICIENT,
     CONF_HEATING_SYSTEM,
     CONF_INTEGRAL,
-    CONF_MINIMUM_SETPOINT_ADJUSTMENT_FACTOR,
     CONF_MODE,
     CONF_PID_CONTROLLER_VERSION,
     CONF_PROPORTIONAL,
@@ -26,7 +25,6 @@ from .const import (
 )
 from .heating_curve import HeatingCurve
 from .helpers import convert_time_str_to_seconds
-from .minimum_setpoint import MinimumSetpoint
 from .pid import PID
 from .pwm import PWM, CycleConfig
 
@@ -63,19 +61,6 @@ def create_pid_controller(config_data: Mapping[str, Any], config_options: Mappin
         kd=kd,
         automatic_gains=automatic_gains,
         sample_time_limit=sample_time_limit,
-    )
-
-
-def create_minimum_setpoint_controller(
-    minimum_setpoint: float, config_options: Mapping[str, Any]
-) -> MinimumSetpoint:
-    """Create and return a Minimum Setpoint controller with the given configuration options."""
-    # Extract the configuration options
-    adjustment_factor = config_options[CONF_MINIMUM_SETPOINT_ADJUSTMENT_FACTOR]
-
-    # Return a new Minimum Setpoint controller instance with the given configuration options
-    return MinimumSetpoint(
-        configured_minimum_setpoint=minimum_setpoint, adjustment_factor=adjustment_factor
     )
 
 

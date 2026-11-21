@@ -69,6 +69,76 @@ async def test_frequent_flame_losses_raise_an_issue(hass: HomeAssistant) -> None
     assert not ir.async_get(hass).async_get_issue(DOMAIN, "frequent_flame_loss_entry")
 
 
+def burn_with_cylinder(diagnostics: BoilerDiagnostics, start: float, drop: float) -> float:
+    """Ten idle minutes, then a twenty minute heating burn that cools the cylinder."""
+    now = start
+    for _ in range(10):
+        diagnostics.update(
+            now,
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=None,
+            settled_heating_burn=False,
+            cylinder_temperature=50.0,
+        )
+        now += 60
+    for minute in range(20):
+        diagnostics.update(
+            now,
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=None,
+            settled_heating_burn=False,
+            heating_burn=True,
+            cylinder_temperature=50.0 - (drop if minute >= 2 else 0.0),
+        )
+        now += 60
+    return now
+
+
+async def test_a_cylinder_cooled_by_heating_raises_an_issue(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    now = 0.0
+    for _ in range(4):
+        now = burn_with_cylinder(diagnostics, now, 3.5)
+    # Too few burns yet
+    assert diagnostics.cylinder_drop is None
+    now = burn_with_cylinder(diagnostics, now, 3.5)
+    assert diagnostics.cylinder_drop == 3.5
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "cylinder_cools_in_heating_entry")
+
+    # After the valve is fixed the drop goes away
+    for _ in range(10):
+        now = burn_with_cylinder(diagnostics, now, 0.2)
+    assert diagnostics.cylinder_drop == 0.2
+    assert not ir.async_get(hass).async_get_issue(DOMAIN, "cylinder_cools_in_heating_entry")
+
+
+async def test_a_cylinder_reheat_is_not_counted(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    now = 0.0
+    for _ in range(8):
+        for second in range(0, 1800, 60):
+            diagnostics.update(
+                now + second,
+                pressure=1.5,
+                fault=False,
+                fault_code=None,
+                exhaust=None,
+                return_temperature=None,
+                settled_heating_burn=False,
+                heating_burn=second >= 600,
+                hot_water=600 <= second < 900,
+                cylinder_temperature=40.0 if second >= 900 else 50.0,
+            )
+        now += 1800
+    assert diagnostics.cylinder_drop is None
+
+
 async def test_low_water_pressure_raises_an_issue(hass: HomeAssistant) -> None:
     diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
     run(diagnostics, 0.5, pressure=0.6)
