@@ -75,7 +75,7 @@ Until the budget is ready the normal control runs, with its own Always use PWM s
 
 **Comfort schedule and setback.** With a schedule helper that is on in comfort hours, the heat budget lowers its target by the **Setback outside the schedule**. The recovery starts early by a learned time (Seem et al.: *hours = a × temperature rise + b × recent demand*), and comfort ends an hour early because the screed keeps heating. The setback only acts while the heat budget controls.
 
-**Learn only** learns and shows the plan while the normal control runs. Two sensors carry the history: **Heat need** (kW, with the heat credit and the block length as attributes) and **Heat loss of the house** (W/K). The climate's attributes show the rest (`heat_budget_ready`, `solar_gain_kw`, `heat_block_active`, `heat_budget_target`, `learning_samples`). Use it for a few days before `On`.
+**Learn only** learns and shows the plan while the normal control runs. Two sensors carry the history: **Heat need** (kW, with the heat credit and the block length as attributes) and **Heat loss of the house** (W/K). `next_block_start` and `next_block_end` say when the next block is planned, if the need stays as it is (a hot water reheat late in a period can bring it forward). The climate's attributes show the rest (`heat_budget_ready`, `solar_gain_kw`, `heat_block_active`, `heat_budget_target`, `learning_samples`). Use it for a few days before `On`.
 
 In a simulation of an 87 m² flat (H = 0.12 kW/K, 5.3 kW minimum power) the budget cut the burner starts from about 60–75 to about 26 a day at the same gas use, with the room mostly within about ±0.5 °C of the target. A simulation is not a house.
 

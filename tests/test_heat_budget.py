@@ -507,3 +507,20 @@ def test_a_steady_room_keeps_the_starting_capacity() -> None:
 
     assert budget.heat_capacity == 4.0
     assert budget.attributes["heat_capacity_kwh_per_k"] == 4.0
+
+
+def test_the_next_block_is_announced() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.03)
+    now = burn(budget, 1000, 30)
+    attributes = budget.attributes
+    start = datetime.fromisoformat(attributes["next_block_start"])
+    end = datetime.fromisoformat(attributes["next_block_end"])
+    wall = WALL + timedelta(seconds=now - 30)
+
+    # 0.6 kW a period is too little for a 10 minute burn, so the block waits a period or more
+    assert start > wall
+    assert timedelta(minutes=10) <= end - start <= timedelta(minutes=60)
+
+    # A room well above its target is owed nothing
+    budget.update(inputs(now, indoor=23.0))
+    assert budget.attributes["next_block_start"] is None

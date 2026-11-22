@@ -21,7 +21,7 @@ import logging
 import math
 from collections import deque
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.storage import Store
@@ -370,6 +370,7 @@ class HeatBudget:
         self._effective_target: float | None = None
         self._target_seen: float | None = None
         self._minimum_power = 5.0
+        self._wall: datetime | None = None
 
     # ---------------------------------------------------------------- storage
 
@@ -553,6 +554,7 @@ class HeatBudget:
             "heat_budget_room_too_warm": self._surplus,
             "heat_budget_coasting": self._coasting,
             "hot_water_piggybacks": self._piggybacks,
+            **self._next_block(),
         }
 
     # ------------------------------------------------------------- the update
@@ -562,6 +564,7 @@ class HeatBudget:
         now = inputs.now
         dt = 0.0 if self._last_update is None else now - self._last_update
         self._last_update = now
+        self._wall = inputs.wall_time
         self._minimum_power = max(1.0, inputs.minimum_power_kw)
         self._wind = inputs.wind
 
@@ -642,6 +645,44 @@ class HeatBudget:
             self._block_delivered = 0.0
             if piggyback:
                 self._piggybacks += 1
+
+    def _next_block(self) -> dict[str, Any]:
+        """When the next block is planned to start and end, if the need stays as it is now.
+
+        A block starts at the end of a period once the heat owed fills the minimum burn; a hot
+        water reheat late in a period can bring it forward.
+        """
+        now, wall = self._last_update, self._wall
+        if now is None or wall is None or self._overloaded:
+            return {"next_block_start": None, "next_block_end": None}
+        if self._block_active and self._block_started is not None:
+            remaining = max(self._block_target - self._block_delivered, 0.0)
+            end = now + remaining / self._minimum_power * SECONDS_PER_HOUR
+            return {
+                "next_block_start": wall.isoformat(),
+                "next_block_end": (wall + timedelta(seconds=end - now)).isoformat(),
+            }
+        if self._surplus or self._need <= 0 or self._period_end is None:
+            return {"next_block_start": None, "next_block_end": None}
+
+        period_hours = self._period / SECONDS_PER_HOUR
+        limit = self._minimum_power * period_hours
+        start = self._period_end
+        credit = min(self._credit + self._need * max(start - now, 0.0) / SECONDS_PER_HOUR, limit)
+        # Look a few periods ahead; a need this small waits longer than that
+        for _ in range(12):
+            energy = credit + self._need * period_hours
+            on_time = min(energy / self._minimum_power * SECONDS_PER_HOUR, self._period)
+            if on_time >= self._minimum_burn:
+                if self._last_block_end is not None:
+                    start = max(start, self._last_block_end + self._minimum_off)
+                return {
+                    "next_block_start": (wall + timedelta(seconds=start - now)).isoformat(),
+                    "next_block_end": (wall + timedelta(seconds=start - now + on_time)).isoformat(),
+                }
+            credit = min(credit + self._need * period_hours, limit)
+            start += self._period
+        return {"next_block_start": None, "next_block_end": None}
 
     @property
     def overloaded(self) -> bool:
