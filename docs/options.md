@@ -90,6 +90,7 @@ This section is collapsed by default.
 
 - **Hot water temperature**: default 0, which leaves the hot water to the boiler.
 - **Eco temperature** and **Hot water schedule**: outside the schedule's hours the eco temperature applies.
+- **Water meter**: a total water meter (litres or m³), for the cylinder check: it leaves out heating starts with a tap open and counts the reheats no water use explains.
 - **Legionella boost day** and **start**: default off.
 
 ## Presence and windows

@@ -282,3 +282,58 @@ def test_the_curve_advisor_continues_after_a_restart() -> None:
     transfer = advisor.transfer_kw_per_k
     assert transfer is not None
     assert transfer < 0.625
+
+
+async def test_the_water_meter_keeps_taps_out_and_counts_dry_reheats(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    now, litres = 0.0, 1000.0
+
+    def step(*, burn: bool = False, hot_water: bool = False, cylinder: float = 50.0) -> None:
+        nonlocal now
+        diagnostics.update(
+            now,
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=None,
+            settled_heating_burn=False,
+            heating_burn=burn,
+            hot_water=hot_water,
+            cylinder_temperature=cylinder,
+            water_litres=litres,
+        )
+        now += 60
+
+    # Five heating starts, each with a shower running: no sample
+    for _ in range(5):
+        for _ in range(10):
+            step()
+        for minute in range(15):
+            if minute < 5:
+                litres += 8
+            step(burn=True, cylinder=50.0 - (6.0 if minute >= 2 else 0.0))
+    assert diagnostics.cylinder_drop is None
+
+    # An hour later the cylinder is reheated with no water drawn
+    for _ in range(70):
+        step()
+    step(hot_water=True)
+    step(hot_water=True)
+    attributes = diagnostics.attributes
+    assert attributes["cylinder_reheats_24h"] == 1
+    assert attributes["cylinder_reheats_without_draw_24h"] == 1
+
+    # A reheat right after a tap is not dry
+    litres += 10
+    step()
+    step(hot_water=True)
+    attributes = diagnostics.attributes
+    assert attributes["cylinder_reheats_24h"] == 2
+    assert attributes["cylinder_reheats_without_draw_24h"] == 1
+
+
+async def test_without_a_water_meter_no_reheat_counts_are_shown(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    run(diagnostics, 0.1)
+    assert "cylinder_reheats_24h" not in diagnostics.attributes

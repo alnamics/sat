@@ -33,11 +33,13 @@ from homeassistant.components.climate import (
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_TEMPERATURE,
+    ATTR_UNIT_OF_MEASUREMENT,
     STATE_OFF,
     STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     UnitOfSpeed,
+    UnitOfVolume,
 )
 from homeassistant.core import (
     CoreState,
@@ -57,7 +59,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
-from homeassistant.util.unit_conversion import SpeedConverter
+from homeassistant.util.unit_conversion import SpeedConverter, VolumeConverter
 
 from .area import SENSOR_TEMPERATURE_ID, Areas, is_heating_blocked
 from .boiler_diagnostics import BoilerDiagnostics
@@ -110,6 +112,7 @@ from .const import (
     CONF_THERMOSTAT,
     CONF_VALVE_OPENING_TIME,
     CONF_WARM_WEATHER_SHUTDOWN,
+    CONF_WATER_METER_ENTITY_ID,
     CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_DETECTION,
     CONF_WINDOW_MINIMUM_OPEN_TIME,
@@ -493,6 +496,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._warm_weather_was_active = False
 
         self._hot_water_schedule_entity_id = config_options.get(CONF_HOT_WATER_SCHEDULE_ENTITY_ID)
+        self._water_meter_entity_id = config_options.get(CONF_WATER_METER_ENTITY_ID)
         self.hot_water_schedule: HotWaterSchedule | None = None
         comfort = float(config_options.get(CONF_HOT_WATER_COMFORT_TEMPERATURE) or 0)
         if comfort > 0 and coordinator.supports_hot_water_setpoint_management:
@@ -1884,6 +1888,20 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             )
         self._weather_forecast = forecast
 
+    def _water_meter_litres(self) -> float | None:
+        """Return the total of the water meter in litres, if one is set."""
+        if (
+            not self._water_meter_entity_id
+            or (state := self.hass.states.get(self._water_meter_entity_id)) is None
+        ):
+            return None
+        if (value := float_value(state.state)) is None:
+            return None
+        unit = str(state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) or "")
+        if unit not in {member.value for member in UnitOfVolume}:
+            return None
+        return VolumeConverter.convert(value, unit, UnitOfVolume.LITERS)
+
     def _wind_speed(self) -> float | None:
         """Return the current wind speed of the weather forecast entity, in km/h."""
         if (
@@ -2362,6 +2380,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 fault_code=coordinator.boiler_fault_code_reported,
                 flame_losses_last_day=coordinator.flame_losses_last_day,
                 cylinder_temperature=coordinator.hot_water_temperature,
+                water_litres=self._water_meter_litres(),
                 exhaust=coordinator.exhaust_temperature,
                 return_temperature=coordinator.return_temperature,
                 settled_heating_burn=settled

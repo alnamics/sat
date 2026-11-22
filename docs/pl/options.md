@@ -90,6 +90,7 @@ Sekcja jest domyślnie zwinięta.
 
 - **Temperatura ciepłej wody** (Hot water temperature): domyślnie 0, czyli ciepłą wodą zajmuje się kocioł.
 - **Temperatura eko** (Eco temperature) i **Harmonogram ciepłej wody** (Hot water schedule): poza godzinami harmonogramu obowiązuje temperatura eko.
+- **Licznik wody** (Water meter): licznik całkowitego zużycia wody (litry albo m³) do kontroli zasobnika: pomija starty ogrzewania przy odkręconym kranie i liczy dogrzania, których nie wyjaśnia zużycie wody.
 - **Dzień przegrzewu (legionella)** i **Godzina przegrzewu** (Legionella boost day / start): domyślnie wyłączone.
 
 ## Obecność i okna

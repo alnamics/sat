@@ -124,7 +124,7 @@ They appear under **Settings → System → Repairs** (and as a banner at the to
 | Water pressure keeps falling | the daily mean pressure, corrected for the water temperature, falls 0.05 bar a week or more over at least four days, with 0.1 bar lost |
 | Boiler fault | the boiler reports a fault for a minute (with its OEM code) |
 | Boiler often loses its flame | 6 or more heating burns lost their flame in the last day; clears at 2 |
-| Heating cools the hot water cylinder | with no tap open the cylinder falls 2 K or more in the first 10 minutes of a heating burn (median of the last 10 burns, at least 5); clears at 1 K. Usually a diverter valve that lets heating water into the cylinder coil. Attribute `cylinder_drop_at_heating_start` |
+| Heating cools the hot water cylinder | with no tap open the cylinder falls 2 K or more in the first 10 minutes of a heating burn (median of the last 10 burns, at least 5); clears at 1 K. Usually a diverter valve that lets heating water into the cylinder coil. Attribute `cylinder_drop_at_heating_start`. With a **Water meter** (Hot water menu) starts with a tap open are left out, and `cylinder_reheats_24h` / `cylinder_reheats_without_draw_24h` count the reheats and those no water use explains |
 | Dirty heat exchanger | flue gas more than 12 K above the return in settled burns near minimum power, averaged over a day of burning |
 | Flow too hot for the floor | underfloor only: flow above **Maximum flow for the screed** (55 °C) for 3 minutes in space heating; stays a day |
 | Too little water flow | underfloor only: flow more than 20 K above the return for 5 minutes in settled burns |

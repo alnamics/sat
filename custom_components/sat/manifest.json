@@ -32,5 +32,5 @@
   "requirements": [
     "pyotgw>=2.2.3"
   ],
-  "version": "5.2.0.37"
+  "version": "5.2.0.38"
 }

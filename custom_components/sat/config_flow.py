@@ -112,6 +112,7 @@ from .const import (
     CONF_THERMOSTAT,
     CONF_VALVE_OPENING_TIME,
     CONF_WARM_WEATHER_SHUTDOWN,
+    CONF_WATER_METER_ENTITY_ID,
     CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_DETECTION,
     CONF_WINDOW_MINIMUM_OPEN_TIME,
@@ -1324,7 +1325,7 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
     ) -> ConfigFlowResult:
         if _user_input is not None:
             return await self._update_with_cleared(
-                _user_input, (CONF_HOT_WATER_SCHEDULE_ENTITY_ID,)
+                _user_input, (CONF_HOT_WATER_SCHEDULE_ENTITY_ID, CONF_WATER_METER_ENTITY_ID)
             )
 
         options = await self.get_options()
@@ -1338,6 +1339,9 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             ): _number(0, 65, 1, "°C"),
             self._optional(CONF_HOT_WATER_SCHEDULE_ENTITY_ID, options): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="schedule")
+            ),
+            self._optional(CONF_WATER_METER_ENTITY_ID, options): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="water")
             ),
             vol.Required(CONF_LEGIONELLA_DAY, default=options[CONF_LEGIONELLA_DAY]): _choice(
                 "legionella_day", [LEGIONELLA_OFF, *(str(day) for day in range(7))]

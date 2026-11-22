@@ -342,6 +342,7 @@
           "hot_water_comfort_temperature": "Temperatura ciepłej wody",
           "hot_water_eco_temperature": "Temperatura eko",
           "hot_water_schedule_entity_id": "Harmonogram ciepłej wody",
+          "water_meter_entity_id": "Licznik wody",
           "legionella_day": "Dzień przegrzewu (legionella)",
           "legionella_time": "Godzina przegrzewu"
         },
@@ -349,6 +350,7 @@
           "hot_water_comfort_temperature": "0 zostawia ciepłą wodę kotłowi.",
           "hot_water_eco_temperature": "Poza godzinami harmonogramu; 0 utrzymuje temperaturę ciepłej wody przez cały dzień.",
           "hot_water_schedule_entity_id": "Harmonogram włączony w godzinach, w których używa się ciepłej wody.",
+          "water_meter_entity_id": "Licznik całkowitego zużycia wody (litry albo m³). Kontrola zasobnika pomija wtedy starty ogrzewania przy odkręconym kranie i liczy dogrzania zasobnika, których nie wyjaśnia zużycie wody.",
           "legionella_day": "Raz w tygodniu zasobnik jest utrzymywany przez godzinę w 60 °C.",
           "legionella_time": "Najlepiej w nocy."
         }

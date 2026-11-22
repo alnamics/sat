@@ -15,7 +15,9 @@
 * gas use per degree day clearly above the weeks before;
 * a hot water cylinder that cools when a heating burn starts: with no tap open it should lose
   well under a kelvin in ten minutes, so a regular drop of a few kelvin means heating water
-  gets into the cylinder coil (a diverter valve that does not close fully).
+  gets into the cylinder coil (a diverter valve that does not close fully). With a water meter,
+  windows with a tap open are left out, and the reheats with no water drawn for an hour before
+  them are counted.
 """
 
 from __future__ import annotations
@@ -77,6 +79,12 @@ CYLINDER_SAMPLES = 10
 CYLINDER_MINIMUM_SAMPLES = 5
 CYLINDER_DROP = 2.0
 CYLINDER_DROP_CLEARED = 1.0
+# With a water meter: a tap open this shortly before or during the window spoils the sample,
+# and a reheat with no water drawn for an hour before it was caused by the cylinder cooling
+WATER_DRAW_LITRES = 0.5
+WATER_DRAW_LEAD_SECONDS = 600.0
+DRY_REHEAT_SECONDS = 3600.0
+REHEAT_WINDOW_SECONDS = 86400.0
 
 GAS_USE_INCREASED = 1.3
 GAS_USE_NORMAL = 1.15
@@ -134,6 +142,10 @@ class BoilerDiagnostics:
         self._cylinder_idle: float | None = None
         self._cylinder_burn: tuple[float, float] | None = None
         self._cylinder_drops: deque[float] = deque(maxlen=CYLINDER_SAMPLES)
+        self._water_last: float | None = None
+        self._water_drawn_at: float | None = None
+        self._hot_water_was = False
+        self._reheats: deque[tuple[float, bool]] = deque(maxlen=200)
         self._active: dict[str, bool] = {}
 
     async def async_initialize(self) -> None:
@@ -186,6 +198,7 @@ class BoilerDiagnostics:
             "flue_return_gap": self.flue_return_gap,
             "pressure_trend_bar_per_week": self.pressure_trend_per_week,
             "cylinder_drop_at_heating_start": self.cylinder_drop,
+            **self._reheat_attributes(),
             "boiler_service_due": None if self._service_due is None else str(self._service_due),
             "active_issues": sorted(key for key, on in self._active.items() if on),
         }
@@ -209,6 +222,7 @@ class BoilerDiagnostics:
         hot_water: bool = False,
         flame_losses_last_day: int = 0,
         cylinder_temperature: float | None = None,
+        water_litres: float | None = None,
     ) -> None:
         dt = (
             0.0 if self._last_update is None else min(now - self._last_update, MAXIMUM_STEP_SECONDS)
@@ -227,6 +241,7 @@ class BoilerDiagnostics:
             settled=settled_heating_burn and near_minimum_power,
         )
         self._update_screed(now, flow=flow, heating_burn=heating_burn)
+        self._update_water(now, water_litres, hot_water=hot_water)
         self._update_cylinder(
             now, temperature=cylinder_temperature, heating_burn=heating_burn, hot_water=hot_water
         )
@@ -348,6 +363,36 @@ class BoilerDiagnostics:
             elif self._gap < FOULING_CLEARED:
                 self._set("heat_exchanger_fouling", active=False)
 
+    def _update_water(self, now: float, litres: float | None, *, hot_water: bool) -> None:
+        """Follow the water meter, and count the cylinder reheats no tap explains."""
+        if litres is not None:
+            if self._water_last is not None and litres >= self._water_last + WATER_DRAW_LITRES:
+                self._water_drawn_at = now
+            if self._water_last is None or litres >= self._water_last + WATER_DRAW_LITRES:
+                self._water_last = litres
+            elif litres < self._water_last:
+                # A meter replaced or reset
+                self._water_last = litres
+
+        started = hot_water and not self._hot_water_was
+        self._hot_water_was = hot_water
+        if started and self._water_last is not None:
+            dry = self._water_drawn_at is None or now - self._water_drawn_at > DRY_REHEAT_SECONDS
+            self._reheats.append((now, dry))
+        while self._reheats and now - self._reheats[0][0] > REHEAT_WINDOW_SECONDS:
+            self._reheats.popleft()
+
+    def _water_drawn_since(self, start: float) -> bool:
+        return self._water_drawn_at is not None and self._water_drawn_at >= start
+
+    def _reheat_attributes(self) -> dict[str, int]:
+        if self._water_last is None:
+            return {}
+        return {
+            "cylinder_reheats_24h": len(self._reheats),
+            "cylinder_reheats_without_draw_24h": sum(1 for _, dry in self._reheats if dry),
+        }
+
     def _update_cylinder(
         self, now: float, *, temperature: float | None, heating_burn: bool, hot_water: bool
     ) -> None:
@@ -362,7 +407,9 @@ class BoilerDiagnostics:
             if self._cylinder_burn is not None:
                 start, before = self._cylinder_burn
                 self._cylinder_burn = None
-                if now - start >= CYLINDER_MINIMUM_BURN_SECONDS:
+                if now - start >= CYLINDER_MINIMUM_BURN_SECONDS and not self._water_drawn_since(
+                    start - WATER_DRAW_LEAD_SECONDS
+                ):
                     self._add_cylinder_drop(before - temperature)
             self._cylinder_idle = temperature
             return
@@ -377,7 +424,8 @@ class BoilerDiagnostics:
         start, before = self._cylinder_burn
         if now - start >= CYLINDER_WINDOW_SECONDS:
             self._cylinder_burn = None
-            self._add_cylinder_drop(before - temperature)
+            if not self._water_drawn_since(start - WATER_DRAW_LEAD_SECONDS):
+                self._add_cylinder_drop(before - temperature)
 
     def _add_cylinder_drop(self, drop: float) -> None:
         self._cylinder_drops.append(round(drop, 2))

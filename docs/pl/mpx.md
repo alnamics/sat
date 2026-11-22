@@ -124,7 +124,7 @@ Pojawiają się w **Ustawienia → System → Naprawy** (i jako baner na górze 
 | Ciśnienie wody stale spada | średnie dobowe ciśnienie, skorygowane o temperaturę wody, spada o 0,05 bar na tydzień lub więcej przez co najmniej cztery dni, przy stracie 0,1 bar |
 | Błąd kotła | kocioł zgłasza błąd przez minutę (z kodem producenta) |
 | Kocioł często traci płomień | 6 lub więcej paleń na ogrzewanie straciło płomień w ostatniej dobie; znika przy 2 |
-| Ogrzewanie wychładza zasobnik | bez poboru wody zasobnik traci 2 K lub więcej w pierwszych 10 minutach palenia na ogrzewanie (mediana z ostatnich 10 paleń, co najmniej 5); znika przy 1 K. Zwykle zawór trójdrogowy, który wpuszcza wodę grzewczą do wężownicy zasobnika. Atrybut `cylinder_drop_at_heating_start` |
+| Ogrzewanie wychładza zasobnik | bez poboru wody zasobnik traci 2 K lub więcej w pierwszych 10 minutach palenia na ogrzewanie (mediana z ostatnich 10 paleń, co najmniej 5); znika przy 1 K. Zwykle zawór trójdrogowy, który wpuszcza wodę grzewczą do wężownicy zasobnika. Atrybut `cylinder_drop_at_heating_start`. Z **licznikiem wody** (menu Ciepła woda) starty przy odkręconym kranie są pomijane, a `cylinder_reheats_24h` i `cylinder_reheats_without_draw_24h` liczą dogrzania zasobnika i te, których nie wyjaśnia zużycie wody |
 | Brudny wymiennik ciepła | spaliny ponad 12 K cieplejsze od powrotu w ustabilizowanych paleniach blisko mocy minimalnej, średnio z doby palenia |
 | Zasilanie za gorące dla podłogi | tylko podłogówka: zasilanie powyżej **Maksymalnego zasilania dla wylewki** (55 °C) przez 3 minuty podczas ogrzewania; komunikat zostaje na dobę |
 | Za mały przepływ wody | tylko podłogówka: zasilanie ponad 20 K cieplejsze od powrotu przez 5 minut w ustabilizowanych paleniach |

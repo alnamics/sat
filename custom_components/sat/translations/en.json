@@ -342,6 +342,7 @@
           "hot_water_comfort_temperature": "Hot water temperature",
           "hot_water_eco_temperature": "Eco temperature",
           "hot_water_schedule_entity_id": "Hot water schedule",
+          "water_meter_entity_id": "Water meter",
           "legionella_day": "Legionella boost day",
           "legionella_time": "Legionella boost start"
         },
@@ -349,6 +350,7 @@
           "hot_water_comfort_temperature": "0 leaves the hot water to the boiler.",
           "hot_water_eco_temperature": "Outside the schedule's hours; 0 uses the hot water temperature all day.",
           "hot_water_schedule_entity_id": "A schedule that is on in the hours hot water is used.",
+          "water_meter_entity_id": "A total water meter (litres or m³). The cylinder check then leaves out heating starts with a tap open and counts the reheats no water use explains.",
           "legionella_day": "Once a week the cylinder is held at 60 °C for an hour.",
           "legionella_time": "Best in the night."
         }
