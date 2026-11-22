@@ -178,38 +178,67 @@ def test_comfort_ends_an_hour_early() -> None:
     assert budget.effective_target == 20.5
 
 
-def test_the_heat_loss_comes_from_dark_hours_and_the_sun_from_the_rest() -> None:
-    # A flat losing 50 W/K that gains 1 kW in full sun; the sun shines on the mild hours
-    budget = HeatBudget()
-    for hour in range(24):
-        sun = 0.3 if 9 <= hour < 15 else 0.0
-        kelvin_hours = 10.0 if sun else 16.0
-        budget._hours.append(
-            _Hour(
-                heat_kwh=0.05 * kelvin_hours - 1.0 * sun,
-                kelvin_hours=kelvin_hours,
-                sun_hours=sun,
-                seconds=3600.0,
-                indoor_start=22.0,
-                indoor_end=22.0,
-                wall_end=float(hour),
+def sunny_days(budget: HeatBudget, days: int, sun: float, free_heat: float = 0.0) -> None:
+    """Step days of a flat losing 50 W/K that gains 1 kW in full sun, fitting every hour."""
+    for day in range(days):
+        for hour in range(24):
+            shining = sun if 9 <= hour < 15 else 0.0
+            kelvin_hours = 10.0 if 9 <= hour < 15 else 16.0
+            budget._hours.append(
+                _Hour(
+                    heat_kwh=0.05 * kelvin_hours - 1.0 * shining - free_heat,
+                    kelvin_hours=kelvin_hours,
+                    sun_hours=shining,
+                    seconds=3600.0,
+                    indoor_start=22.0,
+                    indoor_end=22.0,
+                    wall_end=float(day * 24 + hour),
+                )
             )
-        )
-    for _ in range(30):
-        budget._fit()
-
-    assert abs(budget.heat_loss - 0.05) < 0.002
-    assert abs(budget.solar_gain - 1.0) < 0.05
+            budget._fit()
 
 
-def test_a_heat_loss_learned_with_the_sun_is_kept() -> None:
+def test_the_heat_loss_comes_from_dark_hours_and_the_sun_from_the_rest() -> None:
+    budget = HeatBudget()
+    sunny_days(budget, 6, 0.3)
+
+    assert abs(budget.heat_loss - 0.05) < 0.003
+    assert abs(budget.solar_gain - 1.0) < 0.15
+
+
+def test_a_grey_day_does_not_turn_free_heat_into_sun() -> None:
+    # Overcast: a trace of sun while cooking and people give 0.3 kW in the day
+    budget = HeatBudget()
+    for day in range(4):
+        for hour in range(24):
+            daytime = 9 <= hour < 15
+            budget._hours.append(
+                _Hour(
+                    heat_kwh=0.05 * 16.0 - (0.3 if daytime else 0.0),
+                    kelvin_hours=16.0,
+                    sun_hours=0.05 if daytime else 0.0,
+                    seconds=3600.0,
+                    indoor_start=22.0,
+                    indoor_end=22.0,
+                    wall_end=float(day * 24 + hour),
+                )
+            )
+            budget._fit()
+
+    assert budget.solar_gain == 0.0
+
+
+def test_the_sun_learned_before_starts_over_and_the_heat_loss_is_kept() -> None:
     budget = HeatBudget()
     budget._load_learners(
-        {"heat_loss": {"theta": [0.055, 2.8], "p": [[0.01, 0], [0, 0.25]], "updates": 90}}
+        {
+            "heat_loss": {"theta": [0.055, 2.8], "p": [[0.01, 0], [0, 0.25]], "updates": 90},
+            "solar_gain": {"theta": [2.56], "p": [[0.25]], "updates": 40},
+        }
     )
 
     assert budget.heat_loss == 0.055
-    assert budget.solar_gain == 2.8
+    assert budget.solar_gain == 0.0
     assert budget.ready
 
 

@@ -60,7 +60,11 @@ HEAT_LOSS_BOUNDS = (0.02, 0.6)
 # An hour with less sun than this (sun height times clear sky, summed over the hour) is dark
 DARK_SUN_HOURS = 0.02
 LEARNING_MINIMUM_DARK_HOURS = 8
-LEARNING_MINIMUM_SUN_HOURS = 0.5
+# The sun is learned only from clearly sunny hours, once per new one: on a grey day a little
+# sun would carry all the free heat of cooking and people, and refitting the same day every
+# hour would harden that into the estimate
+SUNNY_HOUR_SUN_HOURS = 0.1
+LEARNING_MINIMUM_SUN_HOURS = 1.0
 SOLAR_GAIN_BOUNDS = (0.0, 3.0)
 # Wind: the heat loss rises by this share per km/h above the usual wind. It is learned from the
 # dark hours on top of H and used only once the wind has varied and the effect is clear
@@ -324,7 +328,7 @@ class HeatBudget:
             LEARNING_FORGETTING,
         )
         self._learner.limits[1] = 1.0
-        self._solar_learner = _RecursiveLeastSquares([0.0], [0.25], LEARNING_FORGETTING)
+        self._solar_learner = _RecursiveLeastSquares([0.0], [0.05], LEARNING_FORGETTING)
         self._wind_learner = _RecursiveLeastSquares([0.0], [1e-4], LEARNING_FORGETTING)
         self._wind_mean: float | None = None
         self._wind_square = 0.0
@@ -415,16 +419,12 @@ class HeatBudget:
         theta = heat_loss.get("theta") if isinstance(heat_loss, dict) else None
         if isinstance(balance, dict):
             self._learner.load(balance)
-            self._solar_learner.load(data.get("solar_gain") or {})
         elif isinstance(theta, list) and theta:
-            # Keep what was learned: H alone, or H with the sun when both were learned together;
-            # the variances start over
+            # Keep the heat loss; its variance starts over
             self._learner.theta[0] = float(theta[0])
             self._learner.updates = int(heat_loss.get("updates", 0))
-            if len(theta) == 2:  # noqa: PLR2004
-                self._solar_learner.theta = [float(theta[1])]
-            else:
-                self._solar_learner.load(data.get("solar_gain") or {})
+        # The sun learned before 5.2.0.35 took free heat for sunshine, so it starts over
+        self._solar_learner.load(data.get("solar") or {})
         wind = data.get("wind") or {}
         if isinstance(wind, dict):
             self._wind_learner.load(wind)
@@ -445,7 +445,7 @@ class HeatBudget:
     def _data_to_save(self) -> dict[str, Any]:
         return {
             "heat_balance": self._learner.to_dict(),
-            "solar_gain": self._solar_learner.to_dict(),
+            "solar": self._solar_learner.to_dict(),
             "wind": {
                 **self._wind_learner.to_dict(),
                 "mean": self._wind_mean,
@@ -858,13 +858,14 @@ class HeatBudget:
         """Fit the heat loss to the dark hours of the last day and the solar gain to the rest."""
         # heat + S * sun = H * kelvin_hours + stored
         dark = [h for h in self._hours if h.sun_hours <= DARK_SUN_HOURS]
-        sunny = [h for h in self._hours if h.sun_hours > DARK_SUN_HOURS]
+        sunny = [h for h in self._hours if h.sun_hours > SUNNY_HOUR_SUN_HOURS]
+        new_sun = bool(self._hours) and self._hours[-1].sun_hours > SUNNY_HOUR_SUN_HOURS
         if len(dark) >= LEARNING_MINIMUM_DARK_HOURS:
             heat, kelvin_hours, _ = _balance(dark, 0.0)
             if kelvin_hours > 0:
                 # The heat is what the house lost plus what it stored
                 self._learner.update([kelvin_hours, _warming(dark)], heat)
-        if self._learner.updates > 0 and sunny:
+        if self._learner.updates > 0 and new_sun:
             heat, kelvin_hours, stored = _balance(sunny, self.heat_capacity)
             sun_hours = sum(h.sun_hours for h in sunny)
             if sun_hours >= LEARNING_MINIMUM_SUN_HOURS:
