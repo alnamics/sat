@@ -388,6 +388,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._keep_heating_suspended_until: float | None = None
         self._kept_on_flame_since: float | None = None
         self._kept_on_released: bool = False
+        # The on-phase burn still running when the off-phase began
+        self._kept_on_carried_burn: bool = False
 
         # Create a PID controller with given configuration options
         self.pid = create_pid_controller(config_entry.data, config_options)
@@ -2440,6 +2442,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             or self.pwm.status != PWMStatus.OFF
         ):
             self._pwm_off_since = None
+            self._kept_on_carried_burn = False
             # Only a real on-phase warms the water again; an idle step between off-phases
             # (valves, a reset) must not enable heating against the boiler minimum once more
             if self.pwm.status == PWMStatus.ON or not self.pulse_width_modulation_enabled:
@@ -2449,11 +2452,22 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         now = monotonic()
         if self._pwm_off_since is None:
             self._pwm_off_since = now
+            self._kept_on_carried_burn = (
+                self._coordinator.flame_active and not self._coordinator.heating_hot_water
+            )
 
         if self._keep_heating_suspended_until is not None:
             if now < self._keep_heating_suspended_until:
                 return False
             self._keep_heating_suspended_until = None
+
+        # A boiler keeps burning against its own minimum setpoint while the water is below its
+        # switch-off point, so the on-phase burn goes on into the off-phase: heating is disabled
+        # until that flame is out and then enabled again, which is no new ignition
+        if self._kept_on_carried_burn:
+            if self._coordinator.flame_active and not self._coordinator.heating_hot_water:
+                return False
+            self._kept_on_carried_burn = False
 
         # The setpoint the boiler reports lags the off-phase setpoint for a few seconds
         if self._kept_on_released or (

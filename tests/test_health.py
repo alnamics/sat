@@ -560,3 +560,50 @@ async def test_keep_heating_is_released_before_the_water_reaches_the_boiler_mini
         assert climate._heating_kept_on_in_pwm_off()
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_on_phase_burn_is_ended_without_suspending_keep_heating(
+    hass: HomeAssistant,
+) -> None:
+    entry = await setup_heating(hass)
+    climate = entry.runtime_data.climate
+    coordinator = entry.runtime_data.coordinator
+    climate._keep_heating_in_pwm_off = True
+    clock = [1000.0]
+
+    with (
+        patch("custom_components.sat.climate.monotonic", side_effect=lambda: clock[0]),
+        patch.object(
+            type(climate), "pulse_width_modulation_enabled", new_callable=PropertyMock
+        ) as enabled,
+        patch.object(type(climate.pwm), "status", new_callable=PropertyMock) as status,
+        patch.object(type(coordinator), "flame_active", new_callable=PropertyMock) as flame,
+        patch.object(type(coordinator), "setpoint", new_callable=PropertyMock) as setpoint,
+        patch.object(
+            type(coordinator), "boiler_temperature", new_callable=PropertyMock
+        ) as boiler_temperature,
+        patch.object(
+            type(coordinator), "heating_hot_water", new_callable=PropertyMock
+        ) as heating_hot_water,
+    ):
+        heating_hot_water.return_value = False
+        enabled.return_value = True
+        setpoint.return_value = 25.0
+        boiler_temperature.return_value = 32.0
+
+        # The block ends while the burner runs; the water is below the boiler's switch-off point
+        status.return_value = PWMStatus.OFF
+        flame.return_value = True
+        assert not climate._heating_kept_on_in_pwm_off()
+        clock[0] += 200
+        assert not climate._heating_kept_on_in_pwm_off()
+
+        # Once the flame is out heating is enabled again, with no suspension
+        flame.return_value = False
+        clock[0] += 10
+        assert climate._heating_kept_on_in_pwm_off()
+        assert climate._keep_heating_suspended_until is None
+        clock[0] += 300
+        assert climate._heating_kept_on_in_pwm_off()
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
