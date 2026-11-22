@@ -29,7 +29,7 @@ This page follows one flat to show what SAT does with the boiler: when and how l
 | Boiler | De Dietrich Lumea MPX 28/33 BIC, condensing, 40 l cylinder (a board of the Baxi Luna Duo-Tec family) |
 | Boiler power | 33 kW, minimum **4.7–5.1 kW** per the data sheet; SAT counts 33 kW × 16% = 5.3 kW |
 | Heating | screed underfloor heating, 8 loops |
-| Loops | 4 with Afriso actuators (5–6 minutes) and Heatit Z-Temp2 thermostats, 4 always open |
+| Loops | 2 always open (hallway and bathroom), the rest with Afriso actuators (5–6 minutes) under 4 Heatit Z-Temp2 thermostats |
 | Connection | OpenTherm Gateway (OTGW) with an Ethernet module, as serial |
 | Thermostat | De Dietrich AD289 iSense on OpenTherm, through the gateway; its temperature (tenths of a degree) is SAT's main sensor |
 

@@ -29,7 +29,7 @@ Ta strona pokazuje na jednym konkretnym mieszkaniu, co SAT robi z kotłem: kiedy
 | Kocioł | De Dietrich Lumea MPX 28/33 BIC, kondensacyjny, z zasobnikiem 40 l (płyta tej samej rodziny co Baxi Luna Duo-Tec) |
 | Moc kotła | 33 kW, minimum **4,7–5,1 kW** według danych technicznych; SAT liczy 33 kW × 16% = 5,3 kW |
 | Ogrzewanie | podłogówka w wylewce, 8 pętli |
-| Pętle | 4 z siłownikami Afriso (5–6 minut) i termostatami Heatit Z-Temp2, 4 zawsze otwarte |
+| Pętle | 2 zawsze otwarte (korytarz i łazienka), pozostałe z siłownikami Afriso (5–6 minut) pod 4 termostatami Heatit Z-Temp2 |
 | Połączenie | OpenTherm Gateway (OTGW) z modułem Ethernet, przez port szeregowy |
 | Termostat | De Dietrich AD289 iSense na OpenTherm, przez bramkę; jego temperatura (0,1 °C) to główny czujnik SAT |
 
