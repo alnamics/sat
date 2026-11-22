@@ -66,7 +66,6 @@ from .const import (
     CONF_HOME_TEMPERATURE,
     CONF_HOT_WATER_COMFORT_TEMPERATURE,
     CONF_HOT_WATER_ECO_TEMPERATURE,
-    CONF_HOT_WATER_OFF_BEFORE_HEATING,
     CONF_HOT_WATER_SCHEDULE_ENTITY_ID,
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
     CONF_INSIDE_SENSOR_ENTITY_ID,
@@ -1291,14 +1290,6 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
         schema[vol.Required(CONF_VALVE_OPENING_TIME, default=options[CONF_VALVE_OPENING_TIME])] = (
             selector.TimeSelector()
         )
-        if self.config_entry.data.get(CONF_MODE) == MODE_SERIAL:
-            # Only the serial gateway forces the hot water enable bit
-            schema[
-                vol.Required(
-                    CONF_HOT_WATER_OFF_BEFORE_HEATING,
-                    default=options[CONF_HOT_WATER_OFF_BEFORE_HEATING],
-                )
-            ] = selector.TimeSelector()
         if self._takes_setpoint:
             schema[
                 vol.Required(

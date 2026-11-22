@@ -83,7 +83,6 @@ from .const import (
     CONF_HEATING_SYSTEM,
     CONF_HOT_WATER_COMFORT_TEMPERATURE,
     CONF_HOT_WATER_ECO_TEMPERATURE,
-    CONF_HOT_WATER_OFF_BEFORE_HEATING,
     CONF_HOT_WATER_SCHEDULE_ENTITY_ID,
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
     CONF_INSIDE_SENSOR_ENTITY_ID,
@@ -198,9 +197,6 @@ KEEP_HEATING_RELEASE_MARGIN = 1.0
 KEEP_HEATING_FLAME_JUDGE_SECONDS = 60
 # The on-phase burn may run on this long into the off-phase before heating is disabled to end it
 KEEP_HEATING_CARRIED_BURN_SECONDS = 600
-# Hot water disabled before heating starts is enabled again once the burner lights, or after
-# this long at the latest
-HOT_WATER_OFF_RESTORE_SECONDS = 120
 # The flow and return only settle a few minutes into a burn, the flue gas a few more
 SETTLED_BURN_SECONDS = 180
 DIAGNOSTIC_BURN_SECONDS = 600
@@ -399,19 +395,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._kept_on_released: bool = False
         # The on-phase burn still running when the off-phase began
         self._kept_on_carried_burn: bool = False
-
-        # Some combi boilers park their diverter valve on the cylinder, so the first water of a
-        # heating start runs through the cylinder coil and cools it; hot water is disabled for a
-        # moment first in the hope that the valve stays on heating
-        self._hot_water_off_before_heating = convert_time_str_to_seconds(
-            config_options.get(
-                CONF_HOT_WATER_OFF_BEFORE_HEATING,
-                OPTIONS_DEFAULTS[CONF_HOT_WATER_OFF_BEFORE_HEATING],
-            )
-        )
-        self._hot_water_off_since: float | None = None
-        self._hot_water_heating_enabled_at: float | None = None
-        self._hot_water_lead_unsub: Callable[[], None] | None = None
 
         # Create a PID controller with given configuration options
         self.pid = create_pid_controller(config_entry.data, config_options)
@@ -682,8 +665,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     @override
     async def async_will_remove_from_hass(self) -> None:
-        self._cancel_hot_water_lead()
-
         if self._control_heating_loop_unsub is not None:
             self._control_heating_loop_unsub()
             self._control_heating_loop_unsub = None
@@ -706,11 +687,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         await self._async_run_guarded(
             "loop measurement restore", self._async_restore_interrupted_measurement
         )
-        if (
-            self._hot_water_off_before_heating > 0
-            and self._coordinator.supports_hot_water_enable_management
-        ):
-            await self._async_run_guarded("hot water enable", self._async_hand_back_hot_water)
         await self._register_event_listeners()
         await self.async_control_heating_loop()
 
@@ -1009,7 +985,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             "pulse_width_modulation_enabled": self.pulse_width_modulation_enabled,
             "pulse_width_modulation_state": self.pwm.status.name,
             "heating_kept_on_in_pwm_off": self._heating_is_kept_on,
-            "hot_water_off_for_heating_start": self._hot_water_off_since is not None,
             "flame_losses_24h": self._coordinator.flame_losses_last_day,
             "pulse_width_modulation_duty_cycle": self.pwm.duty_cycle,
             **(
@@ -1684,7 +1659,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 or self.control_paused
                 or not self._coordinator.online
             ):
-                await self._async_run_guarded("hot water enable", self._async_release_hot_water)
                 if self.hvac_mode == HVACMode.OFF and self._coordinator.online:
                     await self._async_run_guarded("frost protection", self._async_frost_protection)
                 return
@@ -1842,7 +1816,6 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 if (self._setpoint is not None and self._setpoint > COLD_SETPOINT) or kept_on
                 else DeviceState.OFF
             )
-            await self._async_run_guarded("hot water enable", self._async_restore_hot_water)
 
             self.async_write_ha_state()
 
@@ -2622,87 +2595,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             self._valve_wait_logged = False
 
-            if not await self._async_hot_water_off_first():
-                return
-
-        else:
-            await self._async_restore_hot_water(force=True)
-            if not self._coordinator.device_active:
-                _LOGGER.debug("Heater is already off. No action taken.")
-                return
-
-        await self._coordinator.async_set_heater_state(state)
-        if state == DeviceState.ON and self._hot_water_off_since is not None:
-            self._hot_water_heating_enabled_at = monotonic()
-
-    async def _async_hot_water_off_first(self) -> bool:
-        """Return True once heating may be enabled; hot water is disabled for a while first."""
-        lead = self._hot_water_off_before_heating
-        if lead <= 0 or not self._coordinator.supports_hot_water_enable_management:
-            return True
-
-        if self._hot_water_off_since is None:
-            # A cylinder reheat holds the valve on hot water anyway, with hot water in the coil
-            if self._coordinator.heating_hot_water:
-                return True
-
-            self._hot_water_off_since = monotonic()
-            self._hot_water_heating_enabled_at = None
-            await self._coordinator.async_set_hot_water_enabled(enabled=False)
-            _LOGGER.info("Hot water disabled for %.0f s before heating is enabled.", lead)
-
-            self._cancel_hot_water_lead()
-            self._hot_water_lead_unsub = async_call_later(
-                self.hass, lead, HassJob(self._async_hot_water_lead_done)
-            )
-            return False
-
-        return monotonic() - self._hot_water_off_since >= lead - 1
-
-    async def _async_hot_water_lead_done(self, _time: datetime) -> None:
-        self._hot_water_lead_unsub = None
-        self.schedule_control_heating_loop(force=True)
-
-    def _cancel_hot_water_lead(self) -> None:
-        if self._hot_water_lead_unsub is not None:
-            self._hot_water_lead_unsub()
-            self._hot_water_lead_unsub = None
-
-    async def _async_restore_hot_water(self, *, force: bool = False) -> None:
-        """Enable hot water again once the burner lit for heating, or at once with force."""
-        if self._hot_water_off_since is None:
+        elif not self._coordinator.device_active:
+            _LOGGER.debug("Heater is already off. No action taken.")
             return
 
-        if not force:
-            now = monotonic()
-            enabled_at = self._hot_water_heating_enabled_at
-            if enabled_at is None:
-                # Heating was not enabled yet; a wait that runs far over is given up
-                if (
-                    now - self._hot_water_off_since
-                    < self._hot_water_off_before_heating + HOT_WATER_OFF_RESTORE_SECONDS
-                ):
-                    return
-            elif (
-                not self._coordinator.flame_active
-                and now - enabled_at < HOT_WATER_OFF_RESTORE_SECONDS
-            ):
-                return
-
-        self._hot_water_off_since = None
-        self._hot_water_heating_enabled_at = None
-        self._cancel_hot_water_lead()
-        await self._coordinator.async_set_hot_water_enabled(enabled=None)
-        _LOGGER.info("Hot water enabled again.")
-
-    async def _async_release_hot_water(self) -> None:
-        await self._async_restore_hot_water(force=True)
-
-    async def _async_hand_back_hot_water(self) -> None:
-        """Clear a hot water override a restart may have left in the gateway."""
-        self._hot_water_off_since = None
-        self._hot_water_heating_enabled_at = None
-        await self._coordinator.async_set_hot_water_enabled(enabled=None)
+        await self._coordinator.async_set_heater_state(state)
 
     @override
     async def async_set_temperature(self, **kwargs: Any) -> None:

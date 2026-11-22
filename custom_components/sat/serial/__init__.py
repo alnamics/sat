@@ -249,11 +249,6 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
 
     @override
     @property
-    def supports_hot_water_enable_management(self) -> bool:
-        return True
-
-    @override
-    @property
     def supports_relative_modulation(self) -> bool:
         return True
 
@@ -659,20 +654,10 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         await super().async_set_heater_state(state)
 
     @override
-    async def async_set_hot_water_enabled(self, *, enabled: bool | None) -> None:
-        if not self._simulation:
-            # Any other character than 0 or 1 hands the bit back to the thermostat
-            await self._api.set_hot_water_ovrd("A" if enabled is None else int(enabled))
-
-        await super().async_set_hot_water_enabled(enabled=enabled)
-
-    @override
     async def async_release_control(self) -> None:
         if not self._simulation:
             await self._api.set_control_setpoint(0)
             await self._api.set_max_relative_mod("-")
-            if self.hot_water_enable_override is not None:
-                await self._api.set_hot_water_ovrd("A")
 
         await super().async_release_control()
 
@@ -695,8 +680,6 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
             try:
                 await self._api.set_control_setpoint(0)
                 await self._api.set_max_relative_mod("-")
-                if self.hot_water_enable_override is not None:
-                    await self._api.set_hot_water_ovrd("A")
             except Exception:  # pragma: no cover - best effort cleanup
                 _LOGGER.debug(
                     "Failed to reset serial gateway state before disconnect", exc_info=True
