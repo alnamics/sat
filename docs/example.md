@@ -25,7 +25,7 @@ This page follows one flat to show what SAT does with the boiler: when and how l
 
 | | |
 |---|---|
-| Flat | 87 m² in a block of flats, finished in 2021 |
+| Flat | 87 m² on two storeys, in a multi-unit house finished in 2021: a neighbour beside it and one below |
 | Boiler | De Dietrich Lumea MPX 28/33 BIC, condensing, 40 l cylinder (a board of the Baxi Luna Duo-Tec family) |
 | Boiler power | 33 kW, minimum **4.7–5.1 kW** per the data sheet; SAT counts 33 kW × 16% = 5.3 kW |
 | Heating | screed underfloor heating, 8 loops |
@@ -49,7 +49,7 @@ Boiler parameters (numbered as on the iSense; one higher on the boiler panel). S
 
 At 5–12 °C outside the flat needs **7–20 kWh a day** for heating, 0.3–0.8 kW on average. The boiler cannot go below 5.3 kW, so it always has to burn in bursts. The 33 kW were chosen for hot water.
 
-A flat in a block gets a lot of free heat: from the neighbours, people, appliances and the warm cylinder. It needs less than its walls and windows lose, and SAT learns the **effective** heat loss (here 45–55 W/K), the heat the house really needs from the boiler.
+The flat gets a lot of free heat: from the neighbours beside and below, people, appliances and the warm cylinder. It needs less than its walls and windows lose, and SAT learns the **effective** heat loss (here 45–55 W/K), the heat the house really needs from the boiler.
 
 SAT's aim: **few starts, long burns at minimum power, the coolest water possible.**
 

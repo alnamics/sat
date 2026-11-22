@@ -25,7 +25,7 @@ Ta strona pokazuje na jednym konkretnym mieszkaniu, co SAT robi z kotłem: kiedy
 
 | | |
 |---|---|
-| Mieszkanie | 87 m² w bloku, budynek oddany w 2021 roku |
+| Mieszkanie | 87 m² na dwóch poziomach w budynku wielorodzinnym oddanym w 2021 roku: sąsiad z boku i pod spodem |
 | Kocioł | De Dietrich Lumea MPX 28/33 BIC, kondensacyjny, z zasobnikiem 40 l (płyta tej samej rodziny co Baxi Luna Duo-Tec) |
 | Moc kotła | 33 kW, minimum **4,7–5,1 kW** według danych technicznych; SAT liczy 33 kW × 16% = 5,3 kW |
 | Ogrzewanie | podłogówka w wylewce, 8 pętli |
@@ -49,7 +49,7 @@ Parametry kotła (numer z iSense; na panelu kotła o jeden większy). SAT odczyt
 
 Przy 5–12 °C na zewnątrz mieszkanie potrzebuje na ogrzewanie **7–20 kWh na dobę**, czyli średnio 0,3–0,8 kW. Kocioł nie zejdzie poniżej 5,3 kW, więc zawsze musi pracować z przerwami. Moc 33 kW dobrano pod ciepłą wodę.
 
-Mieszkanie w bloku dostaje sporo darmowego ciepła: od sąsiadów, ludzi, sprzętów i ciepłego zasobnika. Dlatego potrzeba jest mniejsza, niż wynikałoby ze strat przez ściany i okna. SAT uczy się **efektywnych** strat (tu 45–55 W/K), czyli tego, ile ciepła dom naprawdę potrzebuje od kotła.
+Mieszkanie dostaje sporo darmowego ciepła: od sąsiadów z boku i z dołu, ludzi, sprzętów i ciepłego zasobnika. Dlatego potrzeba jest mniejsza, niż wynikałoby ze strat przez ściany i okna. SAT uczy się **efektywnych** strat (tu 45–55 W/K), czyli tego, ile ciepła dom naprawdę potrzebuje od kotła.
 
 Cel SAT: **mało startów, długie palenia na minimalnej mocy, jak najchłodniejsza woda.**
 
