@@ -116,7 +116,7 @@ Wartości, które zmieniają się z każdym odczytem (zapotrzebowanie na ciepło
 
 ## Komunikaty w Naprawach
 
-Pojawiają się w **Ustawienia → Naprawy** i znikają same, gdy przyczyna ustąpi.
+Pojawiają się w **Ustawienia → System → Naprawy** (i jako baner na górze Ustawień) i znikają same, gdy przyczyna ustąpi.
 
 | Komunikat | Kiedy |
 |---|---|

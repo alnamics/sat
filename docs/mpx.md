@@ -116,7 +116,7 @@ Values that change with every reading (the heat need, the heat credit, the daily
 
 ## Repair issues
 
-They appear under **Settings → Repairs** and clear themselves when the condition is gone.
+They appear under **Settings → System → Repairs** (and as a banner at the top of Settings) and clear themselves when the condition is gone.
 
 | Issue | When |
 |---|---|
