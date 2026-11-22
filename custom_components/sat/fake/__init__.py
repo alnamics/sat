@@ -21,11 +21,13 @@ class SatFakeConfig:
         supports_maximum_setpoint_management: bool = False,
         supports_hot_water_setpoint_management: bool = False,
         supports_relative_modulation_management: bool = False,
+        supports_hot_water_enable_management: bool = False,
     ) -> None:
         self.supports_setpoint_management = supports_setpoint_management
         self.supports_maximum_setpoint_management = supports_maximum_setpoint_management
         self.supports_hot_water_setpoint_management = supports_hot_water_setpoint_management
         self.supports_relative_modulation_management = supports_relative_modulation_management
+        self.supports_hot_water_enable_management = supports_hot_water_enable_management
 
 
 class SatFakeCoordinator(SatDataUpdateCoordinator):
@@ -105,6 +107,11 @@ class SatFakeCoordinator(SatDataUpdateCoordinator):
     @property
     def supports_relative_modulation(self) -> bool:
         return self.supports_relative_modulation_management
+
+    @override
+    @property
+    def supports_hot_water_enable_management(self) -> bool:
+        return self.config.supports_hot_water_enable_management
 
     async def async_set_boiler_temperature(self, value: float) -> None:
         self._boiler_temperature = value

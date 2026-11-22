@@ -117,6 +117,7 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         self._manufacturer: Manufacturer | None = None
         self._control_max_relative_modulation: int | None = None
         self._control_thermostat_setpoint: float | None = None
+        self._hot_water_enable_override: bool | None = None
         self._simulation: bool = bool(self._options.get(CONF_SIMULATION))
         self._heating_system: str = str(
             config_data.get(CONF_HEATING_SYSTEM, HEATING_SYSTEM_UNKNOWN)
@@ -522,6 +523,16 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         return True
 
     @property
+    def supports_hot_water_enable_management(self) -> bool:
+        """Return whether the device can disable hot water for a while (the DHW enable bit)."""
+        return False
+
+    @property
+    def hot_water_enable_override(self) -> bool | None:
+        """Return the forced hot water enable bit, or None while the thermostat decides."""
+        return self._hot_water_enable_override
+
+    @property
     def supports_maximum_setpoint_management(self) -> bool:
         """Return whether the device supports setting a maximum setpoint.
 
@@ -649,10 +660,21 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         """Control the setpoint temperature for the thermostat."""
         self._control_thermostat_setpoint = value
 
+    async def async_set_hot_water_enabled(self, *, enabled: bool | None) -> None:
+        """Force the hot water enable bit, or hand it back to the room thermostat with None."""
+        if self.supports_hot_water_enable_management:
+            _LOGGER.info(
+                "Hot water enable %s",
+                "left to the thermostat" if enabled is None else ("on" if enabled else "off"),
+            )
+
+        self._hot_water_enable_override = enabled
+
     async def async_release_control(self) -> None:
         """Hand boiler control back to the room thermostat."""
         self._control_max_relative_modulation = None
         self._control_thermostat_setpoint = None
+        self._hot_water_enable_override = None
 
     async def async_notify_listeners(self, _time: datetime | None = None) -> None:
         """Notify listeners of an update asynchronously."""

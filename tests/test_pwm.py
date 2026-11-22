@@ -15,6 +15,7 @@ from custom_components.sat.const import (
     CONF_FORCE_PULSE_WIDTH_MODULATION,
     CONF_HEATING_CURVE_COEFFICIENT,
     CONF_HEATING_SYSTEM,
+    CONF_HOT_WATER_OFF_BEFORE_HEATING,
     CONF_MAXIMUM_SETPOINT,
     CONF_MINIMUM_SETPOINT,
     CONF_PWM_SHORT_BURNS_THRESHOLD,
@@ -527,4 +528,75 @@ async def test_the_boiler_waits_for_a_valve_to_open(
     freezer.tick(timedelta(seconds=61))
     await climate.async_control_heating_loop()
     assert coordinator.device_active
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def _hot_water_lead_climate(
+    hass: HomeAssistant,
+) -> tuple[MockConfigEntry, SatClimate, SatFakeCoordinator]:
+    attributes = {"temperature": 21.0, "current_temperature": 20.8, "hvac_action": "heating"}
+    hass.states.async_set("climate.radiator", HVACMode.HEAT, attributes)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            **DEFAULT_USER_DATA,
+            CONF_HEATING_SYSTEM: HEATING_SYSTEM_RADIATORS,
+            CONF_RADIATORS: ["climate.radiator"],
+        },
+        options={
+            CONF_HEATING_CURVE_COEFFICIENT: 1.8,
+            CONF_MAXIMUM_SETPOINT: 75,
+            CONF_HOT_WATER_OFF_BEFORE_HEATING: "00:01:00",
+        },
+    )
+    hass.states.async_set("sensor.test_inside_sensor", "20.9")
+    hass.states.async_set("sensor.test_outside_sensor", "9.9")
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    climate, coordinator = entry.runtime_data.climate, entry.runtime_data.coordinator
+    coordinator.config.supports_hot_water_enable_management = True
+
+    await coordinator.async_set_boiler_temperature(40)
+    await climate.async_set_target_temperature(23.0)
+    return entry, climate, coordinator
+
+
+async def test_hot_water_is_disabled_before_heating_is_enabled(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry, climate, coordinator = await _hot_water_lead_climate(hass)
+
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+    await climate.async_control_heating_loop()
+    assert coordinator.hot_water_enable_override is False
+    assert not coordinator.device_active
+    assert climate.extra_state_attributes["hot_water_off_for_heating_start"]
+
+    freezer.tick(timedelta(seconds=30))
+    await climate.async_control_heating_loop()
+    assert not coordinator.device_active
+
+    # Heating is enabled after the lead, and hot water once the burner lights
+    freezer.tick(timedelta(seconds=31))
+    await climate.async_control_heating_loop()
+    assert coordinator.device_active
+    assert coordinator.hot_water_enable_override is None
+    assert not climate.extra_state_attributes["hot_water_off_for_heating_start"]
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_hot_water_comes_back_when_heating_is_no_longer_wanted(
+    hass: HomeAssistant,
+) -> None:
+    entry, climate, coordinator = await _hot_water_lead_climate(hass)
+
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+    await climate.async_control_heating_loop()
+    assert coordinator.hot_water_enable_override is False
+
+    await climate.async_set_hvac_mode(HVACMode.OFF)
+    await climate.async_control_heating_loop()
+    assert coordinator.hot_water_enable_override is None
+    assert not coordinator.device_active
     assert await hass.config_entries.async_unload(entry.entry_id)

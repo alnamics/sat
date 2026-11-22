@@ -108,6 +108,7 @@ This section is collapsed by default.
 - **Keep heating enabled between PWM on-phases** (default off): for combi boilers whose pump overrun cools the hot water cylinder. Not in switch mode.
 - **Boiler anti-cycling time**: the boiler's own wait before relighting, from its installer settings (default 0: not set).
 - **Valve opening time**: how long the room thermostats' actuators take to open (default 0: light at once).
+- ⓜ **Disable hot water before heating starts** (default 0: off, experimental): for combi boilers that park the diverter valve on the cylinder, so the first water of every heating start cools the cylinder. SAT disables hot water this long before it enables heating (1 minute is a good start) and enables it again once the burner lights. The `hot_water_off_for_heating_start` attribute shows it. OpenTherm Gateway over serial or network only.
 - **Maximum flow for the screed**: underfloor heating only (default 55 °C; 0 turns it off).
 - **Condensing boiler** (default on): for the efficiency estimate without a flue gas sensor.
 - **Gas use at minimum and maximum power**: from the boiler's manual, in m³/h. SAT uses them to estimate gas use, and the burner power when the boiler does not report its capacity. OpenTherm only.

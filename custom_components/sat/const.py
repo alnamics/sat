@@ -72,6 +72,7 @@ CONF_BOILER_ANTI_CYCLING_TIME = "boiler_anti_cycling_time"
 CONF_LEARN_OVERSHOOT_PROTECTION = "learn_overshoot_protection"
 CONF_VALVE_OPENING_TIME = "valve_opening_time"
 CONF_KEEP_HEATING_IN_PWM_OFF = "keep_heating_in_pwm_off"
+CONF_HOT_WATER_OFF_BEFORE_HEATING = "hot_water_off_before_heating"
 CONF_HEAT_BUDGET_MODE = "heat_budget_mode"
 CONF_HEAT_BUDGET_PERIOD = "heat_budget_period"
 CONF_HEAT_BUDGET_MINIMUM_BURN = "heat_budget_minimum_burn"
@@ -181,6 +182,9 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_VALVE_OPENING_TIME: "00:00:00",
     # Leave central heating enabled at the minimum setpoint between PWM on-phases
     CONF_KEEP_HEATING_IN_PWM_OFF: False,
+    # Disable hot water this long before heating is enabled, so a combi boiler leaves its
+    # diverter valve on heating; 0 turns it off
+    CONF_HOT_WATER_OFF_BEFORE_HEATING: "00:00:00",
     # Dose the burner from a learned heat balance instead of flow temperatures
     CONF_HEAT_BUDGET_MODE: "off",
     CONF_HEAT_BUDGET_PERIOD: "60",
