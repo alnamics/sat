@@ -555,6 +555,8 @@ async def _hot_water_lead_climate(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     climate, coordinator = entry.runtime_data.climate, entry.runtime_data.coordinator
+    assert isinstance(climate, SatClimate)
+    assert isinstance(coordinator, SatFakeCoordinator)
     coordinator.config.supports_hot_water_enable_management = True
 
     await coordinator.async_set_boiler_temperature(40)
@@ -571,7 +573,7 @@ async def test_hot_water_is_disabled_before_heating_is_enabled(
     await climate.async_control_heating_loop()
     assert coordinator.hot_water_enable_override is False
     assert not coordinator.device_active
-    assert climate.extra_state_attributes["hot_water_off_for_heating_start"]
+    assert (climate.extra_state_attributes or {})["hot_water_off_for_heating_start"]
 
     freezer.tick(timedelta(seconds=30))
     await climate.async_control_heating_loop()
@@ -582,7 +584,7 @@ async def test_hot_water_is_disabled_before_heating_is_enabled(
     await climate.async_control_heating_loop()
     assert coordinator.device_active
     assert coordinator.hot_water_enable_override is None
-    assert not climate.extra_state_attributes["hot_water_off_for_heating_start"]
+    assert not (climate.extra_state_attributes or {})["hot_water_off_for_heating_start"]
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
