@@ -562,7 +562,7 @@ async def test_keep_heating_is_released_before_the_water_reaches_the_boiler_mini
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_the_on_phase_burn_is_ended_without_suspending_keep_heating(
+async def test_the_on_phase_burn_runs_out_without_suspending_keep_heating(
     hass: HomeAssistant,
 ) -> None:
     entry = await setup_heating(hass)
@@ -591,19 +591,31 @@ async def test_the_on_phase_burn_is_ended_without_suspending_keep_heating(
         setpoint.return_value = 25.0
         boiler_temperature.return_value = 32.0
 
-        # The block ends while the burner runs; the water is below the boiler's switch-off point
+        # The block ends while the burner runs; the boiler stops it by itself minutes later
         status.return_value = PWMStatus.OFF
         flame.return_value = True
-        assert not climate._heating_kept_on_in_pwm_off()
+        assert climate._heating_kept_on_in_pwm_off()
         clock[0] += 200
-        assert not climate._heating_kept_on_in_pwm_off()
+        assert climate._heating_kept_on_in_pwm_off()
 
-        # Once the flame is out heating is enabled again, with no suspension
+        # Once the flame is out heating stays enabled, with no suspension
         flame.return_value = False
         clock[0] += 10
         assert climate._heating_kept_on_in_pwm_off()
         assert climate._keep_heating_suspended_until is None
         clock[0] += 300
+        assert climate._heating_kept_on_in_pwm_off()
+
+        # A burn that does not end is stopped by disabling heating
+        status.return_value = PWMStatus.ON
+        assert not climate._heating_kept_on_in_pwm_off()
+        status.return_value = PWMStatus.OFF
+        flame.return_value = True
+        assert climate._heating_kept_on_in_pwm_off()
+        clock[0] += 601
+        assert not climate._heating_kept_on_in_pwm_off()
+        flame.return_value = False
+        clock[0] += 10
         assert climate._heating_kept_on_in_pwm_off()
 
     assert await hass.config_entries.async_unload(entry.entry_id)

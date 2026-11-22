@@ -192,6 +192,8 @@ KEEP_HEATING_RELEASE_MARGIN = 1.0
 # A flame in the off-phase is judged after this long; a hot water burn the boiler does not flag
 # has by then heated the water well above any heating setpoint
 KEEP_HEATING_FLAME_JUDGE_SECONDS = 60
+# The on-phase burn may run on this long into the off-phase before heating is disabled to end it
+KEEP_HEATING_CARRIED_BURN_SECONDS = 600
 # The flow and return only settle a few minutes into a burn, the flue gas a few more
 SETTLED_BURN_SECONDS = 180
 DIAGNOSTIC_BURN_SECONDS = 600
@@ -2461,12 +2463,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 return False
             self._keep_heating_suspended_until = None
 
-        # A boiler keeps burning against its own minimum setpoint while the water is below its
-        # switch-off point, so the on-phase burn goes on into the off-phase: heating is disabled
-        # until that flame is out and then enabled again, which is no new ignition
+        # A boiler lowers its setpoint gradually and stops only once the water is a few kelvin
+        # above it, so the on-phase burn runs on into the off-phase for a minute or three. It is
+        # left to go out by itself (the heat budget counts its heat): switching heating off to
+        # end it swings a combi boiler's diverter valve to the cylinder, which cools it. Only a
+        # burn that does not end is stopped that way
         if self._kept_on_carried_burn:
             if self._coordinator.flame_active and not self._coordinator.heating_hot_water:
-                return False
+                return now - self._pwm_off_since < KEEP_HEATING_CARRIED_BURN_SECONDS
             self._kept_on_carried_burn = False
 
         # The setpoint the boiler reports lags the off-phase setpoint for a few seconds
