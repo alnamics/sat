@@ -2289,8 +2289,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         humidity = self.current_humidity
         if (
-            self.entity_id is not None
-            and humidity is not None
+            humidity is not None
             and (temperature := self.native_current_temperature) is not None
         ):
             rooms[self.entity_id] = (temperature, humidity)

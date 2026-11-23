@@ -143,7 +143,7 @@ class BoilerStats:
                 continue
             if mode and last is False:
                 self.totals[f"{key}_starts"] += 1
-            if mode and last and dt > 0:
+            if mode and last is True and dt > 0:
                 self.totals[f"{key}_hours"] += dt / SECONDS_PER_HOUR
         self._heating_mode = heating_mode
         self._hot_water_mode = hot_water_mode
