@@ -394,10 +394,16 @@ async def test_the_boiler_parameters_are_heard_as_the_thermostat_reads_them(
     _send("T000B0C00")
     _send("BC00B0C07")
     assert coordinator.id_scan.parameters == {12: 7}
-    _send("T900B0C0A")
-    _send("BD00B0C0A")
+    with patch("custom_components.sat.serial.persistent_notification.async_create") as notify:
+        _send("T900B0C0A")
+        _send("BD00B0C0A")
+        await hass.async_block_till_done()
     assert coordinator.id_scan.parameters == {12: 10}
     assert "Boiler parameter 12 (OpenTherm TSP) changed: 7 -> 10" in caplog.text
+    assert coordinator.id_scan.parameter_changes[-1]["old"] == 7
+    assert coordinator.id_scan.parameter_changes[-1]["new"] == 10
+    notify.assert_called_once()
+    assert "12" in notify.call_args.args[1]
 
     # A reconnect brings a new processor, which is tapped on the next check
     api._protocol.message_processor = second = _Processor()

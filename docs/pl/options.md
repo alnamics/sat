@@ -81,6 +81,7 @@ Sekcja jest domyślnie zwinięta.
 - **Okres** (Period): co tyle przybywa kredytu ciepła (domyślnie 60 minut).
 - **Minimalne palenie** (Minimum burn): najkrótszy blok wart zapłonu (domyślnie 10 minut).
 - **Prognoza pogody** (Weather forecast): encja pogody z prognozą godzinową; jej prędkość wiatru służy do nauki wpływu wiatru (np. Met.no albo Open-Meteo). Czujnik z samymi bieżącymi wartościami, np. Airly, się nie nadaje.
+- ⓜ **Horyzont prognozy** (Forecast horizon): ile godzin do przodu liczy się prognozowana temperatura zewnętrzna (domyślnie 3). Wylewka oddaje ciepło przez wiele godzin; przy 6–8 budżet zaczyna grzać przed mroźną nocą.
 - **Harmonogram komfortu** i **Obniżenie poza harmonogramem** (Comfort schedule / Setback outside the schedule): pomocnik harmonogramu włączony w godzinach komfortu i to, o ile chłodniej jest poza nimi (domyślnie 0).
 - **Wyłączenie przy ciepłej pogodzie** (Warm weather shutdown): średnia dobowa temperatura zewnętrzna, przy której ogrzewanie się wyłącza (domyślnie 0: nigdy).
 

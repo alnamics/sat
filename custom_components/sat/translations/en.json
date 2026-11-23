@@ -293,6 +293,7 @@
           "heat_budget_period": "Period",
           "heat_budget_minimum_burn": "Minimum burn",
           "weather_forecast_entity_id": "Weather forecast",
+          "heat_budget_forecast_hours": "Forecast horizon",
           "comfort_schedule_entity_id": "Comfort schedule",
           "setback_temperature": "Setback outside the schedule",
           "warm_weather_shutdown_temperature": "Warm weather shutdown"
@@ -302,7 +303,8 @@
           "heat_loss_coefficient": "Heat the house loses per degree between inside and outside. 0 learns it (recommended).",
           "heat_budget_period": "Credit is added every period; longer periods give fewer, longer burns.",
           "heat_budget_minimum_burn": "The shortest block worth lighting the burner for; less heat waits for the next period.",
-          "weather_forecast_entity_id": "Hourly forecast: the budget plans with the next three hours and learns the solar gain from the cloud cover.",
+          "weather_forecast_entity_id": "Hourly forecast: the budget plans with the forecast horizon below and learns the solar gain from the cloud cover.",
+          "heat_budget_forecast_hours": "How far ahead the forecast outdoor temperature counts. A screed floor passes the heat on over hours: 6 to 8 lets the budget heat ahead of a cold night instead of catching up after it.",
           "comfort_schedule_entity_id": "A schedule that is on when the house should be at the target. The recovery starts early enough to be warm on time.",
           "setback_temperature": "How much cooler the house is kept outside the schedule. A screed floor saves little with large setbacks.",
           "warm_weather_shutdown_temperature": "Heating switches off while the daily mean outside temperature is at or above this, and back on 2 °C below. Hot water keeps working. 0 keeps heating on."
@@ -599,6 +601,9 @@
       },
       "otgw_ovrd_high_byte": {
         "name": "Gateway override high byte"
+      },
+      "worth_airing": {
+        "name": "Worth airing"
       }
     },
     "number": {
@@ -873,6 +878,9 @@
       },
       "total_hot_water_mode_hours": {
         "name": "Hot water mode hours"
+      },
+      "daily_summary": {
+        "name": "Yesterday's summary"
       }
     },
     "button": {
@@ -881,6 +889,9 @@
       },
       "calibrate_overshoot_protection": {
         "name": "Calibrate overshoot protection"
+      },
+      "service_report": {
+        "name": "Service report"
       }
     }
   },

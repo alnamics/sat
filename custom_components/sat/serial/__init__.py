@@ -5,6 +5,7 @@ import logging
 from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
+from homeassistant.components import persistent_notification
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.storage import Store
 from homeassistant.util import slugify
@@ -463,8 +464,14 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
         """Keep the boiler's answers, its parameters among them, as the messages pass."""
         parameters = dict(self.id_scan.parameters)
         faults = len(self.id_scan.fault_events)
+        last_change = self.id_scan.parameter_changes[-1] if self.id_scan.parameter_changes else None
         flame = self.id_scan.flame
         self.id_scan.observe(source, frame)
+
+        if self.id_scan.parameter_changes and self.id_scan.parameter_changes[-1] is not last_change:
+            self._hass_loop.call_soon_threadsafe(
+                self._notify_parameter_change, self.id_scan.parameter_changes[-1]
+            )
 
         if flame is False and self.id_scan.flame is True:
             self._hass_loop.call_soon_threadsafe(self._start_fault_watch)
@@ -472,6 +479,32 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
             self.id_scan.parameters != parameters or len(self.id_scan.fault_events) != faults
         ) and self._id_scan_store is not None:
             self._hass_loop.call_soon_threadsafe(self._schedule_id_scan_save)
+
+    def _notify_parameter_change(self, change: dict[str, Any]) -> None:
+        """Tell about a boiler parameter that changed, by a service visit, a reset or by hand."""
+        index, old, new = change.get("index"), change.get("old"), change.get("new")
+        if self.hass.config.language.startswith("pl"):
+            title = "Zmienił się parametr kotła"
+            message = (
+                f"Parametr kotła nr {index} (OpenTherm TSP) zmienił się z {old} na {new}. "
+                "Numer nie zawsze odpowiada numerowi P na panelu kotła. Jeśli nikt go nie "
+                "zmieniał, sprawdź nastawy kotła: reset albo wizyta serwisu mogły przywrócić "
+                "wartości fabryczne."
+            )
+        else:
+            title = "A boiler parameter changed"
+            message = (
+                f"Boiler parameter {index} (OpenTherm TSP) changed from {old} to {new}. The "
+                "number does not always match the P number on the boiler panel. If nobody "
+                "changed it, check the boiler settings: a reset or a service visit may have "
+                "restored the factory values."
+            )
+        persistent_notification.async_create(
+            self.hass,
+            message,
+            title=title,
+            notification_id=f"{DOMAIN}_boiler_parameter_{index}",
+        )
 
     def _start_fault_watch(self) -> None:
         if self._simulation or (

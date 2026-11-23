@@ -56,6 +56,7 @@ from .const import (
     CONF_FROST_PROTECTION_TEMPERATURE,
     CONF_GAS_ENERGY_CONTENT,
     CONF_GAS_PRICE,
+    CONF_HEAT_BUDGET_FORECAST_HOURS,
     CONF_HEAT_BUDGET_MINIMUM_BURN,
     CONF_HEAT_BUDGET_MODE,
     CONF_HEAT_BUDGET_PERIOD,
@@ -1253,6 +1254,9 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             self._optional(CONF_WEATHER_FORECAST_ENTITY_ID, options): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
             ),
+            vol.Required(
+                CONF_HEAT_BUDGET_FORECAST_HOURS, default=options[CONF_HEAT_BUDGET_FORECAST_HOURS]
+            ): _number(1, 12, 1, "h"),
             self._optional(CONF_COMFORT_SCHEDULE_ENTITY_ID, options): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="schedule")
             ),

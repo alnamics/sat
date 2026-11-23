@@ -19,6 +19,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.start import async_at_start
 
 from .const import (
+    CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_SENSORS,
     MINIMUM_SETPOINT,
     BoilerStatus,
@@ -67,6 +68,9 @@ async def async_setup_entry(
 
     if isinstance(coordinator, SatOpenThermMqttCoordinator):
         _async_add_entities([SatBoilerFaultSensor(coordinator, _config_entry)])
+
+    if _config_entry.options.get(CONF_WEATHER_FORECAST_ENTITY_ID):
+        _async_add_entities([SatAiringSensor(coordinator, _config_entry, climate)])
 
     if len(_config_entry.options.get(CONF_WINDOW_SENSORS, [])) > 0:
         _async_add_entities([SatWindowSensor(coordinator, _config_entry, climate)])
@@ -221,6 +225,32 @@ class SatCentralHeatingSynchroSensor(SatSynchroSensor, SatClimateEntity, BinaryS
                 or (climate_hvac_action == HVACAction.HEATING and device_active)
             )
         )
+
+
+class SatAiringSensor(SatClimateEntity, BinarySensorEntity):
+    """On while the flat is humid and the outside air is dry enough for airing to help."""
+
+    _attr_translation_key = "worth_airing"
+
+    def __init__(
+        self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry, climate: SatClimate
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
+
+        self._attr_unique_id = f"{config_entry.entry_id}-worth-airing"
+
+    @override
+    @property
+    def available(self) -> bool:
+        return self.climate_added and self._climate.airing is not None
+
+    @override
+    def _update_attrs(self) -> None:
+        advice = self._climate.airing or {}
+        self._attr_is_on = bool(advice.get("worth_airing"))
+        self._attr_extra_state_attributes = {
+            key: value for key, value in advice.items() if key != "worth_airing"
+        }
 
 
 class SatHeatingControlSensor(SatClimateEntity, BinarySensorEntity):

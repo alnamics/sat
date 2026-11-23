@@ -367,6 +367,7 @@ class SatOpenThermIdsSensor(SatEntity, sensor.SensorEntity):
             "parameter_count": scan.parameter_count,
             "parameters": {str(index): value for index, value in sorted(scan.parameters.items())},
             "fault_events": scan.fault_events,
+            "parameter_changes": scan.parameter_changes,
         }
 
 

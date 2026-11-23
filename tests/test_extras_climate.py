@@ -220,3 +220,27 @@ async def test_the_burner_power_follows_how_the_boiler_reports_modulation(
 
     assert hass.states.get("sensor.mock_title_estimated_water_flow") is not None
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_service_report_button_shows_a_report(hass: HomeAssistant) -> None:
+    entry, climate, _ = await setup(hass, {})
+    climate.boiler_stats.totals["starts"] = 1234
+
+    with patch("custom_components.sat.button.persistent_notification.async_create") as notify:
+        await hass.services.async_call(
+            "button", "press", {"entity_id": "button.mock_title_service_report"}, blocking=True
+        )
+
+    notify.assert_called_once()
+    report = notify.call_args.args[1]
+    assert "1234" in report
+    assert "Service report" in report
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_daily_summary_and_airing_sensors_exist(hass: HomeAssistant) -> None:
+    entry, _, _ = await setup(hass, {"weather_forecast_entity_id": "weather.home"})
+
+    assert hass.states.get("sensor.mock_title_yesterday_s_summary") is not None
+    assert hass.states.get("binary_sensor.mock_title_worth_airing") is not None
+    assert await hass.config_entries.async_unload(entry.entry_id)

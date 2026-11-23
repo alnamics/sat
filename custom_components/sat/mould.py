@@ -50,6 +50,18 @@ def dew_point(temperature: float, humidity: float) -> float:
     return 243.04 * gamma / (17.625 - gamma)
 
 
+def absolute_humidity(temperature: float, humidity: float) -> float:
+    """Return the water in the air in g/m³."""
+    vapour = humidity / 100.0 * saturation_pressure(temperature)
+    return 2.1674 * vapour / (273.15 + temperature)
+
+
+def humidity_at(temperature: float, absolute: float) -> float:
+    """Return the relative humidity in % that this much water gives air at this temperature."""
+    vapour = absolute * (273.15 + temperature) / 2.1674
+    return min(100.0, 100.0 * vapour / saturation_pressure(temperature))
+
+
 def surface_humidity(indoor: float, humidity: float, outdoor: float) -> float:
     """Return the relative humidity in % at the coldest surface of a room."""
     surface = outdoor + SURFACE_TEMPERATURE_FACTOR * (indoor - outdoor)
@@ -59,6 +71,55 @@ def surface_humidity(indoor: float, humidity: float, outdoor: float) -> float:
 
 def mould_store(hass: HomeAssistant, entry_id: str) -> Store[dict[str, Any]]:
     return Store(hass, 1, f"{DOMAIN}.{entry_id}.mould")
+
+
+# Airing is worth it once the outside air holds this much less water per cubic metre
+AIRING_MINIMUM_DRYING = 1.0
+# and the flat needs drying: a room this humid, or a corner this close to mould
+AIRING_ROOM_HUMIDITY = 60.0
+AIRING_SURFACE_HUMIDITY = 70.0
+
+
+def airing_advice(
+    rooms: Mapping[str, tuple[float, float]],
+    *,
+    outdoor: float | None,
+    outdoor_humidity: float | None,
+) -> dict[str, Any] | None:
+    """Tell whether opening the windows dries the flat, from the water inside and outside.
+
+    Cold outside air holds little water even when its relative humidity is high, so once warmed
+    to room temperature it is dry. Warm, damp summer air can hold more than the air inside, and
+    airing then makes the rooms more humid.
+    """
+    if outdoor is None or outdoor_humidity is None or not rooms:
+        return None
+
+    readings = [
+        (indoor, humidity)
+        for indoor, humidity in rooms.values()
+        if 0 < humidity <= MAXIMUM_HUMIDITY
+    ]
+    if not readings:
+        return None
+
+    indoor = sum(temperature for temperature, _ in readings) / len(readings)
+    inside = sum(absolute_humidity(t, h) for t, h in readings) / len(readings)
+    outside = absolute_humidity(outdoor, outdoor_humidity)
+    highest = max(humidity for _, humidity in readings)
+    corner = max(surface_humidity(t, h, outdoor) for t, h in readings)
+    drying = inside - outside
+    needed = highest >= AIRING_ROOM_HUMIDITY or corner >= AIRING_SURFACE_HUMIDITY
+    return {
+        "worth_airing": needed and drying >= AIRING_MINIMUM_DRYING,
+        "airing_needed": needed,
+        "airing_dries": drying >= AIRING_MINIMUM_DRYING,
+        "indoor_absolute_humidity": round(inside, 1),
+        "outdoor_absolute_humidity": round(outside, 1),
+        # The room humidity once the air is fully replaced and warmed to room temperature
+        "humidity_after_airing": round(humidity_at(indoor, outside), 0),
+        "highest_room_humidity": round(highest, 0),
+    }
 
 
 class MouldRisk:

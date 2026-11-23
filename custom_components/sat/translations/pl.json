@@ -293,6 +293,7 @@
           "heat_budget_period": "Okres",
           "heat_budget_minimum_burn": "Minimalne palenie",
           "weather_forecast_entity_id": "Prognoza pogody",
+          "heat_budget_forecast_hours": "Horyzont prognozy",
           "comfort_schedule_entity_id": "Harmonogram komfortu",
           "setback_temperature": "Obniżenie poza harmonogramem",
           "warm_weather_shutdown_temperature": "Wyłączenie przy ciepłej pogodzie"
@@ -302,7 +303,8 @@
           "heat_loss_coefficient": "Ciepło, które dom traci na każdy stopień różnicy między wnętrzem a otoczeniem. 0 oznacza naukę (zalecane).",
           "heat_budget_period": "Co tyle przybywa kredytu; dłuższy okres to rzadsze i dłuższe palenia.",
           "heat_budget_minimum_burn": "Najkrótszy blok, dla którego warto zapalić palnik; mniejsza ilość ciepła czeka na następny okres.",
-          "weather_forecast_entity_id": "Prognoza godzinowa: budżet planuje według najbliższych trzech godzin i uczy się zysków ze słońca z zachmurzenia.",
+          "weather_forecast_entity_id": "Prognoza godzinowa: budżet planuje według horyzontu prognozy poniżej i uczy się zysków ze słońca z zachmurzenia.",
+          "heat_budget_forecast_hours": "Jak daleko do przodu liczy się prognozowana temperatura zewnętrzna. Wylewka oddaje ciepło przez wiele godzin: przy 6–8 budżet zaczyna grzać przed mroźną nocą, zamiast nadrabiać po niej.",
           "comfort_schedule_entity_id": "Harmonogram włączony wtedy, gdy w domu ma być temperatura docelowa. Dogrzewanie zaczyna się na tyle wcześnie, żeby zdążyć.",
           "setback_temperature": "O ile chłodniej poza harmonogramem. Przy wylewce duże obniżenia dają niewiele.",
           "warm_weather_shutdown_temperature": "Ogrzewanie wyłącza się, gdy średnia dobowa temperatura zewnętrzna osiągnie tę wartość, i włącza 2 °C niżej. Ciepła woda działa dalej. 0 nigdy nie wyłącza."
@@ -599,6 +601,9 @@
       },
       "otgw_ovrd_high_byte": {
         "name": "Bramka: nadpisanie starszego bajtu"
+      },
+      "worth_airing": {
+        "name": "Warto wietrzyć"
       }
     },
     "number": {
@@ -873,6 +878,9 @@
       },
       "total_hot_water_mode_hours": {
         "name": "Godziny w trybie c.w.u."
+      },
+      "daily_summary": {
+        "name": "Wczorajszy bilans"
       }
     },
     "button": {
@@ -881,6 +889,9 @@
       },
       "calibrate_overshoot_protection": {
         "name": "Kalibruj ochronę przed przegrzaniem"
+      },
+      "service_report": {
+        "name": "Raport dla serwisu"
       }
     }
   },

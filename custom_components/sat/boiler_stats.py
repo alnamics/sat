@@ -37,6 +37,9 @@ HOT_WATER_DROP = 1.5
 # A drop this soon after heating started or stopped is blamed on the diverter valve
 NEAR_HEATING_CHANGE_SECONDS = 600.0
 EVENT_WINDOW_SECONDS = SECONDS_PER_DAY
+# The day's room range: low, high, time-weighted sum, seconds; the outdoor mean: sum, seconds
+ROOM_FIELDS = 4
+OUTDOOR_FIELDS = 2
 
 TOTALS = (
     "starts",
@@ -83,6 +86,13 @@ class BoilerStats:
 
         self.signature = EnergySignature()
 
+        # The day so far, and what the last whole day added up to
+        self._day: str | None = None
+        self._day_start: dict[str, float] = {}
+        self._day_room: list[float] = []
+        self._day_outdoor: list[float] = []
+        self.yesterday: dict[str, Any] = {}
+
     async def async_initialize(self, hass: HomeAssistant, entry_id: str) -> None:
         if self._store is not None:
             return
@@ -96,6 +106,7 @@ class BoilerStats:
                 if isinstance(value := data.get(key), int | float):
                     self.totals[key] = float(value)
             self.signature.load(data.get("signature"))
+            self._load_day(data)
         finally:
             self.loaded = True
 
@@ -166,6 +177,7 @@ class BoilerStats:
 
         if day is not None:
             self.signature.update(dt, day, heating_gas=heating_gas, indoor=indoor, outdoor=outdoor)
+            self._track_day(day, dt, indoor=indoor, outdoor=outdoor)
 
         self._track_hot_water(
             now,
@@ -187,7 +199,90 @@ class BoilerStats:
             await self._store.async_save(self._data())
 
     def _data(self) -> dict[str, Any]:
-        return {**self.totals, "signature": self.signature.to_dict()}
+        return {
+            **self.totals,
+            "signature": self.signature.to_dict(),
+            "day": self._day,
+            "day_start": self._day_start,
+            "day_room": self._day_room,
+            "day_outdoor": self._day_outdoor,
+            "yesterday": self.yesterday,
+        }
+
+    def _load_day(self, data: dict[str, Any]) -> None:
+        day, start = data.get("day"), data.get("day_start")
+        if isinstance(day, str) and isinstance(start, dict):
+            self._day = day
+            self._day_start = {
+                key: float(value)
+                for key, value in start.items()
+                if key in TOTALS and isinstance(value, int | float)
+            }
+            for name in ("day_room", "day_outdoor"):
+                if isinstance(values := data.get(name), list) and all(
+                    isinstance(value, int | float) for value in values
+                ):
+                    setattr(self, f"_{name}", [float(value) for value in values])
+        if isinstance(yesterday := data.get("yesterday"), dict):
+            self.yesterday = yesterday
+
+    def _track_day(
+        self, day: str, dt: float, *, indoor: float | None, outdoor: float | None
+    ) -> None:
+        """Keep the day's room range and outdoor mean; a new day sums up the last one."""
+        if self._day is None:
+            self._day = day
+            self._day_start = dict(self.totals)
+        elif day != self._day:
+            self.yesterday = self._summary()
+            self._day = day
+            self._day_start = dict(self.totals)
+            self._day_room = []
+            self._day_outdoor = []
+
+        step = max(dt, 0.0)
+        if indoor is not None:
+            if self._day_room:
+                low, high, weighted, seconds = self._day_room
+                self._day_room = [
+                    min(low, indoor),
+                    max(high, indoor),
+                    weighted + indoor * step,
+                    seconds + step,
+                ]
+            else:
+                self._day_room = [indoor, indoor, indoor * step, step]
+        if outdoor is not None and step > 0:
+            weighted, seconds = self._day_outdoor or [0.0, 0.0]
+            self._day_outdoor = [weighted + outdoor * step, seconds + step]
+
+    def _summary(self) -> dict[str, Any]:
+        """Sum up the day that just ended."""
+        change = {
+            key: self.totals[key] - self._day_start.get(key, self.totals[key]) for key in TOTALS
+        }
+        summary: dict[str, Any] = {
+            "date": self._day,
+            "gas_m3": round(change["gas_m3"], 3),
+            "gas_cost": round(change["gas_cost"], 2),
+            "heating_kwh": round(change["heating_kwh"], 2),
+            "hot_water_kwh": round(change["hot_water_kwh"], 2),
+            "burner_starts": round(change["starts"]),
+            "hot_water_starts": round(change["hot_water_starts"]),
+            "heating_starts": round(change["heating_mode_starts"]),
+            "burner_hours": round(change["burn_hours"], 2),
+            "degree_days": round(change["degree_days"], 2),
+        }
+        if len(self._day_room) == ROOM_FIELDS and self._day_room[-1] > 0:
+            low, high, weighted, seconds = self._day_room
+            summary |= {
+                "room_min": round(low, 1),
+                "room_max": round(high, 1),
+                "room_mean": round(weighted / seconds, 1),
+            }
+        if len(self._day_outdoor) == OUTDOOR_FIELDS and self._day_outdoor[-1] > 0:
+            summary["outdoor_mean"] = round(self._day_outdoor[0] / self._day_outdoor[1], 1)
+        return summary
 
     @property
     def gas_use_ratio(self) -> float | None:

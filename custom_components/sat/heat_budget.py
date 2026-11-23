@@ -96,10 +96,6 @@ PARTIAL_HOUR_SAVE_SECONDS = 300.0
 # A saved hour is continued when the restart took no longer than this
 PARTIAL_HOUR_MAXIMUM_GAP_SECONDS = 900.0
 
-# The heat released now reaches the rooms over the next hours, so that is the outdoor
-# temperature that matters
-FORECAST_HORIZON_HOURS = 3.0
-
 # Boiler cut-outs in one block that end it, because the water cannot take the heat
 CUT_SHORT_BURNS_TO_END_BLOCK = 2
 # A boiler relights a lost flame by itself; this many in one block end it well before the

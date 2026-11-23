@@ -6,17 +6,20 @@ from typing import TYPE_CHECKING, override
 from homeassistant.components import persistent_notification
 from homeassistant.components.button import ButtonEntity
 from homeassistant.const import EntityCategory
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_HEATING_SYSTEM,
     CONF_MINIMUM_SETPOINT,
     CONF_OVERSHOOT_PROTECTION,
+    DOMAIN,
     HEATING_SYSTEM_UNKNOWN,
 )
 from .entity import SatClimateEntity, SatEntity
 from .helpers import configured_maximum_setpoint
 from .overshoot_protection import CalibrationError, create_overshoot_protection
 from .serial import SatSerialCoordinator
+from .service_report import build_service_report
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -45,6 +48,55 @@ async def async_setup_entry(
 
     if isinstance(coordinator, SatSerialCoordinator) and not coordinator.simulation:
         async_add_entities([SatScanOpenThermIdsButton(coordinator, config_entry)])
+
+    async_add_entities(
+        [SatServiceReportButton(coordinator, config_entry, config_entry.runtime_data.climate)]
+    )
+
+
+class SatServiceReportButton(SatClimateEntity, ButtonEntity):
+    """Show what SAT saw of the boiler as a report for the service technician."""
+
+    _attr_translation_key = "service_report"
+    _attr_icon = "mdi:clipboard-text-outline"
+
+    def __init__(
+        self,
+        coordinator: SatDataUpdateCoordinator,
+        config_entry: SatConfigEntry,
+        climate: SatClimate,
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
+
+        self._attr_unique_id = f"{config_entry.entry_id}-service-report"
+
+    @override
+    async def async_press(self) -> None:
+        coordinator = self._coordinator
+        scan = coordinator.id_scan if isinstance(coordinator, SatSerialCoordinator) else None
+        report = build_service_report(
+            language=self.hass.config.language,
+            title=self._config_entry.title,
+            boiler=coordinator.device_type,
+            now=dt_util.now(),
+            totals=self._climate.boiler_stats.totals,
+            attributes=self._climate.extra_state_attributes or {},
+            yesterday=self._climate.boiler_stats.yesterday,
+            pressure=coordinator.water_pressure,
+            faults=scan.fault_events if scan is not None else None,
+            parameters=scan.parameters if scan is not None else None,
+            parameter_changes=scan.parameter_changes if scan is not None else None,
+            settings={
+                "minimum_setpoint": coordinator.minimum_setpoint,
+                "maximum_setpoint": coordinator.maximum_setpoint,
+            },
+        )
+        persistent_notification.async_create(
+            self.hass,
+            report,
+            title=self._config_entry.title,
+            notification_id=f"{DOMAIN}_{self._config_entry.entry_id}_service_report",
+        )
 
 
 class SatScanOpenThermIdsButton(SatEntity, ButtonEntity):

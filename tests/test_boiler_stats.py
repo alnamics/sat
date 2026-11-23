@@ -144,3 +144,36 @@ def test_hot_water_burns_and_the_boiler_modes_are_counted() -> None:
     assert stats.totals["heating_mode_starts"] == 1
     assert stats.totals["heating_mode_hours"] == pytest.approx(59 / 60)
     assert stats.totals["hot_water_mode_starts"] == 1
+
+
+def test_a_new_day_sums_up_the_last_one() -> None:
+    stats = BoilerStats()
+
+    def step(now: float, day: str, *, flame: bool, indoor: float) -> None:
+        stats.update(
+            now=now,
+            flame=flame,
+            hot_water=False,
+            heat_kw=5.0,
+            gas_m3_per_hour=0.5,
+            outdoor=2.0,
+            indoor=indoor,
+            day=day,
+        )
+
+    step(0, "2026-11-22", flame=False, indoor=21.8)
+    for minute in range(1, 31):
+        step(minute * 60, "2026-11-22", flame=True, indoor=22.0 + minute / 100)
+    step(1860, "2026-11-22", flame=False, indoor=22.2)
+    assert stats.yesterday == {}
+
+    step(1920, "2026-11-23", flame=False, indoor=22.1)
+
+    summary = stats.yesterday
+    assert summary["date"] == "2026-11-22"
+    assert summary["burner_starts"] == 1
+    assert summary["gas_m3"] == pytest.approx(0.25, abs=0.01)
+    assert summary["heating_kwh"] == pytest.approx(2.5, abs=0.1)
+    assert summary["room_min"] == 21.8
+    assert summary["room_max"] == 22.3
+    assert summary["outdoor_mean"] == 2.0

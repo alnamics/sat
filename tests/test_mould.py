@@ -5,6 +5,7 @@ import pytest
 from custom_components.sat.mould import (
     MINIMUM_HOURS,
     MouldRisk,
+    airing_advice,
     dew_point,
     saturation_pressure,
     surface_humidity,
@@ -63,3 +64,27 @@ def test_no_outside_temperature_judges_nothing() -> None:
 
     risk.update(0.0, 0.0, rooms={"climate.bedroom": (21.0, 70.0)}, outdoor=None)
     assert risk.attributes == {}
+
+
+def test_cold_outside_air_dries_a_humid_flat() -> None:
+    rooms = {"climate.bathroom": (22.0, 65.0), "climate.bedroom": (21.0, 55.0)}
+
+    # 2 °C at 90 %: about 5 g/m³ of water, against about 11 g/m³ inside
+    advice = airing_advice(rooms, outdoor=2.0, outdoor_humidity=90.0)
+    assert advice is not None
+    assert advice["worth_airing"]
+    assert advice["humidity_after_airing"] < 35
+
+
+def test_damp_summer_air_does_not_dry_the_flat() -> None:
+    advice = airing_advice({"climate.room": (23.0, 62.0)}, outdoor=26.0, outdoor_humidity=70.0)
+    assert advice is not None
+    assert advice["airing_needed"]
+    assert not advice["worth_airing"]
+
+
+def test_a_dry_flat_needs_no_airing() -> None:
+    advice = airing_advice({"climate.room": (22.0, 40.0)}, outdoor=2.0, outdoor_humidity=90.0)
+    assert advice is not None
+    assert not advice["worth_airing"]
+    assert airing_advice({}, outdoor=2.0, outdoor_humidity=90.0) is None

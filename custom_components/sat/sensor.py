@@ -94,6 +94,7 @@ async def async_setup_entry(
         ]
         + [
             SatHotWaterCoolingSensor(coordinator, _config_entry, climate),
+            SatDailySummarySensor(coordinator, _config_entry, climate),
             SatEfficiencySensor(coordinator, _config_entry, climate),
             SatEstimatedWaterFlowSensor(coordinator, _config_entry, climate),
         ]
@@ -515,6 +516,28 @@ class SatEfficiencySensor(SatClimateEntity, SensorEntity):
             None if efficiency.current is None else round(efficiency.current * 100, 1)
         )
         self._attr_extra_state_attributes = efficiency.attributes
+
+
+class SatDailySummarySensor(SatClimateEntity, SensorEntity):
+    """Yesterday's gas, heat, starts and room range; the state is the gas in m³."""
+
+    _attr_translation_key = "daily_summary"
+    _attr_device_class = SensorDeviceClass.GAS
+    _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self, coordinator: SatDataUpdateCoordinator, config_entry: ConfigEntry, climate: SatClimate
+    ) -> None:
+        super().__init__(coordinator, config_entry, climate)
+
+        self._attr_unique_id = f"{config_entry.entry_id}-daily-summary"
+
+    @override
+    def _update_attrs(self) -> None:
+        summary = self._climate.boiler_stats.yesterday
+        self._attr_native_value = summary.get("gas_m3") if summary else None
+        self._attr_extra_state_attributes = dict(summary)
 
 
 class SatGasCostSensor(SatClimateEntity, SensorEntity):

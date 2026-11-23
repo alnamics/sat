@@ -157,6 +157,8 @@ class OpenThermIdScan:
         self.parameter_count: int | None = None
         # Each fault the boiler reported, when it first showed: time, flags and code
         self.fault_events: list[dict[str, Any]] = []
+        # Each change of a parameter that was known before: time, index, old and new value
+        self.parameter_changes: list[dict[str, Any]] = []
         self._last_fault: tuple[int, int] = (0, 0)
         # Flame bit of the boiler's last status answer, None before the first
         self.flame: bool | None = None
@@ -192,12 +194,21 @@ class OpenThermIdScan:
                 index, value = data[2], data[3]
                 previous_value = self.parameters.get(index)
                 if previous_value is not None and previous_value != value:
-                    _LOGGER.info(
+                    _LOGGER.warning(
                         "Boiler parameter %d (OpenTherm TSP) changed: %d -> %d",
                         index,
                         previous_value,
                         value,
                     )
+                    self.parameter_changes.append(
+                        {
+                            "time": datetime.now(UTC).isoformat(timespec="seconds"),
+                            "index": index,
+                            "old": previous_value,
+                            "new": value,
+                        }
+                    )
+                    del self.parameter_changes[:-FAULT_EVENTS_KEPT]
                 self.parameters[index] = value
         elif message_type == DATA_INVALID:
             answer = Answer(INVALID)
@@ -323,6 +334,7 @@ class OpenThermIdScan:
             "parameters": {str(index): value for index, value in self.parameters.items()},
             "parameter_count": self.parameter_count,
             "fault_events": self.fault_events,
+            "parameter_changes": self.parameter_changes,
         }
 
     def load(self, data: dict[str, Any]) -> None:
@@ -348,6 +360,12 @@ class OpenThermIdScan:
         self.parameters = parameters
         self.parameter_count = count if isinstance(count, int) else None
         self.scanned_at = scanned_at if isinstance(scanned_at, str) else None
+        changes = data.get("parameter_changes")
+        self.parameter_changes = (
+            [change for change in changes if isinstance(change, dict)][-FAULT_EVENTS_KEPT:]
+            if isinstance(changes, list)
+            else []
+        )
         events = data.get("fault_events")
         self.fault_events = (
             [event for event in events if isinstance(event, dict)][-FAULT_EVENTS_KEPT:]

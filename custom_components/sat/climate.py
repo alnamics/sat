@@ -39,6 +39,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     UnitOfSpeed,
+    UnitOfTemperature,
     UnitOfVolume,
 )
 from homeassistant.core import (
@@ -60,7 +61,11 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
-from homeassistant.util.unit_conversion import SpeedConverter, VolumeConverter
+from homeassistant.util.unit_conversion import (
+    SpeedConverter,
+    TemperatureConverter,
+    VolumeConverter,
+)
 
 from .area import SENSOR_TEMPERATURE_ID, Areas, is_heating_blocked
 from .boiler_diagnostics import BoilerDiagnostics
@@ -76,6 +81,7 @@ from .const import (
     CONF_FROST_PROTECTION_TEMPERATURE,
     CONF_GAS_ENERGY_CONTENT,
     CONF_GAS_PRICE,
+    CONF_HEAT_BUDGET_FORECAST_HOURS,
     CONF_HEAT_BUDGET_MINIMUM_BURN,
     CONF_HEAT_BUDGET_MODE,
     CONF_HEAT_BUDGET_PERIOD,
@@ -139,7 +145,6 @@ from .efficiency import EfficiencyTracker, fuel_for
 from .entity import SatEntity
 from .errors import Error, Errors
 from .heat_budget import (
-    FORECAST_HORIZON_HOURS,
     HeatBudget,
     HeatBudgetInputs,
     sun_factor,
@@ -155,7 +160,7 @@ from .loop_measurement import (
 from .loop_monitor import LoopMonitor, RoomReading, estimate_water_flow
 from .manufacturers.geminox import Geminox
 from .modulation_scale import ModulationScale
-from .mould import MouldRisk
+from .mould import MouldRisk, airing_advice
 from .presence import Occupancy, PresenceTracker, is_home
 from .relative_modulation import RelativeModulation, RelativeModulationState
 from .summer_simmer import SummerSimmer
@@ -256,6 +261,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         {
             "boiler_flame_timing",
             "mould_risk",
+            "airing",
             "boiler_temperature_cold",
             "boiler_temperature_derivative",
             "current_kd",
@@ -445,6 +451,12 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         self._weather_forecast_entity_id = config_options.get(CONF_WEATHER_FORECAST_ENTITY_ID)
         self._weather_forecast: list[tuple[datetime, float | None, float | None]] = []
+        # A screed floor passes the heat on over hours, so the forecast counts that far ahead
+        self._forecast_hours = float(
+            config_options.get(
+                CONF_HEAT_BUDGET_FORECAST_HOURS, OPTIONS_DEFAULTS[CONF_HEAT_BUDGET_FORECAST_HOURS]
+            )
+        )
         self._comfort_schedule_entity_id = config_options.get(CONF_COMFORT_SCHEDULE_ENTITY_ID)
         self._setback_temperature = float(config_options.get(CONF_SETBACK_TEMPERATURE) or 0)
         self._minimum_consumption = float(config_options.get(CONF_MINIMUM_CONSUMPTION) or 0)
@@ -461,6 +473,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # Running totals, loop watching and boiler diagnostics
         self.boiler_stats = BoilerStats()
         self.mould = MouldRisk()
+        self.airing: dict[str, Any] | None = None
         self.boiler_diagnostics: BoilerDiagnostics | None = None
         monitored = [*self._radiators, *self.areas.items()]
         self.loop_monitor = LoopMonitor(monitored) if monitored else None
@@ -1004,6 +1017,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             ),
             **(self.boiler_diagnostics.attributes if self.boiler_diagnostics is not None else {}),
             **({"mould_risk": mould} if (mould := self.mould.attributes) else {}),
+            **({"airing": self.airing} if self.airing is not None else {}),
             **self._extras_attributes(),
         }
 
@@ -1914,6 +1928,20 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             return None
         return VolumeConverter.convert(value, unit, UnitOfVolume.LITERS)
 
+    def _weather_air(self) -> tuple[float | None, float | None]:
+        """Return the temperature (°C) and relative humidity outside, from the weather entity."""
+        if (
+            not self._weather_forecast_entity_id
+            or (state := self.hass.states.get(self._weather_forecast_entity_id)) is None
+        ):
+            return None, None
+        temperature = float_value(state.attributes.get(weather.ATTR_WEATHER_TEMPERATURE))
+        humidity = float_value(state.attributes.get(weather.ATTR_WEATHER_HUMIDITY))
+        unit = state.attributes.get(weather.ATTR_WEATHER_TEMPERATURE_UNIT)
+        if temperature is not None and unit in {member.value for member in UnitOfTemperature}:
+            temperature = TemperatureConverter.convert(temperature, unit, UnitOfTemperature.CELSIUS)
+        return temperature, humidity
+
     def _wind_speed(self) -> float | None:
         """Return the current wind speed of the weather forecast entity, in km/h."""
         if (
@@ -1935,7 +1963,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         heating_power = self._heating_power()
 
         # The heat released now reaches the rooms over the next hours
-        horizon = now_utc + timedelta(hours=FORECAST_HORIZON_HOURS)
+        horizon = now_utc + timedelta(hours=self._forecast_hours)
         upcoming = [
             entry
             for entry in self._weather_forecast
@@ -2295,6 +2323,20 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         return None
 
+    def _complete_daily_summary(self) -> None:
+        """Add the boiler's day to a summary that was just closed: flame losses, reheats, issues."""
+        summary = self.boiler_stats.yesterday
+        if not summary or "flame_losses" in summary:
+            return
+
+        summary["flame_losses"] = self._coordinator.flame_losses_last_day
+        if self.boiler_diagnostics is not None:
+            attributes = self.boiler_diagnostics.attributes
+            for key in ("cylinder_reheats_24h", "cylinder_reheats_without_draw_24h"):
+                if (value := attributes.get(key)) is not None:
+                    summary[key.removesuffix("_24h")] = value
+            summary["issues"] = attributes.get("active_issues") or []
+
     def _update_mould(self) -> None:
         """Feed the mould risk with the temperature and humidity of every room that reports both."""
         rooms: dict[str, tuple[float, float]] = {}
@@ -2316,6 +2358,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         if humidity is not None and (temperature := self.native_current_temperature) is not None:
             rooms[self.entity_id] = (temperature, humidity)
             names[self.entity_id] = self.name if isinstance(self.name, str) else self.entity_id
+
+        outdoor, outdoor_humidity = self._weather_air()
+        self.airing = airing_advice(rooms, outdoor=outdoor, outdoor_humidity=outdoor_humidity)
 
         self.mould.update(
             monotonic(),
@@ -2401,6 +2446,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             heating_mode=coordinator.heating_mode_active,
             hot_water_mode=coordinator.hot_water_active or hot_water,
         )
+        self._complete_daily_summary()
 
         flow_sample = None
         if (
