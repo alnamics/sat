@@ -676,6 +676,8 @@ async def test_a_humid_room_raises_the_mould_risk(
     await hass.async_block_till_done()
 
     for _ in range(13 * 12):
+        # A reading older than six hours counts as a stalled sensor
+        hass.states.async_set("sensor.test_outside_sensor", "0.0", force_update=True)
         climate._update_mould()
         freezer.tick(timedelta(minutes=5))
 
