@@ -154,10 +154,10 @@ def build_service_report(
             for fault in faults[-10:]
         ] or [text["no_faults"]]
 
-    if parameters:
+    if parameters is not None and len(parameters) > 0:
         listed = ", ".join(f"{index}: {value}" for index, value in sorted(parameters.items()))
         lines += ["", f"**{text['parameters']}**", listed]
-    if parameter_changes:
+    if parameter_changes is not None and len(parameter_changes) > 0:
         lines += ["", f"**{text['changes']}**"]
         lines += [
             f"- {change.get('time')}: {change.get('index')} "

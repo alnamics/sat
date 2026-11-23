@@ -246,7 +246,7 @@ class SatAiringSensor(SatClimateEntity, BinarySensorEntity):
 
     @override
     def _update_attrs(self) -> None:
-        advice = self._climate.airing or {}
+        advice = self._climate.airing if self._climate.airing is not None else {}
         self._attr_is_on = bool(advice.get("worth_airing"))
         self._attr_extra_state_attributes = {
             key: value for key, value in advice.items() if key != "worth_airing"
