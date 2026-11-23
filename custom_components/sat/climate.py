@@ -50,6 +50,7 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import EntityPlatformState
 from homeassistant.helpers.event import (
     async_call_later,
@@ -2272,6 +2273,28 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 self._interrupted_rooms,
             )
 
+    def _device_humidity(self, entity_id: str) -> float | None:
+        """Return the humidity a room thermostat reports as a sensor of its own device.
+
+        Z-Wave thermostats such as the Heatit Z-Temp2 give their humidity as a separate sensor
+        entity instead of the climate's current_humidity.
+        """
+        registry = er.async_get(self.hass)
+        if (entry := registry.async_get(entity_id)) is None or entry.device_id is None:
+            return None
+
+        for sibling in er.async_entries_for_device(registry, entry.device_id):
+            if (
+                sibling.domain == sensor.DOMAIN
+                and (sibling.device_class or sibling.original_device_class)
+                == sensor.SensorDeviceClass.HUMIDITY
+                and (state := self.hass.states.get(sibling.entity_id)) is not None
+                and (value := float_value(state.state)) is not None
+            ):
+                return value
+
+        return None
+
     def _update_mould(self) -> None:
         """Feed the mould risk with the temperature and humidity of every room that reports both."""
         rooms: dict[str, tuple[float, float]] = {}
@@ -2282,6 +2305,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 continue
             temperature = float_value(state.attributes.get("current_temperature"))
             humidity = float_value(state.attributes.get("current_humidity"))
+            if humidity is None:
+                humidity = self._device_humidity(entity_id)
             if temperature is None or humidity is None:
                 continue
             rooms[entity_id] = (temperature, humidity)

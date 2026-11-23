@@ -7,6 +7,8 @@ import pytest
 from homeassistant.components.climate import PRESET_AWAY, HVACAction, HVACMode
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
 
@@ -687,4 +689,37 @@ async def test_a_humid_room_raises_the_mould_risk(
     assert issue is not None
     assert issue.translation_placeholders is not None
     assert issue.translation_placeholders["rooms"]
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_mould_risk_reads_the_humidity_sensor_of_the_thermostat(
+    hass: HomeAssistant,
+) -> None:
+    # Z-Wave thermostats report the humidity as a sensor of their device
+    zwave = MockConfigEntry(domain="zwave_js")
+    zwave.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=zwave.entry_id, identifiers={("zwave_js", "node-11")}
+    )
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "climate", "zwave_js", "node-11-climate", device_id=device.id, suggested_object_id="room"
+    )
+    humidity = registry.async_get_or_create(
+        "sensor",
+        "zwave_js",
+        "node-11-humidity",
+        device_id=device.id,
+        suggested_object_id="room_humidity",
+        original_device_class="humidity",
+    )
+    hass.states.async_set(humidity.entity_id, "48.0")
+    hass.states.async_set(ROOM, HVACMode.HEAT, {"temperature": 21.0, "current_temperature": 21.0})
+    entry = await setup_rooms(hass)
+    climate = entry.runtime_data.climate
+
+    climate._update_mould()
+
+    attributes = climate.extra_state_attributes or {}
+    assert attributes["mould_risk"][ROOM]["dew_point"] == pytest.approx(9.6, abs=0.2)
     assert await hass.config_entries.async_unload(entry.entry_id)
