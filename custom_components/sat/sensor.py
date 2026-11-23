@@ -456,7 +456,12 @@ class SatTotalSensor(SatClimateEntity, SensorEntity):
 
     @override
     def _update_attrs(self) -> None:
-        value = self._climate.boiler_stats.totals[self._key]
+        stats = self._climate.boiler_stats
+        if not stats.loaded:
+            self._attr_native_value = None
+            return
+
+        value = stats.totals[self._key]
         self._attr_native_value = int(value) if self._key == "starts" else round(value, 4)
 
 
@@ -511,7 +516,8 @@ class SatGasCostSensor(SatClimateEntity, SensorEntity):
 
     @override
     def _update_attrs(self) -> None:
-        self._attr_native_value = round(self._climate.boiler_stats.totals["gas_cost"], 2)
+        stats = self._climate.boiler_stats
+        self._attr_native_value = round(stats.totals["gas_cost"], 2) if stats.loaded else None
 
 
 class SatHotWaterCoolingSensor(SatClimateEntity, SensorEntity):

@@ -58,6 +58,9 @@ class BoilerStats:
 
     def __init__(self) -> None:
         self.totals: dict[str, float] = dict.fromkeys(TOTALS, 0.0)
+        # Until the saved totals are read, the zeros above are no reading: a total sensor that
+        # showed them would make the statistics count the whole total again as a meter reset
+        self.loaded = False
         self._store: Store[dict[str, Any]] | None = None
         self._last_update: float | None = None
         self._last_save: float | None = None
@@ -73,13 +76,16 @@ class BoilerStats:
             return
 
         self._store = boiler_stats_store(hass, entry_id)
-        if (data := await self._store.async_load()) is None:
-            return
+        try:
+            if (data := await self._store.async_load()) is None:
+                return
 
-        for key in TOTALS:
-            if isinstance(value := data.get(key), int | float):
-                self.totals[key] = float(value)
-        self.signature.load(data.get("signature"))
+            for key in TOTALS:
+                if isinstance(value := data.get(key), int | float):
+                    self.totals[key] = float(value)
+            self.signature.load(data.get("signature"))
+        finally:
+            self.loaded = True
 
     def update(
         self,

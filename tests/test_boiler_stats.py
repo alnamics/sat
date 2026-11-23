@@ -1,6 +1,11 @@
 """Tests for the boiler totals and the gas cost."""
 
-from custom_components.sat.boiler_stats import BoilerStats
+from typing import TYPE_CHECKING
+
+from custom_components.sat.boiler_stats import BoilerStats, boiler_stats_store
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 
 def run(stats: BoilerStats, start: float, seconds: float, **changes: float | bool | None) -> float:
@@ -81,3 +86,26 @@ def test_cylinder_drop_at_heating_start_is_blamed_on_heating() -> None:
     step(42.0, stopped - 300, stopped)
     assert stats.hot_water_drops_after_heating_stop == 1
     assert stats.hot_water_drops_after_heating == 2
+
+
+async def test_the_totals_are_a_reading_only_once_the_saved_ones_are_loaded(
+    hass: HomeAssistant,
+) -> None:
+    await boiler_stats_store(hass, "entry").async_save({"starts": 1500.0, "gas_m3": 120.5})
+    stats = BoilerStats()
+
+    # The zeros before the load would read as a meter reset to the statistics
+    assert not stats.loaded
+
+    await stats.async_initialize(hass, "entry")
+    assert stats.loaded
+    assert stats.totals["starts"] == 1500
+    assert stats.totals["gas_m3"] == 120.5
+
+
+async def test_a_first_start_without_saved_totals_is_loaded_too(hass: HomeAssistant) -> None:
+    stats = BoilerStats()
+
+    await stats.async_initialize(hass, "fresh")
+    assert stats.loaded
+    assert stats.totals["starts"] == 0
