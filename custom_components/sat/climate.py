@@ -2288,10 +2288,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             names[entity_id] = str(state.attributes.get("friendly_name") or entity_id)
 
         humidity = self.current_humidity
-        if (
-            humidity is not None
-            and (temperature := self.native_current_temperature) is not None
-        ):
+        if humidity is not None and (temperature := self.native_current_temperature) is not None:
             rooms[self.entity_id] = (temperature, humidity)
             names[self.entity_id] = self.name if isinstance(self.name, str) else self.entity_id
 
