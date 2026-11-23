@@ -312,6 +312,16 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         return False
 
     @property
+    def heating_mode_active(self) -> bool | None:
+        """Return whether the boiler reports its heating mode, or None if it does not."""
+        return None
+
+    @property
+    def supports_heating_mode_report(self) -> bool:
+        """Return whether the boiler's heating mode flag is read (heating_mode_active)."""
+        return False
+
+    @property
     def heating_hot_water(self) -> bool:
         """Return True while the boiler heats hot water, whether it flags that or not.
 

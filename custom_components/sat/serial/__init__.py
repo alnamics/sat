@@ -22,6 +22,7 @@ from pyotgw.vars import (
     DATA_MASTER_CH_ENABLED,
     DATA_REL_MOD_LEVEL,
     DATA_RETURN_WATER_TEMP,
+    DATA_SLAVE_CH_ACTIVE,
     DATA_SLAVE_CH_MIN_SETP,
     DATA_SLAVE_DHW_ACTIVE,
     DATA_SLAVE_DHW_MAX_SETP,
@@ -231,6 +232,18 @@ class SatSerialCoordinator(SatDataUpdateCoordinator):
     @property
     def hot_water_active(self) -> bool:
         return bool(self.get(DATA_SLAVE_DHW_ACTIVE) or False)
+
+    @override
+    @property
+    def supports_heating_mode_report(self) -> bool:
+        return True
+
+    @override
+    @property
+    def heating_mode_active(self) -> bool | None:
+        if (value := self.get(DATA_SLAVE_CH_ACTIVE)) is None:
+            return None
+        return bool(value)
 
     @override
     @property

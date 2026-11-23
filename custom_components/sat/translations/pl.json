@@ -855,6 +855,24 @@
       },
       "heat_loss": {
         "name": "Straty ciepła domu"
+      },
+      "total_hot_water_starts": {
+        "name": "Starty palnika na c.w.u."
+      },
+      "total_hot_water_burn_hours": {
+        "name": "Godziny palnika na c.w.u."
+      },
+      "total_heating_mode_starts": {
+        "name": "Włączenia trybu c.o."
+      },
+      "total_heating_mode_hours": {
+        "name": "Godziny w trybie c.o."
+      },
+      "total_hot_water_mode_starts": {
+        "name": "Włączenia trybu c.w.u."
+      },
+      "total_hot_water_mode_hours": {
+        "name": "Godziny w trybie c.w.u."
       }
     },
     "button": {
@@ -933,6 +951,10 @@
     "gas_use_increased": {
       "title": "{title}: wzrosło zużycie gazu",
       "description": "{title} zużył w zeszłym tygodniu o {percent} % więcej gazu na stopniodzień niż w poprzednich tygodniach. Sprawdź, czy nie jest otwarte okno, zamknięta pętla albo czy kocioł działa prawidłowo."
+    },
+    "mould_risk": {
+      "title": "{title}: ryzyko pleśni w {rooms}",
+      "description": "W ostatniej dobie powietrze przy najzimniejszych powierzchniach w {rooms} (narożniki ścian zewnętrznych, ościeża okien) miało średnio około {humidity} % wilgotności względnej. Pleśń rośnie od około 80 %. Wilgotność w pomieszczeniach jest wysoka jak na temperaturę na zewnątrz: wietrz częściej lub dłużej, używaj wentylatorów w łazience i kuchni, susz pranie poza mieszkaniem i odsuń meble kilka centymetrów od ścian zewnętrznych. Komunikat zniknie sam, gdy średnia dobowa spadnie poniżej 75 %."
     }
   }
 }

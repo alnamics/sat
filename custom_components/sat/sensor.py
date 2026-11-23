@@ -80,7 +80,17 @@ async def async_setup_entry(
     _async_add_entities(
         [
             SatTotalSensor(coordinator, _config_entry, climate, key)
-            for key in ("starts", "burn_hours", "heating_kwh", "hot_water_kwh", "degree_days")
+            for key in (
+                "starts",
+                "burn_hours",
+                "heating_kwh",
+                "hot_water_kwh",
+                "degree_days",
+                "hot_water_starts",
+                "hot_water_burn_hours",
+                "hot_water_mode_starts",
+                "hot_water_mode_hours",
+            )
         ]
         + [
             SatHotWaterCoolingSensor(coordinator, _config_entry, climate),
@@ -88,6 +98,13 @@ async def async_setup_entry(
             SatEstimatedWaterFlowSensor(coordinator, _config_entry, climate),
         ]
     )
+    if coordinator.supports_heating_mode_report:
+        _async_add_entities(
+            [
+                SatTotalSensor(coordinator, _config_entry, climate, key)
+                for key in ("heating_mode_starts", "heating_mode_hours")
+            ]
+        )
     if climate.heat_budget is not None:
         _async_add_entities(
             [
@@ -425,6 +442,12 @@ class SatHeatLossSensor(SatClimateEntity, SensorEntity):
 TOTAL_SENSORS: dict[str, tuple[SensorDeviceClass | None, str | None, int]] = {
     "starts": (None, None, 0),
     "burn_hours": (SensorDeviceClass.DURATION, UnitOfTime.HOURS, 2),
+    "hot_water_starts": (None, None, 0),
+    "hot_water_burn_hours": (SensorDeviceClass.DURATION, UnitOfTime.HOURS, 2),
+    "heating_mode_starts": (None, None, 0),
+    "heating_mode_hours": (SensorDeviceClass.DURATION, UnitOfTime.HOURS, 2),
+    "hot_water_mode_starts": (None, None, 0),
+    "hot_water_mode_hours": (SensorDeviceClass.DURATION, UnitOfTime.HOURS, 2),
     "heating_kwh": (SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 2),
     "hot_water_kwh": (SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, 2),
     "gas_m3": (SensorDeviceClass.GAS, UnitOfVolume.CUBIC_METERS, 3),
@@ -462,7 +485,7 @@ class SatTotalSensor(SatClimateEntity, SensorEntity):
             return
 
         value = stats.totals[self._key]
-        self._attr_native_value = int(value) if self._key == "starts" else round(value, 4)
+        self._attr_native_value = int(value) if self._key.endswith("starts") else round(value, 4)
 
 
 class SatEfficiencySensor(SatClimateEntity, SensorEntity):

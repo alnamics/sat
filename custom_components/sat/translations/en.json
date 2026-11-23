@@ -855,6 +855,24 @@
       },
       "heat_loss": {
         "name": "Heat loss of the house"
+      },
+      "total_hot_water_starts": {
+        "name": "Burner starts for hot water"
+      },
+      "total_hot_water_burn_hours": {
+        "name": "Burner hours for hot water"
+      },
+      "total_heating_mode_starts": {
+        "name": "Heating mode starts"
+      },
+      "total_heating_mode_hours": {
+        "name": "Heating mode hours"
+      },
+      "total_hot_water_mode_starts": {
+        "name": "Hot water mode starts"
+      },
+      "total_hot_water_mode_hours": {
+        "name": "Hot water mode hours"
       }
     },
     "button": {
@@ -933,6 +951,10 @@
     "gas_use_increased": {
       "title": "{title}: gas use went up",
       "description": "{title} used {percent} % more gas per degree day last week than in the weeks before. Look for an open window, a closed loop or a boiler problem."
+    },
+    "mould_risk": {
+      "title": "{title}: mould risk in {rooms}",
+      "description": "Over the last day the air at the coldest surfaces of {rooms} (outside wall corners, window reveals) was at about {humidity} % relative humidity on average. Mould grows from about 80 %. The room humidity is high for the outside temperature: air the rooms more often or longer, use the bathroom and kitchen fans, dry laundry outside the flat, and keep furniture a few centimetres off outside walls. The issue clears itself once the daily mean is below 75 %."
     }
   }
 }

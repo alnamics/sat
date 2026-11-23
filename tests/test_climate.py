@@ -7,6 +7,7 @@ import pytest
 from homeassistant.components.climate import PRESET_AWAY, HVACAction, HVACMode
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.components.template import DOMAIN as TEMPLATE_DOMAIN
+from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.sat.config_flow import SatFlowHandler
@@ -658,4 +659,30 @@ async def test_frost_protection_heats_while_off(hass: HomeAssistant) -> None:
     await climate.async_control_heating_loop()
     assert climate.hvac_action == HVACAction.OFF
     assert not coordinator.device_active
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_humid_room_raises_the_mould_risk(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    hass.states.async_set(
+        ROOM,
+        HVACMode.HEAT,
+        {"temperature": 21.0, "current_temperature": 21.0, "current_humidity": 65.0},
+    )
+    entry = await setup_rooms(hass)
+    climate = entry.runtime_data.climate
+    hass.states.async_set("sensor.test_outside_sensor", "0.0")
+    await hass.async_block_till_done()
+
+    for _ in range(13 * 12):
+        climate._update_mould()
+        freezer.tick(timedelta(minutes=5))
+
+    attributes = climate.extra_state_attributes or {}
+    assert attributes["mould_risk"][ROOM]["surface_humidity_24h"] >= 80
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, f"mould_risk_{entry.entry_id}")
+    assert issue is not None
+    assert issue.translation_placeholders is not None
+    assert issue.translation_placeholders["rooms"]
     assert await hass.config_entries.async_unload(entry.entry_id)

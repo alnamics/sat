@@ -487,6 +487,17 @@ class BoilerDiagnostics:
             if spread < LOW_FLOW_CLEARED_SPREAD:
                 self._set("low_water_flow", active=False)
 
+    def set_mould_risk(self, rooms: list[str], humidity: float | None) -> None:
+        """Warn while the coldest surface of a room stays humid enough for mould."""
+        self._set(
+            "mould_risk",
+            active=bool(rooms),
+            placeholders={
+                "rooms": ", ".join(rooms),
+                "humidity": "" if humidity is None else f"{humidity:.0f}",
+            },
+        )
+
     def _set(self, key: str, *, active: bool, placeholders: dict[str, str] | None = None) -> None:
         previous = self._active.get(key)
         if previous == active:

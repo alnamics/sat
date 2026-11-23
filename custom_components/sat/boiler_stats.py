@@ -41,6 +41,15 @@ EVENT_WINDOW_SECONDS = SECONDS_PER_DAY
 TOTALS = (
     "starts",
     "burn_hours",
+    # Burns that heated hot water, and their hours (OpenTherm IDs 119 and 123)
+    "hot_water_starts",
+    "hot_water_burn_hours",
+    # How often and how long the boiler was in heating or hot water mode; with the pump running
+    # in either, they stand in for its pump counters (IDs 117, 118, 121 and 122)
+    "heating_mode_starts",
+    "heating_mode_hours",
+    "hot_water_mode_starts",
+    "hot_water_mode_hours",
     "heating_kwh",
     "hot_water_kwh",
     "gas_m3",
@@ -65,6 +74,9 @@ class BoilerStats:
         self._last_update: float | None = None
         self._last_save: float | None = None
         self._flame: bool | None = None
+        self._burn_counted_hot_water = False
+        self._heating_mode: bool | None = None
+        self._hot_water_mode: bool | None = None
 
         self._reference: float | None = None
         self._events: deque[tuple[float, str | None]] = deque()
@@ -102,6 +114,8 @@ class BoilerStats:
         heating_started_at: float | None = None,
         day: str | None = None,
         gas_price: float = 0.0,
+        heating_mode: bool | None = None,
+        hot_water_mode: bool | None = None,
     ) -> None:
         dt = (
             0.0 if self._last_update is None else min(now - self._last_update, MAXIMUM_STEP_SECONDS)
@@ -110,7 +124,29 @@ class BoilerStats:
 
         if flame and self._flame is False:
             self.totals["starts"] += 1
+            self._burn_counted_hot_water = False
         self._flame = flame
+
+        # A reheat the boiler does not flag is told a few seconds into the burn, so a burn counts
+        # as a hot water start once it heats hot water at all
+        if flame and hot_water and not self._burn_counted_hot_water:
+            self.totals["hot_water_starts"] += 1
+            self._burn_counted_hot_water = True
+        if flame and hot_water and dt > 0:
+            self.totals["hot_water_burn_hours"] += dt / SECONDS_PER_HOUR
+
+        for key, mode, last in (
+            ("heating_mode", heating_mode, self._heating_mode),
+            ("hot_water_mode", hot_water_mode, self._hot_water_mode),
+        ):
+            if mode is None:
+                continue
+            if mode and last is False:
+                self.totals[f"{key}_starts"] += 1
+            if mode and last and dt > 0:
+                self.totals[f"{key}_hours"] += dt / SECONDS_PER_HOUR
+        self._heating_mode = heating_mode
+        self._hot_water_mode = hot_water_mode
 
         heating_gas = 0.0
         if flame and dt > 0:

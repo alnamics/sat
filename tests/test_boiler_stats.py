@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from custom_components.sat.boiler_stats import BoilerStats, boiler_stats_store
 
 if TYPE_CHECKING:
@@ -109,3 +111,36 @@ async def test_a_first_start_without_saved_totals_is_loaded_too(hass: HomeAssist
     await stats.async_initialize(hass, "fresh")
     assert stats.loaded
     assert stats.totals["starts"] == 0
+
+
+def test_hot_water_burns_and_the_boiler_modes_are_counted() -> None:
+    stats = BoilerStats()
+
+    def step(now: float, *, flame: bool, hot_water: bool, heating: bool) -> None:
+        stats.update(
+            now=now,
+            flame=flame,
+            hot_water=hot_water,
+            heat_kw=5.0,
+            gas_m3_per_hour=0.5,
+            outdoor=5.0,
+            heating_mode=heating,
+            hot_water_mode=hot_water,
+        )
+
+    step(0, flame=False, hot_water=False, heating=False)
+    # A heating burn of an hour, then a hot water burn the boiler flags a few seconds late
+    for minute in range(1, 61):
+        step(minute * 60, flame=True, hot_water=False, heating=True)
+    step(3660, flame=False, hot_water=False, heating=False)
+    step(3720, flame=True, hot_water=False, heating=False)
+    for second in range(3740, 4340, 60):
+        step(second, flame=True, hot_water=True, heating=False)
+    step(4400, flame=False, hot_water=False, heating=False)
+
+    assert stats.totals["starts"] == 2
+    assert stats.totals["hot_water_starts"] == 1
+    assert 0.15 < stats.totals["hot_water_burn_hours"] < 0.17
+    assert stats.totals["heating_mode_starts"] == 1
+    assert stats.totals["heating_mode_hours"] == pytest.approx(59 / 60)
+    assert stats.totals["hot_water_mode_starts"] == 1

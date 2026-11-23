@@ -154,6 +154,7 @@ from .loop_measurement import (
 from .loop_monitor import LoopMonitor, RoomReading, estimate_water_flow
 from .manufacturers.geminox import Geminox
 from .modulation_scale import ModulationScale
+from .mould import MouldRisk
 from .presence import Occupancy, PresenceTracker, is_home
 from .relative_modulation import RelativeModulation, RelativeModulationState
 from .summer_simmer import SummerSimmer
@@ -253,6 +254,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     _unrecorded_attributes = frozenset(
         {
             "boiler_flame_timing",
+            "mould_risk",
             "boiler_temperature_cold",
             "boiler_temperature_derivative",
             "current_kd",
@@ -457,6 +459,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         # Running totals, loop watching and boiler diagnostics
         self.boiler_stats = BoilerStats()
+        self.mould = MouldRisk()
         self.boiler_diagnostics: BoilerDiagnostics | None = None
         monitored = [*self._radiators, *self.areas.items()]
         self.loop_monitor = LoopMonitor(monitored) if monitored else None
@@ -575,6 +578,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self.async_on_remove(async_at_started(self.hass, self._async_started))
 
         await self.boiler_stats.async_initialize(self.hass, self._config_entry.entry_id)
+        await self.mould.async_initialize(
+            self.hass, self._config_entry.entry_id, dt_util.utcnow().timestamp()
+        )
         self.boiler_diagnostics = BoilerDiagnostics(
             self.hass,
             self._config_entry.entry_id,
@@ -890,6 +896,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
     async def async_save_learning(self) -> None:
         """Write what was learned and counted, so a stop or a reload loses none of it."""
         await self._async_run_guarded("totals save", self.boiler_stats.async_save)
+        await self._async_run_guarded(
+            "mould save", lambda: self.mould.async_save(dt_util.utcnow().timestamp())
+        )
         if self.boiler_diagnostics is not None:
             await self._async_run_guarded("diagnostics save", self.boiler_diagnostics.async_save)
         if self.heat_budget is not None:
@@ -993,6 +1002,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 else {}
             ),
             **(self.boiler_diagnostics.attributes if self.boiler_diagnostics is not None else {}),
+            **({"mould_risk": mould} if (mould := self.mould.attributes) else {}),
             **self._extras_attributes(),
         }
 
@@ -1647,6 +1657,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             # Totals and diagnostics also run while SAT is off, so summer hot water counts too
             self._run_guarded("monitors", self._update_monitors)
+            self._run_guarded("mould risk", self._update_mould)
             self._run_guarded("warm weather", self._update_warm_weather)
             await self._async_run_guarded("hot water", self._async_control_hot_water)
             await self._async_run_guarded(
@@ -2261,6 +2272,42 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 self._interrupted_rooms,
             )
 
+    def _update_mould(self) -> None:
+        """Feed the mould risk with the temperature and humidity of every room that reports both."""
+        rooms: dict[str, tuple[float, float]] = {}
+        names: dict[str, str] = {}
+        for entity_id in self.areas.items():
+            state = self.hass.states.get(entity_id)
+            if state is None:
+                continue
+            temperature = float_value(state.attributes.get("current_temperature"))
+            humidity = float_value(state.attributes.get("current_humidity"))
+            if temperature is None or humidity is None:
+                continue
+            rooms[entity_id] = (temperature, humidity)
+            names[entity_id] = str(state.attributes.get("friendly_name") or entity_id)
+
+        humidity = self.current_humidity
+        if (
+            self.entity_id is not None
+            and humidity is not None
+            and (temperature := self.native_current_temperature) is not None
+        ):
+            rooms[self.entity_id] = (temperature, humidity)
+            names[self.entity_id] = self.name if isinstance(self.name, str) else self.entity_id
+
+        self.mould.update(
+            monotonic(),
+            dt_util.utcnow().timestamp(),
+            rooms=rooms,
+            outdoor=self.current_outside_temperature,
+        )
+        if self.boiler_diagnostics is not None:
+            self.boiler_diagnostics.set_mould_risk(
+                [names.get(room, room) for room in self.mould.rooms_at_risk],
+                self.mould.highest_mean,
+            )
+
     def _update_monitors(self) -> None:
         """Feed the running totals, the loop monitor and the boiler diagnostics."""
         coordinator = self._coordinator
@@ -2330,6 +2377,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             heating_started_at=self._heating_started_at,
             day=today.isoformat(),
             gas_price=self._gas_price,
+            heating_mode=coordinator.heating_mode_active,
+            hot_water_mode=coordinator.hot_water_active or hot_water,
         )
 
         flow_sample = None
