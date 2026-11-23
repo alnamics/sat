@@ -38,6 +38,7 @@ from .const import (
     SETUP_FAILED_ISSUE_DELAY,
 )
 from .coordinator_factory import SatDataUpdateCoordinatorFactory
+from .entity_ids import async_keep_english_entity_ids
 from .flame import flame_store
 from .heat_budget import heat_budget_store
 from .loop_measurement import loop_measurement_store
@@ -131,6 +132,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SatConfigEntry) -> bool:
 
     # Forward entry setup for used platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # A non-English system names new entities in its own language
+    await async_keep_english_entity_ids(hass, entry)
 
     return True
 
