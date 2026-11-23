@@ -364,13 +364,15 @@
           "presence_entity_ids": "Obecność",
           "proximity_entity_id": "Odległość od domu",
           "return_distance": "Odległość powrotu",
-          "window_detection": "Wykrywaj otwarte okna po temperaturze"
+          "window_detection": "Wykrywaj otwarte okna po temperaturze",
+          "outside_humidity_entity_id": "Wilgotność na zewnątrz"
         },
         "data_description": {
           "presence_entity_ids": "Osoby, urządzenia śledzące, strefy lub grupy. Poza domem po 30 minutach nieobecności wszystkich.",
           "proximity_entity_id": "Czujnik odległości (integracja Proximity), żeby wolna podłoga zaczęła grzać wcześniej.",
           "return_distance": "Jak blisko ktoś musi być, żeby grzanie wróciło; 0 czeka, aż będzie w domu.",
-          "window_detection": "Bez czujników otwarcia: spadek o 0,8 °C w 10 minut albo o 0,3 °C w 30 minut wstrzymuje grzanie, aż pokój przestanie stygnąć (najwyżej 2 godziny). Wymaga czujnika z dokładnością do 0,1 °C."
+          "window_detection": "Bez czujników otwarcia: spadek o 0,8 °C w 10 minut albo o 0,3 °C w 30 minut wstrzymuje grzanie, aż pokój przestanie stygnąć (najwyżej 2 godziny). Wymaga czujnika z dokładnością do 0,1 °C.",
+          "outside_humidity_entity_id": "Czujnik wilgotności na zewnątrz (Airly, stacja pogodowa) dla czujnika Warto wietrzyć, razem z temperaturą zewnętrzną. Bez niego obie wartości bierze z encji prognozy pogody."
         }
       }
     }

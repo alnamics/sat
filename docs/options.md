@@ -101,6 +101,7 @@ This section is collapsed by default.
 - **Presence**: who counts as being home. After 30 minutes with nobody home SAT switches to Away.
 - **Distance to home** and **Return distance**: an optional Proximity sensor and how close someone must be for the heating to come back.
 - **Detect open windows from the temperature**: default off.
+- ⓜ **Outdoor humidity**: a humidity sensor outside (Airly, a weather station) for the *Worth airing* sensor, with SAT's outside temperature. Without it the weather forecast entity gives both.
 
 ## Boiler and service
 

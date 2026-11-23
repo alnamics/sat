@@ -100,6 +100,7 @@ from .const import (
     CONF_MAXIMUM_CONSUMPTION,
     CONF_MAXIMUM_RELATIVE_MODULATION,
     CONF_MINIMUM_CONSUMPTION,
+    CONF_OUTSIDE_HUMIDITY_ENTITY_ID,
     CONF_OUTSIDE_SENSOR_ENTITY_ID,
     CONF_OVERSHOOT_PROTECTION,
     CONF_PRESENCE_ENTITY_IDS,
@@ -450,6 +451,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._budget_overloaded = False
 
         self._weather_forecast_entity_id = config_options.get(CONF_WEATHER_FORECAST_ENTITY_ID)
+        self._outside_humidity_entity_id = config_options.get(CONF_OUTSIDE_HUMIDITY_ENTITY_ID)
         self._weather_forecast: list[tuple[datetime, float | None, float | None]] = []
         # A screed floor passes the heat on over hours, so the forecast counts that far ahead
         self._forecast_hours = float(
@@ -1929,7 +1931,16 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         return VolumeConverter.convert(value, unit, UnitOfVolume.LITERS)
 
     def _weather_air(self) -> tuple[float | None, float | None]:
-        """Return the temperature (°C) and relative humidity outside, from the weather entity."""
+        """Return the temperature (°C) and relative humidity outside.
+
+        An outdoor humidity sensor goes with the outside temperature SAT controls with; without
+        one the weather entity gives both.
+        """
+        if self._outside_humidity_entity_id:
+            state = self.hass.states.get(self._outside_humidity_entity_id)
+            humidity = float_value(state.state) if state is not None else None
+            return self.current_outside_temperature, humidity
+
         if (
             not self._weather_forecast_entity_id
             or (state := self.hass.states.get(self._weather_forecast_entity_id)) is None

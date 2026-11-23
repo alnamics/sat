@@ -85,6 +85,7 @@ from .const import (
     CONF_MODE,
     CONF_MQTT_TOPIC,
     CONF_NAME,
+    CONF_OUTSIDE_HUMIDITY_ENTITY_ID,
     CONF_OUTSIDE_SENSOR_ENTITY_ID,
     CONF_OVERSHOOT_PROTECTION,
     CONF_PID_CONTROLLER_VERSION,
@@ -1361,7 +1362,9 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
     ) -> ConfigFlowResult:
         if _user_input is not None:
             return await self._update_with_cleared(
-                _user_input, (CONF_PROXIMITY_ENTITY_ID,), (CONF_PRESENCE_ENTITY_IDS,)
+                _user_input,
+                (CONF_PROXIMITY_ENTITY_ID, CONF_OUTSIDE_HUMIDITY_ENTITY_ID),
+                (CONF_PRESENCE_ENTITY_IDS,),
             )
 
         options = await self.get_options()
@@ -1386,6 +1389,9 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
                 0, 200, 1, "km"
             ),
             vol.Required(CONF_WINDOW_DETECTION, default=options[CONF_WINDOW_DETECTION]): bool,
+            self._optional(CONF_OUTSIDE_HUMIDITY_ENTITY_ID, options): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="humidity")
+            ),
         }
         return self.async_show_form(step_id="presence", data_schema=vol.Schema(schema))
 

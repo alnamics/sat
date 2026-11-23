@@ -723,3 +723,21 @@ async def test_the_mould_risk_reads_the_humidity_sensor_of_the_thermostat(
     attributes = climate.extra_state_attributes or {}
     assert attributes["mould_risk"][ROOM]["dew_point"] == pytest.approx(9.6, abs=0.2)
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_an_outdoor_humidity_sensor_feeds_the_airing_advice(hass: HomeAssistant) -> None:
+    hass.states.async_set(
+        ROOM,
+        HVACMode.HEAT,
+        {"temperature": 21.0, "current_temperature": 21.0, "current_humidity": 65.0},
+    )
+    hass.states.async_set("sensor.airly_humidity", "85.0")
+    entry = await setup_rooms(hass, options={"outside_humidity_entity_id": "sensor.airly_humidity"})
+    climate = entry.runtime_data.climate
+
+    climate._update_mould()
+
+    assert climate.airing is not None
+    assert climate.airing["worth_airing"]
+    assert hass.states.get("binary_sensor.mock_title_worth_airing") is not None
+    assert await hass.config_entries.async_unload(entry.entry_id)

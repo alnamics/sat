@@ -102,6 +102,7 @@ Sekcja jest domyślnie zwinięta.
 - **Odległość od domu** i **Odległość powrotu** (Distance to home / Return distance): opcjonalny czujnik z integracji Proximity i to, jak blisko ktoś musi być, żeby grzanie wróciło.
 - **Wykrywaj otwarte okna po temperaturze** (Detect open windows from the temperature): domyślnie wyłączone.
 
+- ⓜ **Wilgotność na zewnątrz** (Outdoor humidity): czujnik wilgotności na zewnątrz (Airly, stacja pogodowa) dla czujnika *Warto wietrzyć*, razem z temperaturą zewnętrzną SAT. Bez niego obie wartości bierze z encji prognozy pogody.
 ## Kocioł i serwis
 
 ⓜ [Szczegóły](mpx.md#ustawienia-kotła) i [Monitoring](mpx.md#monitoring).

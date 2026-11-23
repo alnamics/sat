@@ -364,13 +364,15 @@
           "presence_entity_ids": "Presence",
           "proximity_entity_id": "Distance to home",
           "return_distance": "Return distance",
-          "window_detection": "Detect open windows from the temperature"
+          "window_detection": "Detect open windows from the temperature",
+          "outside_humidity_entity_id": "Outdoor humidity"
         },
         "data_description": {
           "presence_entity_ids": "People, device trackers, zones or groups. Away after 30 minutes with nobody home.",
           "proximity_entity_id": "A distance sensor (Proximity integration), so a slow floor starts warming early.",
           "return_distance": "How close someone must be for the heating to come back; 0 waits until they are home.",
-          "window_detection": "Without contact sensors: a drop of 0.8 °C in 10 minutes or 0.3 °C in 30 minutes pauses heating until the room stops cooling (2 hours at most). Needs a sensor with tenths of a degree."
+          "window_detection": "Without contact sensors: a drop of 0.8 °C in 10 minutes or 0.3 °C in 30 minutes pauses heating until the room stops cooling (2 hours at most). Needs a sensor with tenths of a degree.",
+          "outside_humidity_entity_id": "A humidity sensor outside (Airly, a weather station) for the Worth airing sensor, together with the outside temperature. Without it the weather forecast entity gives both."
         }
       }
     }

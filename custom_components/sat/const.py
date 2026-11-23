@@ -82,6 +82,7 @@ CONF_SETBACK_TEMPERATURE = "setback_temperature"
 CONF_WARM_WEATHER_SHUTDOWN = "warm_weather_shutdown_temperature"
 CONF_FROST_PROTECTION_TEMPERATURE = "frost_protection_temperature"
 CONF_HEAT_BUDGET_FORECAST_HOURS = "heat_budget_forecast_hours"
+CONF_OUTSIDE_HUMIDITY_ENTITY_ID = "outside_humidity_entity_id"
 CONF_HOT_WATER_SCHEDULE_ENTITY_ID = "hot_water_schedule_entity_id"
 CONF_WATER_METER_ENTITY_ID = "water_meter_entity_id"
 CONF_HOT_WATER_COMFORT_TEMPERATURE = "hot_water_comfort_temperature"
@@ -189,6 +190,8 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     # Heat loss of the house in W/K; 0 learns it
     CONF_HEAT_LOSS_COEFFICIENT: 0,
     CONF_WEATHER_FORECAST_ENTITY_ID: None,
+    # An outdoor humidity sensor (Airly, a weather station) for the airing advice
+    CONF_OUTSIDE_HUMIDITY_ENTITY_ID: None,
     # How far ahead the forecast outdoor temperature counts; slow floors want more
     CONF_HEAT_BUDGET_FORECAST_HOURS: 3,
     CONF_COMFORT_SCHEDULE_ENTITY_ID: None,

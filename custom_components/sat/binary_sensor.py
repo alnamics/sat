@@ -19,6 +19,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.start import async_at_start
 
 from .const import (
+    CONF_OUTSIDE_HUMIDITY_ENTITY_ID,
     CONF_WEATHER_FORECAST_ENTITY_ID,
     CONF_WINDOW_SENSORS,
     MINIMUM_SETPOINT,
@@ -69,7 +70,9 @@ async def async_setup_entry(
     if isinstance(coordinator, SatOpenThermMqttCoordinator):
         _async_add_entities([SatBoilerFaultSensor(coordinator, _config_entry)])
 
-    if _config_entry.options.get(CONF_WEATHER_FORECAST_ENTITY_ID):
+    if _config_entry.options.get(CONF_WEATHER_FORECAST_ENTITY_ID) or _config_entry.options.get(
+        CONF_OUTSIDE_HUMIDITY_ENTITY_ID
+    ):
         _async_add_entities([SatAiringSensor(coordinator, _config_entry, climate)])
 
     if len(_config_entry.options.get(CONF_WINDOW_SENSORS, [])) > 0:
