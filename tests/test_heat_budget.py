@@ -550,3 +550,47 @@ def test_the_integral_waits_while_the_house_recovers_from_a_raised_target() -> N
         budget.update(inputs(minute * 60.0, indoor=21.0, target=22.0))
 
     assert budget.attributes["heat_need_kw"] == pytest.approx(first, abs=0.01)
+
+
+def test_an_aired_hour_and_the_next_are_left_out_of_the_learning() -> None:
+    budget = HeatBudget()
+
+    def hour(start: float, *, aired: bool) -> float:
+        now = start
+        for minute in range(60):
+            indoor = 21.5 if aired and 10 <= minute < 20 else 22.0
+            budget.update(inputs(now, indoor=indoor))
+            now += 60
+        return now
+
+    # An hour is filed one step after it ends, so the counts trail the loop by an hour
+    now = hour(0.0, aired=False)
+    now = hour(now, aired=False)
+    now = hour(now, aired=True)
+    before = len(budget._hours)
+    now = hour(now, aired=False)
+    now = hour(now, aired=False)
+    assert len(budget._hours) == before
+    hour(now, aired=False)
+    assert len(budget._hours) == before + 1
+
+
+async def test_a_model_saved_before_the_airing_fix_learns_capacity_and_wind_anew() -> None:
+    saved = {
+        "heat_balance": {"theta": [0.046, 1.0], "p": [[0.01, 0.0], [0.0, 0.2]], "updates": 50},
+        "wind": {"theta": [0.018], "p": [[1e-4]], "updates": 60, "mean": 12.0, "square": 160.0},
+        "hours": [[1.0, 20.0, 0.0, 3600.0, 22.0, 22.0, datetime.now(UTC).timestamp()]],
+    }
+
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+    budget = HeatBudget()
+    with patch("custom_components.sat.heat_budget.heat_budget_store", return_value=FakeStore()):
+        await budget.async_initialize(MagicMock(), "entry")
+
+    assert budget.heat_loss == pytest.approx(0.046)
+    assert budget.heat_capacity == pytest.approx(4.0)
+    assert budget.wind_sensitivity == 0.0
+    assert len(budget._hours) == 0

@@ -2025,6 +2025,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             next_comfort_change=next_change,
             setback=self._setback_temperature,
             heating_allowed=self._valves_open is not False,
+            window_open=self._window_detected or self.preset_mode == PRESET_ACTIVITY,
         )
 
     def _burner_share(self) -> float | None:

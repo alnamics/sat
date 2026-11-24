@@ -39,6 +39,13 @@ SECONDS_PER_HOUR = 3600.0
 # starts at a flat's value and is learned alongside H from the days the room temperature
 # changed (a new target, a setback); it is never less certain than at the start
 BUILDING_CAPACITY_KWH_PER_K = 4.0
+# A room falling this fast is being aired: that hour and the next one teach nothing about the
+# house, as the heat that went out of the window looks like a bigger loss, wind or a light house
+AIRING_DROP_K = 0.3
+AIRING_DROP_SECONDS = 1800.0
+AIRING_SETTLE_SECONDS = 3600.0
+# Version of the saved model; 2 drops the wind and capacity learned from aired hours before it
+MODEL_VERSION = 2
 BUILDING_CAPACITY_BOUNDS = (1.0, 20.0)
 # Learning: one record per hour, a balance over the last day, about four days of memory
 LEARNING_WINDOW_HOURS = 24
@@ -68,7 +75,8 @@ LEARNING_MINIMUM_SUN_HOURS = 1.0
 SOLAR_GAIN_BOUNDS = (0.0, 3.0)
 # Wind: the heat loss rises by this share per km/h above the usual wind. It is learned from the
 # dark hours on top of H and used only once the wind has varied and the effect is clear
-WIND_SENSITIVITY_BOUNDS = (0.0, 0.02)
+# At most 8 % more loss per 10 km/h: more than that is airing or drying laundry taken for wind
+WIND_SENSITIVITY_BOUNDS = (0.0, 0.008)
 WIND_MEAN_HOURS = 96.0
 WIND_MINIMUM_UPDATES = 48
 WIND_MINIMUM_SPREAD = 4.0
@@ -193,6 +201,8 @@ class HeatBudgetInputs:
     setback: float = 0.0
     # False while no loop can take heat (all valves closed); nothing is owed then
     heating_allowed: bool = True
+    # A window is open (contact sensor or detected): the hour teaches nothing about the house
+    window_open: bool = False
 
 
 @dataclass(slots=True)
@@ -336,6 +346,10 @@ class HeatBudget:
         # Wall time the running hour began, and how far a restored hour already was
         self._hour_started_wall: float | None = None
         self._restored_hour_seconds: float | None = None
+        # Recent room temperatures, to tell an aired room, and until when the hours are disturbed
+        self._recent_indoor: deque[tuple[float, float]] = deque()
+        self._disturbed_until: float | None = None
+        self._hour_disturbed = False
         self._last_partial_save: float | None = None
 
         self._preheat = _RecursiveLeastSquares(
@@ -380,6 +394,12 @@ class HeatBudget:
             return
 
         self._load_learners(data)
+        model = data.get("model", 1)
+        if not isinstance(model, int) or model < MODEL_VERSION:
+            # Aired and laundry-drying hours taught a wind effect and a light house; the heat loss
+            # stays, the capacity and the wind start over with a fresh day of hours
+            self._reset_disturbed_learning()
+            data = {**data, "hours": [], "current": None}
         self._preheat.load(data.get("preheat", {}))
         self._integral = float(data.get("integral", 0.0))
         self._demand = float(data.get("demand", self._demand))
@@ -410,6 +430,15 @@ class HeatBudget:
             self._hour_started_wall = float(started)
             self._restored_hour_seconds = now - started
         _LOGGER.debug("Loaded heat budget: H=%.3f kW/K.", self.heat_loss)
+
+    def _reset_disturbed_learning(self) -> None:
+        self._learner.theta[1] = BUILDING_CAPACITY_KWH_PER_K
+        self._learner.p[0][1] = self._learner.p[1][0] = 0.0
+        self._learner.p[1][1] = 1.0
+        mean, square = self._wind_mean, self._wind_square
+        self._wind_learner = _RecursiveLeastSquares([0.0], [1e-4], LEARNING_FORGETTING)
+        self._wind_mean, self._wind_square = mean, square
+        _LOGGER.info("Heat budget: the capacity and the wind effect are learned anew.")
 
     def _load_learners(self, data: dict[str, Any]) -> None:
         balance = data.get("heat_balance")
@@ -442,6 +471,7 @@ class HeatBudget:
 
     def _data_to_save(self) -> dict[str, Any]:
         return {
+            "model": MODEL_VERSION,
             "heat_balance": self._learner.to_dict(),
             "solar": self._solar_learner.to_dict(),
             "wind": {
@@ -830,6 +860,8 @@ class HeatBudget:
             self._last_partial_save = now
             return
 
+        self._track_airing(now, inputs)
+
         if dt <= MAXIMUM_STEP_SECONDS and inputs.indoor is not None and inputs.outdoor is not None:
             hours = dt / SECONDS_PER_HOUR
             self._hour.heat_kwh += delivered
@@ -858,6 +890,7 @@ class HeatBudget:
         self._hour_started = now
         self._hour_started_wall = wall
         self._last_partial_save = now
+        disturbed, self._hour_disturbed = self._hour_disturbed, self._disturbed(now)
 
         # Drop the hours that fell out of the day
         while (
@@ -866,6 +899,12 @@ class HeatBudget:
             and wall - self._hours[0].wall_end > LEARNING_WINDOW_SPAN_HOURS * SECONDS_PER_HOUR
         ):
             self._hours.popleft()
+
+        if disturbed:
+            # An aired hour is left out; the warming of the hours around it stays their own
+            _LOGGER.debug("Heat budget: an aired hour is left out of the learning.")
+            self._save()
+            return
 
         if (
             hour.seconds < MINIMUM_HOUR_COVERAGE * SECONDS_PER_HOUR
@@ -892,6 +931,23 @@ class HeatBudget:
 
         self._fit()
         self._save()
+
+    def _track_airing(self, now: float, inputs: HeatBudgetInputs) -> None:
+        """Mark the hours disturbed by an open window: detected, or a room falling fast."""
+        aired = inputs.window_open
+        if inputs.indoor is not None:
+            self._recent_indoor.append((now, inputs.indoor))
+            while self._recent_indoor and now - self._recent_indoor[0][0] > AIRING_DROP_SECONDS:
+                self._recent_indoor.popleft()
+            highest = max(value for _, value in self._recent_indoor)
+            aired = aired or highest - inputs.indoor >= AIRING_DROP_K
+        if aired:
+            self._disturbed_until = now + AIRING_SETTLE_SECONDS
+        if self._disturbed(now):
+            self._hour_disturbed = True
+
+    def _disturbed(self, now: float) -> bool:
+        return self._disturbed_until is not None and now < self._disturbed_until
 
     def _fit(self) -> None:
         """Fit the heat loss to the dark hours of the last day and the solar gain to the rest."""
