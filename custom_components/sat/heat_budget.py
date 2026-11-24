@@ -79,12 +79,13 @@ DEFAULT_HEAT_LOSS_KW_PER_K = 0.12
 
 # Room error correction, in kelvin of outside temperature per kelvin of room error. The
 # proportional part brings the room back in hours rather than days; the integral takes up what
-# the model gets wrong (free heat, a heat loss that is off) and only works close to the target,
-# so a change of target does not wind it up
+# the model gets wrong (free heat, a heat loss that is off). It works within a kelvin and a half
+# of the target, not while the house recovers from a raised target, so a change of target does
+# not wind it up; a narrower band left a room stuck half a kelvin low on a cold, windy day
 PROPORTIONAL_GAIN = 8.0
 INTEGRAL_HOURS = 1.5
 INTEGRAL_LIMIT_K = 8.0
-INTEGRAL_BAND_K = 0.5
+INTEGRAL_BAND_K = 1.5
 # A room this far above its target gets no heat at all
 SURPLUS_STOP_K = 0.5
 # After the target is lowered the house coasts down to it; heating resumes this close to it,
@@ -739,6 +740,7 @@ class HeatBudget:
             and not saturated_high
             and not saturated_low
             and abs(error) <= INTEGRAL_BAND_K
+            and (self._recovery is None or error <= 0)
         ):
             self._integral += (
                 error * min(dt, MAXIMUM_STEP_SECONDS) / (INTEGRAL_HOURS * SECONDS_PER_HOUR)

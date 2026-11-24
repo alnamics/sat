@@ -6,6 +6,8 @@ from itertools import pairwise
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from custom_components.sat.const import PWMStatus
 from custom_components.sat.heat_budget import HeatBudget, HeatBudgetInputs, _Hour, solar_elevation
 
@@ -524,3 +526,27 @@ def test_the_next_block_is_announced() -> None:
     # A room well above its target is owed nothing
     budget.update(inputs(now, indoor=23.0))
     assert budget.attributes["next_block_start"] is None
+
+
+def test_a_room_that_stays_below_its_target_gets_more_heat_over_the_hours() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.045)
+
+    # Steady at 0.6 K below the target: the integral takes up what the model misses
+    budget.update(inputs(0.0, indoor=21.4))
+    first = budget.attributes["heat_need_kw"]
+    for minute in range(1, 6 * 60):
+        budget.update(inputs(minute * 60.0, indoor=21.4))
+
+    assert budget.attributes["heat_need_kw"] > first + 0.05
+
+
+def test_the_integral_waits_while_the_house_recovers_from_a_raised_target() -> None:
+    budget = HeatBudget(heat_loss_kw_per_k=0.045)
+
+    budget.update(inputs(0.0, indoor=21.0, target=21.0))
+    budget.update(inputs(60.0, indoor=21.0, target=22.0))
+    first = budget.attributes["heat_need_kw"]
+    for minute in range(2, 3 * 60):
+        budget.update(inputs(minute * 60.0, indoor=21.0, target=22.0))
+
+    assert budget.attributes["heat_need_kw"] == pytest.approx(first, abs=0.01)
