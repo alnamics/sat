@@ -395,11 +395,11 @@ class HeatBudget:
 
         self._load_learners(data)
         model = data.get("model", 1)
-        if not isinstance(model, int) or model < MODEL_VERSION:
+        outdated = not isinstance(model, int) or model < MODEL_VERSION
+        if outdated:
             # Aired and laundry-drying hours taught a wind effect and a light house; the heat loss
             # stays, the capacity and the wind start over with a fresh day of hours
             self._reset_disturbed_learning()
-            data = {**data, "hours": [], "current": None}
         self._preheat.load(data.get("preheat", {}))
         self._integral = float(data.get("integral", 0.0))
         self._demand = float(data.get("demand", self._demand))
@@ -407,7 +407,7 @@ class HeatBudget:
 
         # The day window survives a restart, so the learning picks up where it was
         now = datetime.now(UTC).timestamp()
-        for values in data.get("hours", []):
+        for values in [] if outdated else data.get("hours", []):
             hour = _Hour.from_list(values)
             if (
                 hour is not None
@@ -417,7 +417,7 @@ class HeatBudget:
                 self._hours.append(hour)
 
         # The hour that was being measured continues after a short restart
-        current = _Hour.from_list(data.get("current"))
+        current = None if outdated else _Hour.from_list(data.get("current"))
         started = data.get("current_started")
         if (
             current is not None
