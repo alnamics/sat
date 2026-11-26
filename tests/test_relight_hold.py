@@ -1,6 +1,7 @@
 """The heating ignition right after a cylinder reheat waits for the boiler to cool."""
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 from custom_components.sat.climate import (
@@ -30,7 +31,7 @@ def climate() -> SimpleNamespace:
 
 
 def hold(entity: SimpleNamespace) -> bool:
-    return SatClimate._hold_relight_after_hot_water(entity, on_phase=True)  # type: ignore[arg-type]
+    return SatClimate._hold_relight_after_hot_water(cast("SatClimate", entity), on_phase=True)
 
 
 def reheat(entity: SimpleNamespace, clock: Clock) -> None:
@@ -42,6 +43,8 @@ def reheat(entity: SimpleNamespace, clock: Clock) -> None:
     clock.now += 5
     entity._coordinator.heating_hot_water = False
     entity._coordinator.flame_active = False
+    # The control loop sees the end of the reheat at once
+    assert hold(entity)
 
 
 def test_no_reheat_lights_at_once() -> None:
@@ -56,7 +59,6 @@ def test_the_ignition_waits_a_minute_and_for_the_flow_to_cool() -> None:
     entity = climate()
     with patch("custom_components.sat.climate.monotonic", clock):
         reheat(entity, clock)
-        assert hold(entity)
 
         # Cooled quickly, but the exchanger itself still needs the minute
         entity._coordinator.boiler_temperature = 34.0
