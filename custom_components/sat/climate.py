@@ -85,6 +85,7 @@ from .const import (
     CONF_HEAT_BUDGET_MINIMUM_BURN,
     CONF_HEAT_BUDGET_MODE,
     CONF_HEAT_BUDGET_PERIOD,
+    CONF_HEAT_CAPACITY,
     CONF_HEAT_LOSS_COEFFICIENT,
     CONF_HEATING_MODE,
     CONF_HEATING_SYSTEM,
@@ -427,6 +428,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 config_options.get(CONF_BOILER_ANTI_CYCLING_TIME) or "00:00:00"
             )
             heat_loss = float(config_options.get(CONF_HEAT_LOSS_COEFFICIENT) or 0) / 1000
+            capacity = float(config_options.get(CONF_HEAT_CAPACITY) or 0)
             # Without a configured wait the budget learns it from the boiler's relights
             self._anti_cycling_configured = anti_cycling > 0
             self.heat_budget = HeatBudget(
@@ -436,6 +438,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 ),
                 minimum_off_seconds=anti_cycling or 600,
                 heat_loss_kw_per_k=heat_loss or None,
+                heat_capacity_kwh_per_k=capacity or None,
             )
         # Fast radiators would swing with hour-long blocks, so they only learn
         if (

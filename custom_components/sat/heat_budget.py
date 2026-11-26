@@ -36,16 +36,26 @@ _LOGGER = logging.getLogger(__name__)
 SECONDS_PER_HOUR = 3600.0
 
 # Heat stored per kelvin in the rooms and the screed, which corrects the 24 h balance. It
-# starts at a flat's value and is learned alongside H from the days the room temperature
-# changed (a new target, a setback); it is never less certain than at the start
-BUILDING_CAPACITY_KWH_PER_K = 4.0
+# starts at the heat loss times the time constant of a typical heavy home and is learned only
+# slowly: on days the room barely moves the balance cannot tell heat stored from heat lost, and
+# a freely learned capacity took up a heat loss that was too low (a flat went to 20 kWh/K, a
+# time constant of two weeks). Days the room clearly rises or falls still move it
+CAPACITY_TIME_CONSTANT_HOURS = 80.0
+CAPACITY_VARIANCE = 0.05
+# A light timber house cools in a day, a heavy home with screed floors in a week at most
+CAPACITY_TIME_CONSTANT_BOUNDS = (24.0, 200.0)
 # A room falling this fast is being aired: that hour and the next one teach nothing about the
 # house, as the heat that went out of the window looks like a bigger loss, wind or a light house
 AIRING_DROP_K = 0.3
 AIRING_DROP_SECONDS = 1800.0
 AIRING_SETTLE_SECONDS = 3600.0
-# Version of the saved model; 2 drops the wind and capacity learned from aired hours before it
-MODEL_VERSION = 2
+# Version of the saved model; 2 drops the wind and capacity learned from aired hours before it,
+# 3 starts the capacity over from the heat loss and lets the heat loss move quickly again
+MODEL_VERSION = 3
+# Models before this one also learned the wind and kept hours from aired days
+AIRING_MODEL_VERSION = 2
+# The heat loss is this uncertain again after a capacity reset, so it settles within a day
+HEAT_LOSS_RESET_VARIANCE = 1e-3
 BUILDING_CAPACITY_BOUNDS = (1.0, 20.0)
 # Learning: one record per hour, a balance over the last day, about four days of memory
 LEARNING_WINDOW_HOURS = 24
@@ -320,21 +330,25 @@ class HeatBudget:
         minimum_burn_seconds: float = 600.0,
         minimum_off_seconds: float = 600.0,
         heat_loss_kw_per_k: float | None = None,
+        heat_capacity_kwh_per_k: float | None = None,
     ) -> None:
         self._period = max(900.0, float(period_seconds))
         self._minimum_burn = max(180.0, float(minimum_burn_seconds))
         self._minimum_off = max(0.0, float(minimum_off_seconds))
         self._fixed_heat_loss = heat_loss_kw_per_k or None
+        self._fixed_capacity = heat_capacity_kwh_per_k or None
 
         # The heat loss is learned from the hours without sun, the solar gain from the sunny
         # ones on top of it: learned together from one day, where the sun and the mild hours
         # come at the same time, the two traded off against each other
+        heat_loss = self._fixed_heat_loss or DEFAULT_HEAT_LOSS_KW_PER_K
         self._learner = _RecursiveLeastSquares(
-            [DEFAULT_HEAT_LOSS_KW_PER_K, BUILDING_CAPACITY_KWH_PER_K],
-            [0.01, 1.0],
+            [heat_loss, heat_loss * CAPACITY_TIME_CONSTANT_HOURS],
+            [0.01, CAPACITY_VARIANCE],
             LEARNING_FORGETTING,
         )
-        self._learner.limits[1] = 1.0
+        self._learner.limits[1] = CAPACITY_VARIANCE
+        self._hold_fixed_capacity()
         self._solar_learner = _RecursiveLeastSquares([0.0], [0.05], LEARNING_FORGETTING)
         self._wind_learner = _RecursiveLeastSquares([0.0], [1e-4], LEARNING_FORGETTING)
         self._wind_mean: float | None = None
@@ -394,12 +408,14 @@ class HeatBudget:
             return
 
         self._load_learners(data)
+        self._hold_fixed_capacity()
         model = data.get("model", 1)
-        outdated = not isinstance(model, int) or model < MODEL_VERSION
-        if outdated:
-            # Aired and laundry-drying hours taught a wind effect and a light house; the heat loss
-            # stays, the capacity and the wind start over with a fresh day of hours
-            self._reset_disturbed_learning()
+        # Aired and laundry-drying hours taught a wind effect and a light house (model 1); a
+        # freely learned capacity took up a heat loss that was too low (model 2). The heat loss
+        # stays, the capacity starts over; the wind and the hours only before model 2
+        drop_hours = not isinstance(model, int) or model < AIRING_MODEL_VERSION
+        if not isinstance(model, int) or model < MODEL_VERSION:
+            self._reset_disturbed_learning(wind=drop_hours)
         self._preheat.load(data.get("preheat", {}))
         self._integral = float(data.get("integral", 0.0))
         self._demand = float(data.get("demand", self._demand))
@@ -407,7 +423,7 @@ class HeatBudget:
 
         # The day window survives a restart, so the learning picks up where it was
         now = datetime.now(UTC).timestamp()
-        for values in [] if outdated else data.get("hours", []):
+        for values in [] if drop_hours else data.get("hours", []):
             hour = _Hour.from_list(values)
             if (
                 hour is not None
@@ -417,7 +433,7 @@ class HeatBudget:
                 self._hours.append(hour)
 
         # The hour that was being measured continues after a short restart
-        current = None if outdated else _Hour.from_list(data.get("current"))
+        current = None if drop_hours else _Hour.from_list(data.get("current"))
         started = data.get("current_started")
         if (
             current is not None
@@ -431,14 +447,29 @@ class HeatBudget:
             self._restored_hour_seconds = now - started
         _LOGGER.debug("Loaded heat budget: H=%.3f kW/K.", self.heat_loss)
 
-    def _reset_disturbed_learning(self) -> None:
-        self._learner.theta[1] = BUILDING_CAPACITY_KWH_PER_K
-        self._learner.p[0][1] = self._learner.p[1][0] = 0.0
-        self._learner.p[1][1] = 1.0
-        mean, square = self._wind_mean, self._wind_square
-        self._wind_learner = _RecursiveLeastSquares([0.0], [1e-4], LEARNING_FORGETTING)
-        self._wind_mean, self._wind_square = mean, square
-        _LOGGER.info("Heat budget: the capacity and the wind effect are learned anew.")
+    def _reset_disturbed_learning(self, *, wind: bool) -> None:
+        learner = self._learner
+        learner.theta[1] = self.heat_loss * CAPACITY_TIME_CONSTANT_HOURS
+        learner.p[0][1] = learner.p[1][0] = 0.0
+        learner.p[1][1] = CAPACITY_VARIANCE
+        learner.p[0][0] = max(learner.p[0][0], HEAT_LOSS_RESET_VARIANCE)
+        self._hold_fixed_capacity()
+        if wind:
+            mean, square = self._wind_mean, self._wind_square
+            self._wind_learner = _RecursiveLeastSquares([0.0], [1e-4], LEARNING_FORGETTING)
+            self._wind_mean, self._wind_square = mean, square
+            _LOGGER.info("Heat budget: the capacity and the wind effect are learned anew.")
+        else:
+            _LOGGER.info("Heat budget: the capacity is learned anew from the heat loss.")
+
+    def _hold_fixed_capacity(self) -> None:
+        """Keep a capacity set by hand: with no variance the fit leaves it alone."""
+        if self._fixed_capacity is None:
+            return
+        learner = self._learner
+        learner.theta[1] = self._fixed_capacity
+        learner.p[0][1] = learner.p[1][0] = learner.p[1][1] = 0.0
+        learner.limits[1] = 0.0
 
     def _load_learners(self, data: dict[str, Any]) -> None:
         balance = data.get("heat_balance")
@@ -957,6 +988,13 @@ class HeatBudget:
         new_sun = bool(self._hours) and self._hours[-1].sun_hours > SUNNY_HOUR_SUN_HOURS
         if len(dark) >= LEARNING_MINIMUM_DARK_HOURS:
             heat, kelvin_hours, _ = _balance(dark, 0.0)
+            if (
+                self._fixed_capacity is None
+                and self._fixed_heat_loss is None
+                and self._learner.updates < LEARNING_MINIMUM_UPDATES
+            ):
+                # Until the heat loss has settled the capacity follows it
+                self._learner.theta[1] = self.heat_loss * CAPACITY_TIME_CONSTANT_HOURS
             if kelvin_hours > 0:
                 # The heat is what the house lost plus what it stored
                 self._learner.update([kelvin_hours, _warming(dark)], heat)
@@ -998,7 +1036,14 @@ class HeatBudget:
     def _clamp_parameters(self) -> None:
         theta = self._learner.theta
         theta[0] = min(max(theta[0], HEAT_LOSS_BOUNDS[0]), HEAT_LOSS_BOUNDS[1])
-        theta[1] = min(max(theta[1], BUILDING_CAPACITY_BOUNDS[0]), BUILDING_CAPACITY_BOUNDS[1])
+        if self._fixed_capacity is not None:
+            theta[1] = self._fixed_capacity
+        else:
+            # The capacity stays within a believable time constant of the heat loss
+            shortest, longest = CAPACITY_TIME_CONSTANT_BOUNDS
+            low = max(BUILDING_CAPACITY_BOUNDS[0], self.heat_loss * shortest)
+            high = min(BUILDING_CAPACITY_BOUNDS[1], max(low, self.heat_loss * longest))
+            theta[1] = min(max(theta[1], low), high)
         solar = self._solar_learner.theta
         solar[0] = min(max(solar[0], SOLAR_GAIN_BOUNDS[0]), SOLAR_GAIN_BOUNDS[1])
         wind = self._wind_learner.theta

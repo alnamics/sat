@@ -78,6 +78,7 @@ This section is collapsed by default.
 
 - **Heat budget**: Off (default), Learn only or On. On controls underfloor heating only.
 - **Heat loss of the house**: in W/K; 0 learns it (default, recommended).
+- **Heat capacity of the house**: heat stored per kelvin in kWh/K; 0 learns it (default, recommended). A value set here holds the capacity and only the heat loss is learned; a flat with screed floors has about 4–8 kWh/K.
 - **Period**: how often heat credit is added (default 60 minutes).
 - **Minimum burn**: the shortest block worth lighting the burner for (default 10 minutes).
 - **Weather forecast**: a weather entity with an hourly forecast; its wind speed is used to learn the wind effect (Met.no or Open-Meteo, for example). A sensor with current values only, such as Airly, doesn't work here. Its temperature and humidity also feed the *Worth airing* sensor.

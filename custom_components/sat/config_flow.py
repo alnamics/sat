@@ -60,6 +60,7 @@ from .const import (
     CONF_HEAT_BUDGET_MINIMUM_BURN,
     CONF_HEAT_BUDGET_MODE,
     CONF_HEAT_BUDGET_PERIOD,
+    CONF_HEAT_CAPACITY,
     CONF_HEAT_LOSS_COEFFICIENT,
     CONF_HEATING_CURVE_COEFFICIENT,
     CONF_HEATING_MODE,
@@ -1246,6 +1247,9 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
             vol.Required(
                 CONF_HEAT_LOSS_COEFFICIENT, default=options[CONF_HEAT_LOSS_COEFFICIENT]
             ): _number(0, 600, 5, "W/K"),
+            vol.Required(CONF_HEAT_CAPACITY, default=options[CONF_HEAT_CAPACITY]): _number(
+                0, 50, 0.5, "kWh/K"
+            ),
             vol.Required(
                 CONF_HEAT_BUDGET_PERIOD, default=str(options[CONF_HEAT_BUDGET_PERIOD])
             ): _choice("heat_budget_period", ["30", "60", "90", "120"]),

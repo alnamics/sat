@@ -78,6 +78,7 @@ Sekcja jest domyślnie zwinięta.
 
 - **Budżet ciepła** (Heat budget): Wyłączony (domyślnie), Tylko nauka albo Włączony. Włączony steruje tylko ogrzewaniem podłogowym.
 - **Straty ciepła domu** (Heat loss of the house): w W/K; 0 oznacza naukę (domyślnie, zalecane).
+- **Pojemność cieplna domu** (Heat capacity of the house): ciepło magazynowane na kelwin w kWh/K; 0 oznacza naukę (domyślnie, zalecane). Wpisana wartość blokuje pojemność i uczone są tylko straty; mieszkanie z wylewkami ma około 4–8 kWh/K.
 - **Okres** (Period): co tyle przybywa kredytu ciepła (domyślnie 60 minut).
 - **Minimalne palenie** (Minimum burn): najkrótszy blok wart zapłonu (domyślnie 10 minut).
 - **Prognoza pogody** (Weather forecast): encja pogody z prognozą godzinową; jej prędkość wiatru służy do nauki wpływu wiatru (np. Met.no albo Open-Meteo). Czujnik z samymi bieżącymi wartościami, np. Airly, się nie nadaje.

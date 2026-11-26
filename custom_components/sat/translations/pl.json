@@ -290,6 +290,7 @@
         "data": {
           "heat_budget_mode": "Budżet ciepła",
           "heat_loss_coefficient": "Straty ciepła domu",
+          "heat_capacity": "Pojemność cieplna domu",
           "heat_budget_period": "Okres",
           "heat_budget_minimum_burn": "Minimalne palenie",
           "weather_forecast_entity_id": "Prognoza pogody",
@@ -301,6 +302,7 @@
         "data_description": {
           "heat_budget_mode": "Tylko nauka pokazuje plan w atrybutach encji klimatu, ale nie steruje. Dopóki dom nie jest nauczony (około 36 godzin), steruje zwykły PWM.",
           "heat_loss_coefficient": "Ciepło, które dom traci na każdy stopień różnicy między wnętrzem a otoczeniem. 0 oznacza naukę (zalecane).",
+          "heat_capacity": "Ciepło, które dom magazynuje na każdy stopień: ściany, stropy i wylewka. 0 oznacza naukę (zalecane); mieszkanie z wylewkami ma około 4–8 kWh/K.",
           "heat_budget_period": "Co tyle przybywa kredytu; dłuższy okres to rzadsze i dłuższe palenia.",
           "heat_budget_minimum_burn": "Najkrótszy blok, dla którego warto zapalić palnik; mniejsza ilość ciepła czeka na następny okres.",
           "weather_forecast_entity_id": "Prognoza godzinowa: budżet planuje według horyzontu prognozy poniżej i uczy się zysków ze słońca z zachmurzenia.",

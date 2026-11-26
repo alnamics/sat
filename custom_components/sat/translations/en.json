@@ -290,6 +290,7 @@
         "data": {
           "heat_budget_mode": "Heat budget",
           "heat_loss_coefficient": "Heat loss of the house",
+          "heat_capacity": "Heat capacity of the house",
           "heat_budget_period": "Period",
           "heat_budget_minimum_burn": "Minimum burn",
           "weather_forecast_entity_id": "Weather forecast",
@@ -301,6 +302,7 @@
         "data_description": {
           "heat_budget_mode": "Learn only shows the plan in the climate attributes without controlling. Until the house is learned (about 36 hours) the normal PWM controls.",
           "heat_loss_coefficient": "Heat the house loses per degree between inside and outside. 0 learns it (recommended).",
+          "heat_capacity": "Heat the house stores per degree: walls, ceilings and screed. 0 learns it (recommended); a flat with screed floors has about 4–8 kWh/K.",
           "heat_budget_period": "Credit is added every period; longer periods give fewer, longer burns.",
           "heat_budget_minimum_burn": "The shortest block worth lighting the burner for; less heat waits for the next period.",
           "weather_forecast_entity_id": "Hourly forecast: the budget plans with the forecast horizon below and learns the solar gain from the cloud cover.",

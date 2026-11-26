@@ -503,12 +503,61 @@ def test_the_heat_capacity_is_learned_from_days_the_room_changed() -> None:
     assert abs(budget.heat_capacity - 8.0) < 1.0
 
 
-def test_a_steady_room_keeps_the_starting_capacity() -> None:
+def test_a_steady_room_keeps_the_capacity_at_the_heat_loss_times_80_hours() -> None:
     budget = HeatBudget()
     windy_days(budget, 0.0)
 
-    assert budget.heat_capacity == 4.0
-    assert budget.attributes["heat_capacity_kwh_per_k"] == 4.0
+    assert budget.heat_loss == pytest.approx(0.05, abs=0.003)
+    assert budget.heat_capacity == pytest.approx(4.0, rel=0.1)
+    assert budget.attributes["heat_capacity_kwh_per_k"] == pytest.approx(4.0, abs=0.4)
+
+
+def test_steady_days_raise_a_low_heat_loss_instead_of_the_capacity() -> None:
+    # A learned state that is too light on loss: 50 W/K with long memory, the house loses 70
+    budget = HeatBudget()
+    budget._learner.theta = [0.05, 4.0]
+    budget._learner.p = [[1e-6, 0.0], [0.0, 0.05]]
+    budget._learner.updates = 200
+    for day in range(6):
+        for hour in range(24):
+            # The room creeps up by a tenth of a kelvin a day, as a house a little short does
+            start = 21.4 + 0.1 * (day * 24 + hour) / 24
+            budget._hours.append(
+                _Hour(
+                    heat_kwh=0.07 * 20.0,
+                    kelvin_hours=20.0,
+                    seconds=3600.0,
+                    indoor_start=start,
+                    indoor_end=start + 0.1 / 24,
+                    wall_end=float(day * 24 + hour),
+                )
+            )
+            budget._fit()
+
+    assert budget.heat_loss > 0.062
+    assert budget.heat_capacity / budget.heat_loss <= 200.0
+
+
+def test_a_capacity_set_by_hand_is_not_learned() -> None:
+    budget = HeatBudget(heat_capacity_kwh_per_k=6.0)
+    for day in range(10):
+        warming = (1.0, -1.0, 0.5, -0.5, 0.0)[day % 5] / 24
+        for hour in range(24):
+            start = 21.0 + warming * hour
+            budget._hours.append(
+                _Hour(
+                    heat_kwh=0.05 * 16.0 + 12.0 * warming,
+                    kelvin_hours=16.0,
+                    seconds=3600.0,
+                    indoor_start=start,
+                    indoor_end=start + warming,
+                    wall_end=float(day * 24 + hour),
+                )
+            )
+            budget._fit()
+
+    assert budget.heat_capacity == 6.0
+    assert abs(budget.heat_loss - 0.05) < 0.005
 
 
 def test_the_next_block_is_announced() -> None:
@@ -591,6 +640,48 @@ async def test_a_model_saved_before_the_airing_fix_learns_capacity_and_wind_anew
         await budget.async_initialize(MagicMock(), "entry")
 
     assert budget.heat_loss == pytest.approx(0.046)
-    assert budget.heat_capacity == pytest.approx(4.0)
+    assert budget.heat_capacity == pytest.approx(0.046 * 80)
     assert budget.wind_sensitivity == 0.0
     assert len(budget._hours) == 0
+
+
+async def test_a_model_with_a_runaway_capacity_starts_it_over_and_keeps_the_hours() -> None:
+    now = datetime.now(UTC).timestamp()
+    saved = {
+        "model": 2,
+        "heat_balance": {"theta": [0.055, 20.0], "p": [[1e-6, 1e-4], [1e-4, 1.0]], "updates": 207},
+        "wind": {"theta": [0.004], "p": [[1e-5]], "updates": 60, "mean": 12.0, "square": 160.0},
+        "hours": [[1.0, 20.0, 0.0, 3600.0, 22.0, 22.0, now]],
+    }
+
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+    budget = HeatBudget()
+    with patch("custom_components.sat.heat_budget.heat_budget_store", return_value=FakeStore()):
+        await budget.async_initialize(MagicMock(), "entry")
+
+    assert budget.heat_loss == pytest.approx(0.055)
+    assert budget.heat_capacity == pytest.approx(0.055 * 80)
+    assert budget._learner.p[0][0] >= 1e-3
+    assert budget.wind_sensitivity == pytest.approx(0.004)
+    assert len(budget._hours) == 1
+
+
+async def test_a_capacity_set_by_hand_overrides_the_saved_one() -> None:
+    saved = {
+        "model": 3,
+        "heat_balance": {"theta": [0.055, 9.0], "p": [[1e-4, 0.0], [0.0, 0.05]], "updates": 50},
+    }
+
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+    budget = HeatBudget(heat_capacity_kwh_per_k=6.0)
+    with patch("custom_components.sat.heat_budget.heat_budget_store", return_value=FakeStore()):
+        await budget.async_initialize(MagicMock(), "entry")
+
+    assert budget.heat_capacity == 6.0
+    assert budget._learner.p[1][1] == 0.0

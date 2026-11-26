@@ -76,6 +76,7 @@ CONF_HEAT_BUDGET_MODE = "heat_budget_mode"
 CONF_HEAT_BUDGET_PERIOD = "heat_budget_period"
 CONF_HEAT_BUDGET_MINIMUM_BURN = "heat_budget_minimum_burn"
 CONF_HEAT_LOSS_COEFFICIENT = "heat_loss_coefficient"
+CONF_HEAT_CAPACITY = "heat_capacity"
 CONF_WEATHER_FORECAST_ENTITY_ID = "weather_forecast_entity_id"
 CONF_COMFORT_SCHEDULE_ENTITY_ID = "comfort_schedule_entity_id"
 CONF_SETBACK_TEMPERATURE = "setback_temperature"
@@ -189,6 +190,8 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_HEAT_BUDGET_MINIMUM_BURN: "00:10:00",
     # Heat loss of the house in W/K; 0 learns it
     CONF_HEAT_LOSS_COEFFICIENT: 0,
+    # Heat stored per kelvin in kWh/K; 0 learns it from the heat loss
+    CONF_HEAT_CAPACITY: 0,
     CONF_WEATHER_FORECAST_ENTITY_ID: None,
     # An outdoor humidity sensor (Airly, a weather station) for the airing advice
     CONF_OUTSIDE_HUMIDITY_ENTITY_ID: None,
