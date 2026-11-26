@@ -211,6 +211,16 @@ SETTLED_BURN_SECONDS = 180
 DIAGNOSTIC_BURN_SECONDS = 600
 # After hot water the flow sensor still reads the hot water temperature for a while
 AFTER_HOT_WATER_SECONDS = 300
+# Right after a cylinder reheat the heat exchanger is still hot: lit at once for heating, the
+# ignition power lifts the flow some 10 K within seconds and the boiler cuts out above the
+# setpoint, then waits its anti-cycling time. The on-phase holds the setpoint down while the
+# pump carries that heat into the floor, at least a minute and until the flow is this far below
+# the on-phase setpoint, at most three minutes
+HOT_WATER_RELIGHT_MINIMUM_SECONDS = 60
+HOT_WATER_RELIGHT_MAXIMUM_SECONDS = 180
+HOT_WATER_RELIGHT_MARGIN = 10.0
+# A flame this long after the reheat is a heating burn already under way; it is not stopped
+HOT_WATER_TAIL_SECONDS = 15
 # The flue gas of a clean heat exchanger is only judged this close to the minimum power
 NEAR_MINIMUM_POWER_SHARE = 0.15
 # A warm weather average older than this is not continued after a restart
@@ -496,6 +506,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         }
         self._hot_water_ended_at: float | None = None
         self._last_hot_water_active = False
+        # When the on-phase began holding its ignition back after a cylinder reheat
+        self._relight_hold_since: float | None = None
+        self._relight_hot_water_seen = False
         self._init_extras(coordinator, config_options)
 
         if self._simulation:
@@ -1555,7 +1568,14 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             # PWM is enabled and actively controlling the cycle
             _LOGGER.debug("Running PWM cycle with state: %s", pwm_state.status)
 
-            if pwm_state.status == PWMStatus.ON:
+            # Followed in every phase, so a block that starts right after a reheat is held too
+            holding = self._hold_relight_after_hot_water(on_phase=pwm_state.status == PWMStatus.ON)
+            if pwm_state.status == PWMStatus.ON and holding:
+                self._setpoint = MINIMUM_SETPOINT
+                _LOGGER.debug(
+                    "Holding the heating ignition while the boiler cools after hot water."
+                )
+            elif pwm_state.status == PWMStatus.ON:
                 self._setpoint = self.minimum_setpoint_value
                 _LOGGER.debug("Setting setpoint to minimum: %.1f°C", self._setpoint)
             else:
@@ -1566,6 +1586,40 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._setpoint = min(self._setpoint, self._coordinator.maximum_setpoint)
         await self._coordinator.async_set_control_setpoint(self._setpoint)
         _LOGGER.debug("Control setpoint has been updated to: %.1f°C", self._setpoint)
+
+    def _hold_relight_after_hot_water(self, *, on_phase: bool) -> bool:
+        """Return True while a heating ignition right after a cylinder reheat is held back."""
+        coordinator = self._coordinator
+        now = monotonic()
+        if coordinator.heating_hot_water:
+            self._relight_hot_water_seen = True
+            self._relight_hold_since = None
+            return False
+        if self._relight_hot_water_seen:
+            self._relight_hot_water_seen = False
+            self._relight_hold_since = now
+        started = self._relight_hold_since
+        if started is None:
+            return False
+
+        held = now - started
+        flow = coordinator.boiler_temperature
+        cooled = flow is not None and flow <= self.minimum_setpoint_value - HOT_WATER_RELIGHT_MARGIN
+        burning = coordinator.flame_active and held >= HOT_WATER_TAIL_SECONDS
+        if (
+            burning
+            or held >= HOT_WATER_RELIGHT_MAXIMUM_SECONDS
+            or (held >= HOT_WATER_RELIGHT_MINIMUM_SECONDS and cooled)
+        ):
+            self._relight_hold_since = None
+            if on_phase and not burning:
+                _LOGGER.info(
+                    "Heating relights %.0fs after hot water, with the flow at %s°C.",
+                    held,
+                    "?" if flow is None else f"{flow:.1f}",
+                )
+            return False
+        return True
 
     async def _async_control_relative_modulation(self) -> None:
         """Control the relative modulation value based on the conditions."""
