@@ -685,3 +685,59 @@ async def test_a_capacity_set_by_hand_overrides_the_saved_one() -> None:
 
     assert budget.heat_capacity == 6.0
     assert budget._learner.p[1][1] == 0.0
+
+
+def learned_day(budget: HeatBudget, heat_loss: float) -> None:
+    """Steady dark hours of a house losing this much, fitted every hour."""
+    for hour in range(24):
+        budget._hours.append(
+            _Hour(
+                heat_kwh=heat_loss * 22.0,
+                kelvin_hours=22.0,
+                seconds=3600.0,
+                indoor_start=21.6,
+                indoor_end=21.6,
+                wall_end=float(hour),
+            )
+        )
+        budget._fit()
+
+
+def test_a_higher_heat_loss_takes_over_the_integral() -> None:
+    # The integral made up 0.42 kW for a heat loss learned too low; H is then learned right
+    budget = HeatBudget()
+    budget._learner.theta = [0.056, 4.5]
+    budget._learner.p = [[1e-3, 0.0], [0.0, 0.05]]
+    budget._learner.updates = 208
+    budget._integral = 7.5
+    budget._last_difference = 22.0
+    learned_day(budget, 0.087)
+
+    assert budget.heat_loss == pytest.approx(0.087, abs=0.003)
+    assert budget._integral == 0.0
+
+
+def test_a_small_correction_of_the_heat_loss_takes_only_its_share() -> None:
+    budget = HeatBudget()
+    budget._learner.theta = [0.080, 4.5]
+    budget._learner.p = [[1e-3, 0.0], [0.0, 0.05]]
+    budget._learner.updates = 208
+    budget._integral = 4.0
+    budget._last_difference = 22.0
+    learned_day(budget, 0.084)
+
+    # 0.32 kW of integral, of which H now covers about 0.09 kW
+    assert budget.heat_loss == pytest.approx(0.084, abs=0.002)
+    assert budget._integral * budget.heat_loss == pytest.approx(0.32 - 0.088, abs=0.03)
+
+
+def test_a_heat_loss_moving_against_the_integral_leaves_it() -> None:
+    budget = HeatBudget()
+    budget._learner.theta = [0.080, 4.5]
+    budget._learner.p = [[1e-3, 0.0], [0.0, 0.05]]
+    budget._learner.updates = 208
+    budget._integral = 2.0
+    budget._last_difference = 22.0
+    learned_day(budget, 0.070)
+
+    assert budget._integral == 2.0

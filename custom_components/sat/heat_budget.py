@@ -104,6 +104,8 @@ PROPORTIONAL_GAIN = 8.0
 INTEGRAL_HOURS = 1.5
 INTEGRAL_LIMIT_K = 8.0
 INTEGRAL_BAND_K = 1.5
+# A heat loss learned closer takes over the integral's heat; a change this big is logged
+INTEGRAL_HANDOVER_LOG_K = 0.5
 # A room this far above its target gets no heat at all
 SURPLUS_STOP_K = 0.5
 # After the target is lowered the house coasts down to it; heating resumes this close to it,
@@ -378,6 +380,8 @@ class HeatBudget:
         self._store: Store[dict[str, Any]] | None = None
         self._last_update: float | None = None
         self._integral = 0.0
+        # Inside minus outside of the last need, at which the integral's heat is handed to H
+        self._last_difference: float | None = None
         self._surplus = False
         self._coasting = False
         self._credit = 0.0
@@ -785,6 +789,7 @@ class HeatBudget:
             outdoor += min(max(trend, -FORECAST_TREND_LIMIT), FORECAST_TREND_LIMIT)
         solar = inputs.solar_forecast if inputs.solar_forecast is not None else inputs.solar
         error = target - indoor
+        self._last_difference = target - outdoor
 
         base = self.heat_loss * (target - outdoor) * self._wind_factor(
             inputs.wind
@@ -982,6 +987,44 @@ class HeatBudget:
 
     def _fit(self) -> None:
         """Fit the heat loss to the dark hours of the last day and the solar gain to the rest."""
+        heat_loss = self.heat_loss
+        self._fit_parameters()
+        self._hand_over_integral(heat_loss)
+
+    def _hand_over_integral(self, previous: float) -> None:
+        """Take off the integral what a changed heat loss now covers by itself.
+
+        The integral made up for a heat loss that was off; once H is learned closer, keeping the
+        whole integral would count the same heat twice and overheat the house for a day while it
+        unwinds. It only shrinks towards zero, by at most the change of H at the current
+        difference, and a change in the other direction leaves it alone.
+        """
+        difference = self._last_difference
+        if difference is None or difference <= 0 or self._integral == 0:
+            return
+        correction = previous * self._integral
+        shift = (self.heat_loss - previous) * difference
+        if correction * shift <= 0:
+            return
+        remaining = correction - shift if abs(shift) < abs(correction) else 0.0
+        integral = remaining / self.heat_loss
+        log = (
+            _LOGGER.info
+            if abs(integral - self._integral) >= INTEGRAL_HANDOVER_LOG_K
+            else _LOGGER.debug
+        )
+        log(
+            "Heat budget: H moved from %.0f to %.0f W/K; the integral hands over "
+            "%.2f kW and goes from %.1f to %.1f K.",
+            previous * 1000,
+            self.heat_loss * 1000,
+            correction - remaining,
+            self._integral,
+            integral,
+        )
+        self._integral = integral
+
+    def _fit_parameters(self) -> None:
         # heat + S * sun = H * kelvin_hours + stored
         dark = [h for h in self._hours if h.sun_hours <= DARK_SUN_HOURS]
         sunny = [h for h in self._hours if h.sun_hours > SUNNY_HOUR_SUN_HOURS]
