@@ -671,7 +671,7 @@ async def test_a_model_with_a_runaway_capacity_starts_it_over_and_keeps_the_hour
 
 async def test_a_capacity_set_by_hand_overrides_the_saved_one() -> None:
     saved = {
-        "model": 3,
+        "model": 4,
         "heat_balance": {"theta": [0.055, 9.0], "p": [[1e-4, 0.0], [0.0, 0.05]], "updates": 50},
     }
 
@@ -741,3 +741,23 @@ def test_a_heat_loss_moving_against_the_integral_leaves_it() -> None:
     learned_day(budget, 0.070)
 
     assert budget._integral == 2.0
+
+
+async def test_the_integral_of_a_model_before_the_handover_starts_over() -> None:
+    saved = {
+        "model": 3,
+        "heat_balance": {"theta": [0.087, 4.5], "p": [[1e-4, 0.0], [0.0, 0.05]], "updates": 211},
+        "integral": 7.5,
+    }
+
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+    budget = HeatBudget()
+    with patch("custom_components.sat.heat_budget.heat_budget_store", return_value=FakeStore()):
+        await budget.async_initialize(MagicMock(), "entry")
+
+    assert budget._integral == 0.0
+    assert budget.heat_loss == pytest.approx(0.087)
+    assert budget.heat_capacity == pytest.approx(4.5)

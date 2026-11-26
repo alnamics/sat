@@ -50,8 +50,10 @@ AIRING_DROP_K = 0.3
 AIRING_DROP_SECONDS = 1800.0
 AIRING_SETTLE_SECONDS = 3600.0
 # Version of the saved model; 2 drops the wind and capacity learned from aired hours before it,
-# 3 starts the capacity over from the heat loss and lets the heat loss move quickly again
-MODEL_VERSION = 3
+# 3 starts the capacity over from the heat loss and lets the heat loss move quickly again,
+# 4 drops the integral that made up for the heat loss learned too low before that
+MODEL_VERSION = 4
+CAPACITY_MODEL_VERSION = 3
 # Models before this one also learned the wind and kept hours from aired days
 AIRING_MODEL_VERSION = 2
 # The heat loss is this uncertain again after a capacity reset, so it settles within a day
@@ -418,10 +420,13 @@ class HeatBudget:
         # freely learned capacity took up a heat loss that was too low (model 2). The heat loss
         # stays, the capacity starts over; the wind and the hours only before model 2
         drop_hours = not isinstance(model, int) or model < AIRING_MODEL_VERSION
-        if not isinstance(model, int) or model < MODEL_VERSION:
+        if not isinstance(model, int) or model < CAPACITY_MODEL_VERSION:
             self._reset_disturbed_learning(wind=drop_hours)
         self._preheat.load(data.get("preheat", {}))
         self._integral = float(data.get("integral", 0.0))
+        if not isinstance(model, int) or model < MODEL_VERSION:
+            # The heat loss has been learned anew since, so what the integral held is covered
+            self._integral = 0.0
         self._demand = float(data.get("demand", self._demand))
         self._clamp_parameters()
 
