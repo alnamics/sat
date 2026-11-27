@@ -1601,9 +1601,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     def _open_room_loops(self) -> frozenset[str]:
         """Return the controlled room climates whose valves are open now."""
+        climates: list[str] = [*self._radiators, *self.areas.items()]
         return frozenset(
             entity_id
-            for entity_id in self._radiators + self.areas.items()
+            for entity_id in climates
             if self._climate_wants_heat(self.hass.states.get(entity_id))
         )
 
