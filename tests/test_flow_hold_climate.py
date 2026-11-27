@@ -71,18 +71,26 @@ async def test_the_hold_after_hot_water_keeps_the_pump_running(
         patch.object(
             SatFakeCoordinator, "heating_hot_water", new_callable=PropertyMock
         ) as hot_water,
+        patch.object(SatFakeCoordinator, "hot_water_active", new_callable=PropertyMock) as flagged,
         patch.object(SatFakeCoordinator, "flame_active", new_callable=PropertyMock) as flame,
     ):
         hot_water.return_value = False
+        flagged.return_value = False
         flame.return_value = False
         await climate.async_control_heating_loop()
         assert climate.pwm.status == PWMStatus.ON
         assert coordinator.setpoint == 57
 
-        # A cylinder reheat, then the hand back with the heat exchanger still hot
+        # A cylinder reheat: the heating setpoint is down already, with heating enabled
         hot_water.return_value = True
+        flagged.return_value = True
         await climate.async_control_heating_loop()
+        assert coordinator.setpoint == MINIMUM_SETPOINT
+        assert coordinator.device_active
+
+        # The hand back with the heat exchanger still hot
         hot_water.return_value = False
+        flagged.return_value = False
         await coordinator.async_set_boiler_temperature(62)
         await climate.async_control_heating_loop()
 

@@ -1660,7 +1660,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         if coordinator.heating_hot_water:
             self._relight_hot_water_seen = True
             self._relight_hold_since = None
-            return False
+            # Held down already while the boiler flags the reheat, which runs on its own
+            # setpoint: a control step comes only every so often, and the boiler lights for
+            # heating within half a minute of the reheat ending, before the next step would hold
+            # it. An unflagged reheat is only told by the burn itself, so it is not held during
+            return coordinator.hot_water_active
         if self._relight_hot_water_seen:
             self._relight_hot_water_seen = False
             self._relight_hold_since = now
@@ -1972,6 +1976,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 or kept_on
                 # The pump keeps running while the ignition waits, which cools the boiler
                 or self._relight_hold_since is not None
+                or self._relight_hot_water_seen
                 or self._flow_waiting
                 else DeviceState.OFF
             )

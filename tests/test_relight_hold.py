@@ -22,7 +22,10 @@ class Clock:
 def climate() -> SimpleNamespace:
     return SimpleNamespace(
         _coordinator=SimpleNamespace(
-            heating_hot_water=False, flame_active=False, boiler_temperature=30.0
+            heating_hot_water=False,
+            hot_water_active=False,
+            flame_active=False,
+            boiler_temperature=30.0,
         ),
         minimum_setpoint_value=45.0,
         _relight_hold_since=None,
@@ -37,11 +40,14 @@ def hold(entity: SimpleNamespace) -> bool:
 def reheat(entity: SimpleNamespace, clock: Clock) -> None:
     """Heat the cylinder, then hand back with the flow still hot."""
     entity._coordinator.heating_hot_water = True
+    entity._coordinator.hot_water_active = True
     entity._coordinator.flame_active = True
     entity._coordinator.boiler_temperature = 63.0
-    assert not hold(entity)
+    # Held down already while the boiler flags the reheat
+    assert hold(entity)
     clock.now += 5
     entity._coordinator.heating_hot_water = False
+    entity._coordinator.hot_water_active = False
     entity._coordinator.flame_active = False
     # The control loop sees the end of the reheat at once
     assert hold(entity)
@@ -93,3 +99,40 @@ def test_a_heating_burn_already_under_way_is_not_stopped() -> None:
         clock.now += 20
         entity._coordinator.flame_active = True
         assert not hold(entity)
+
+
+def test_a_late_control_step_after_the_reheat_still_holds() -> None:
+    # The boiler hands back between two control steps: the setpoint was already down during
+    # the reheat, and the hold counts from the first step that sees the end
+    clock = Clock()
+    entity = climate()
+    with patch("custom_components.sat.climate.monotonic", clock):
+        entity._coordinator.heating_hot_water = True
+        entity._coordinator.hot_water_active = True
+        entity._coordinator.boiler_temperature = 60.0
+        assert hold(entity)
+        clock.now += 40
+        entity._coordinator.heating_hot_water = False
+        entity._coordinator.hot_water_active = False
+        entity._coordinator.boiler_temperature = 40.0
+        assert hold(entity)
+        clock.now += HOT_WATER_RELIGHT_MINIMUM_SECONDS - 1
+        entity._coordinator.boiler_temperature = 33.0
+        assert hold(entity)
+        clock.now += 1
+        assert not hold(entity)
+
+
+def test_an_unflagged_reheat_is_held_only_after_it() -> None:
+    # Told from the burn alone, it may be a heating burn running hot: not stopped while it lasts
+    clock = Clock()
+    entity = climate()
+    with patch("custom_components.sat.climate.monotonic", clock):
+        entity._coordinator.heating_hot_water = True
+        entity._coordinator.flame_active = True
+        entity._coordinator.boiler_temperature = 60.0
+        assert not hold(entity)
+        clock.now += 5
+        entity._coordinator.heating_hot_water = False
+        entity._coordinator.flame_active = False
+        assert hold(entity)
