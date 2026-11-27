@@ -25,6 +25,12 @@ FIT_MINIMUM_VARIANCE = 4.0
 FIT_MAXIMUM_BAR_PER_K = 0.03
 # A rise this large from one day to the next is a top-up
 TOP_UP_RISE = 0.15
+# A reading this far off the day's mean so far is a glitch or the brief swing of a valve
+# changing over (a Lumea read 1.1 bar for a few minutes between 1.6 bar readings): it is left
+# out of the day's mean and of the temperature fit. A leak never moves this much within a
+# day; a top-up shows as the next day's jump
+SPIKE_BAR = 0.2
+SPIKE_MINIMUM_SECONDS = 3600.0
 
 
 def slope(values: list[float]) -> float | None:
@@ -53,6 +59,8 @@ class PressureTrend:
         # Running means of T, p, T² and T·p
         self._fit: list[float] | None = None
         self._fit_hours = 0.0
+        # Readings left out as glitches since the start
+        self.spikes = 0
 
     @property
     def coefficient(self) -> float:
@@ -99,6 +107,13 @@ class PressureTrend:
         if day != self._day:
             completed = self._close_day()
             self._day = day
+
+        if (
+            self._pressure_seconds >= SPIKE_MINIMUM_SECONDS
+            and abs(pressure - self._pressure_sum / self._pressure_seconds) > SPIKE_BAR
+        ):
+            self.spikes += 1
+            return completed
 
         self._pressure_seconds += dt
         self._pressure_sum += pressure * dt

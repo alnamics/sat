@@ -22,6 +22,7 @@ import math
 from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.storage import Store
@@ -118,6 +119,9 @@ COAST_END_K = 0.2
 PARTIAL_HOUR_SAVE_SECONDS = 300.0
 # A saved hour is continued when the restart took no longer than this
 PARTIAL_HOUR_MAXIMUM_GAP_SECONDS = 900.0
+# A block or a period running at a restart this short goes on where it was, with the heat owed;
+# after a longer one the budget plans afresh
+RESUME_MAXIMUM_GAP_SECONDS = 900.0
 
 # Boiler cut-outs in one block that end it, because the water cannot take the heat
 CUT_SHORT_BURNS_TO_END_BLOCK = 2
@@ -232,6 +236,8 @@ class _Hour:
     wind_kelvin_hours: float = 0.0
     wind_hours: float = 0.0
     wind_seconds: float = 0.0
+    # Burns the boiler cut out or lost in this hour: the heat came late, in a later hour
+    cut_outs: float = 0.0
 
     def to_list(self) -> list[float | None]:
         return [
@@ -245,6 +251,7 @@ class _Hour:
             self.wind_kelvin_hours,
             self.wind_hours,
             self.wind_seconds,
+            self.cut_outs,
         ]
 
     @property
@@ -253,8 +260,8 @@ class _Hour:
 
     @classmethod
     def from_list(cls, values: object) -> _Hour | None:
-        # Hours saved before the wind was recorded have seven values
-        if not isinstance(values, list) or len(values) not in (7, len(cls.__slots__)):
+        # Hours saved before the wind was recorded have seven values, before the cut-outs ten
+        if not isinstance(values, list) or len(values) not in (7, 10, len(cls.__slots__)):
             return None
         numbers = [float(value) for value in values if isinstance(value, int | float)]
         if len(numbers) != len(values):
@@ -368,6 +375,8 @@ class HeatBudget:
         self._recent_indoor: deque[tuple[float, float]] = deque()
         self._disturbed_until: float | None = None
         self._hour_disturbed = False
+        # The newest cut-out or lost flame already counted
+        self._cut_out_seen: float | None = None
         self._last_partial_save: float | None = None
 
         self._preheat = _RecursiveLeastSquares(
@@ -428,6 +437,10 @@ class HeatBudget:
             # The heat loss has been learned anew since, so what the integral held is covered
             self._integral = 0.0
         self._demand = float(data.get("demand", self._demand))
+        self._resume_dispatch(data.get("dispatch"))
+        piggybacks = data.get("piggybacks")
+        if isinstance(piggybacks, int) and piggybacks >= 0:
+            self._piggybacks = piggybacks
         self._clamp_parameters()
 
         # The day window survives a restart, so the learning picks up where it was
@@ -522,10 +535,67 @@ class HeatBudget:
             "preheat": self._preheat.to_dict(),
             "integral": self._integral,
             "demand": self._demand,
+            "piggybacks": self._piggybacks,
             "hours": [hour.to_list() for hour in self._hours],
             "current": self._hour.to_list(),
             "current_started": self._hour_started_wall,
+            "dispatch": self._dispatch_to_save(),
         }
+
+    def _dispatch_to_save(self) -> dict[str, Any]:
+        """Return the running period and block on the wall clock, for a restart to carry on."""
+        offset = time() - monotonic()
+
+        def wall(moment: float | None) -> float | None:
+            return None if moment is None else moment + offset
+
+        return {
+            "saved": time(),
+            "credit": self._credit,
+            "period_end": wall(self._period_end),
+            "planned_on": self._planned_on,
+            "block_target": self._block_target,
+            "block_active": self._block_active,
+            "block_started": wall(self._block_started),
+            "block_delivered": self._block_delivered,
+            "last_block_end": wall(self._last_block_end),
+        }
+
+    def _resume_dispatch(self, data: object) -> None:
+        """Carry the period and block of a short restart on, so no ignition is added."""
+        if not isinstance(data, dict):
+            return
+        saved = data.get("saved")
+        if (
+            not isinstance(saved, int | float)
+            or not 0 <= time() - saved <= RESUME_MAXIMUM_GAP_SECONDS
+        ):
+            return
+        offset = monotonic() - time()
+
+        def number(key: str) -> float | None:
+            value = data.get(key)
+            return float(value) if isinstance(value, int | float) else None
+
+        def moment(key: str) -> float | None:
+            value = number(key)
+            return None if value is None else value + offset
+
+        limit = self._minimum_power * self._period / SECONDS_PER_HOUR
+        self._credit = min(max(number("credit") or 0.0, -limit), limit)
+        self._period_end = moment("period_end")
+        self._planned_on = min(max(number("planned_on") or 0.0, 0.0), self._period)
+        self._block_target = max(number("block_target") or 0.0, 0.0)
+        self._last_block_end = moment("last_block_end")
+        if data.get("block_active") is True and self._period_end is not None:
+            self._block_active = True
+            self._block_started = moment("block_started")
+            self._block_delivered = max(number("block_delivered") or 0.0, 0.0)
+            _LOGGER.info(
+                "Heat budget: the heat block goes on after the restart (%.2f of %.2f kWh).",
+                self._block_delivered,
+                self._block_target,
+            )
 
     # ------------------------------------------------------------- properties
 
@@ -916,6 +986,7 @@ class HeatBudget:
                 self._hour.wind_seconds += dt
             self._hour.seconds += dt
             self._hour.indoor_end = inputs.indoor
+            self._track_cut_outs(inputs)
             self._hour.wall_end = wall
 
         if now - self._hour_started < SECONDS_PER_HOUR:
@@ -972,6 +1043,15 @@ class HeatBudget:
 
         self._fit()
         self._save()
+
+    def _track_cut_outs(self, inputs: HeatBudgetInputs) -> None:
+        """Count the burns the boiler cut out or lost in the hour being measured."""
+        newest = max((*inputs.cut_short_burn_ends, *inputs.flame_loss_ends), default=None)
+        if newest is None:
+            return
+        if self._cut_out_seen is not None and newest > self._cut_out_seen:
+            self._hour.cut_outs += 1
+        self._cut_out_seen = newest
 
     def _track_airing(self, now: float, inputs: HeatBudgetInputs) -> None:
         """Mark the hours disturbed by an open window: detected, or a room falling fast."""
@@ -1053,7 +1133,13 @@ class HeatBudget:
                 self._solar_learner.update(
                     [sun_hours], self.heat_loss * kelvin_hours + stored - heat
                 )
-        if self._learner.updates > 0 and self._wind_mean is not None:
+        # Heat a cut-out held back comes in a later hour; while the day holds such hours the
+        # gap and the catching up read as wind (one night of cut-outs taught 6.5 % per 10 km/h)
+        if (
+            self._learner.updates > 0
+            and self._wind_mean is not None
+            and not any(h.cut_outs for h in self._hours)
+        ):
             self._fit_wind([h for h in dark if h.has_wind])
         self._clamp_parameters()
 

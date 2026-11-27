@@ -130,3 +130,36 @@ def test_a_cylinder_drop_right_after_heating_stops_is_told_apart() -> None:
 
     assert stats.hot_water_drops == 2
     assert stats.hot_water_drops_after_heating == 1
+
+
+def test_rooms_that_all_close_often_are_not_told_to_reduce() -> None:
+    # Every room sits at its thermostat's target and closes half the time: no single loop
+    # carries too much water, and turning all down would starve the boiler at its ignition
+    monitor = LoopMonitor(ROOMS)
+    now = 0.0
+    while now < 30 * 3600:
+        hour = (now / 3600) % 24
+        readings = {room: RoomReading(open=hour < 12, temperature=22.0) for room in ROOMS}
+        monitor.update(now, readings, None)
+        now += 60
+
+    assert all(monitor.advice(room) == ("ok", 0) for room in ROOMS)
+    assert monitor.rooms_to_adjust == 0
+
+
+def test_a_room_closing_more_than_the_others_is_told_to_reduce() -> None:
+    monitor = LoopMonitor(ROOMS)
+    now = 0.0
+    while now < 30 * 3600:
+        hour = (now / 3600) % 24
+        readings = {
+            room: RoomReading(open=hour < 6 if room == "climate.a" else hour < 18, temperature=22.0)
+            for room in ROOMS
+        }
+        monitor.update(now, readings, None)
+        now += 60
+
+    advice, percent = monitor.advice("climate.a")
+    assert advice == "reduce"
+    assert 10 <= percent <= 30
+    assert monitor.advice("climate.b") == ("ok", 0)

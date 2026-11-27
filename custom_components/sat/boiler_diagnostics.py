@@ -25,6 +25,7 @@ from __future__ import annotations
 import calendar
 from collections import deque
 from statistics import median
+from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import issue_registry as ir
@@ -163,6 +164,28 @@ class BoilerDiagnostics:
             self._cylinder_drops.extend(
                 float(drop) for drop in drops if isinstance(drop, int | float)
             )
+        self._load_reheats(data)
+
+    def _load_reheats(self, data: dict[str, Any]) -> None:
+        """Bring the last day's reheats and the last draw back on this run's clock."""
+        offset = monotonic() - time()
+        reheats = data.get("reheats")
+        if isinstance(reheats, list):
+            restored = [
+                (float(when) + offset, bool(dry))
+                for when, dry in (
+                    item
+                    for item in reheats
+                    if isinstance(item, list | tuple) and len(item) == 2  # noqa: PLR2004
+                )
+                if isinstance(when, int | float)
+            ]
+            merged = sorted([*restored, *self._reheats])
+            self._reheats.clear()
+            self._reheats.extend(merged)
+        drawn = data.get("water_drawn_at")
+        if isinstance(drawn, int | float) and self._water_drawn_at is None:
+            self._water_drawn_at = float(drawn) + offset
 
     async def async_save(self) -> None:
         if self._store is not None:
@@ -174,6 +197,17 @@ class BoilerDiagnostics:
             "flue_return_gap": self._gap,
             "flue_return_gap_hours": self._gap_hours,
             "cylinder_drops": list(self._cylinder_drops),
+            # Kept on the wall clock, so a restart carries the last day's reheats over
+            **self._reheats_to_save(),
+        }
+
+    def _reheats_to_save(self) -> dict[str, Any]:
+        offset = time() - monotonic()
+        return {
+            "reheats": [[when + offset, dry] for when, dry in self._reheats],
+            "water_drawn_at": None
+            if self._water_drawn_at is None
+            else self._water_drawn_at + offset,
         }
 
     @property
@@ -379,6 +413,8 @@ class BoilerDiagnostics:
         if started and self._water_last is not None:
             dry = self._water_drawn_at is None or now - self._water_drawn_at > DRY_REHEAT_SECONDS
             self._reheats.append((now, dry))
+            if self._store is not None:
+                self._store.async_delay_save(self._data, 60)
         while self._reheats and now - self._reheats[0][0] > REHEAT_WINDOW_SECONDS:
             self._reheats.popleft()
 

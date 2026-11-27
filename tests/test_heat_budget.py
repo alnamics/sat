@@ -3,6 +3,7 @@
 import math
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
+from time import monotonic, time
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -761,3 +762,166 @@ async def test_the_integral_of_a_model_before_the_handover_starts_over() -> None
     assert budget._integral == 0.0
     assert budget.heat_loss == pytest.approx(0.087)
     assert budget.heat_capacity == pytest.approx(4.5)
+
+
+def windy_day_with_cut_outs(budget: HeatBudget, *, cut_out_hours: set[int]) -> None:
+    """Feed days of a 50 W/K flat whose cut-out heat comes two hours later."""
+    budget._wind_mean, budget._wind_square = 15.0, 250.0
+    for day in range(3):
+        for hour in range(24):
+            index = day * 24 + hour
+            wind = 25.0 if hour % 4 == 0 else 8.0
+            heat = 0.05 * 16.0
+            if hour in cut_out_hours:
+                heat *= 0.2
+            elif hour - 2 in cut_out_hours:
+                heat += 0.05 * 16.0 * 0.8
+            measured = _Hour(
+                heat_kwh=heat,
+                kelvin_hours=16.0,
+                seconds=3600.0,
+                indoor_start=22.0,
+                indoor_end=22.0,
+                wall_end=float(index),
+                wind_kelvin_hours=16.0 * wind,
+                wind_hours=wind,
+                wind_seconds=3600.0,
+                cut_outs=1.0 if hour in cut_out_hours else 0.0,
+            )
+            budget._hours.append(measured)
+            budget._fit()
+
+
+def test_a_day_with_cut_outs_teaches_no_wind() -> None:
+    budget = HeatBudget()
+    budget._learner.theta = [0.05, 4.0]
+    budget._learner.updates = 200
+    windy_day_with_cut_outs(budget, cut_out_hours={0, 4, 8})
+    assert budget._wind_learner.updates == 0
+    assert budget.wind_sensitivity == 0.0
+
+
+def test_a_day_without_cut_outs_still_teaches_the_wind() -> None:
+    budget = HeatBudget()
+    budget._learner.theta = [0.05, 4.0]
+    budget._learner.updates = 200
+    windy_day_with_cut_outs(budget, cut_out_hours=set())
+    assert budget._wind_learner.updates > 0
+
+
+def test_cut_outs_are_counted_in_the_hour_they_happen() -> None:
+    budget = HeatBudget()
+    now = 0.0
+    ends: tuple[float, ...] = ()
+    # An earlier cut-out, before the budget started watching, is not counted
+    ends = (-100.0,)
+    budget.update(inputs(now, cut_short_burn_ends=ends))
+    for minute in range(1, 50):
+        now = minute * 60.0
+        if minute in (10, 20):
+            ends = (*ends, now)
+        budget.update(inputs(now, cut_short_burn_ends=ends))
+    assert budget._hour.cut_outs == 2
+    # A lost flame counts too
+    now += 60
+    budget.update(inputs(now, cut_short_burn_ends=ends, flame_loss_ends=(now,)))
+    assert budget._hour.cut_outs == 3
+
+
+def test_an_hour_saved_before_the_cut_outs_loads() -> None:
+    hour = _Hour.from_list([1.2, 20.0, 0.1, 3600.0, 21.9, 22.0, 1_763_200_000.0, 0.0, 0.0, 0.0])
+    assert hour is not None
+    assert hour.cut_outs == 0.0
+    saved = _Hour(
+        heat_kwh=1.0,
+        kelvin_hours=20.0,
+        seconds=3600.0,
+        indoor_start=22.0,
+        indoor_end=22.0,
+        wall_end=1_763_200_000.0,
+        cut_outs=2.0,
+    ).to_list()
+    restored = _Hour.from_list(saved)
+    assert restored is not None
+    assert restored.cut_outs == 2.0
+
+
+async def restart(saved: dict[str, Any]) -> HeatBudget:
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+    budget = HeatBudget()
+    with patch("custom_components.sat.heat_budget.heat_budget_store", return_value=FakeStore()):
+        await budget.async_initialize(MagicMock(), "entry")
+    return budget
+
+
+async def test_a_block_goes_on_after_a_short_restart() -> None:
+    clock = monotonic()
+    budget = HeatBudget(heat_loss_kw_per_k=0.05)
+    budget._credit = 0.4
+    budget._period_end = clock + 1800
+    budget._planned_on = 1500.0
+    budget._block_target = 2.2
+    budget._block_active = True
+    budget._block_started = clock - 600
+    budget._block_delivered = 0.9
+    budget._last_block_end = clock - 3000
+    saved = budget._data_to_save()
+
+    restarted = await restart(saved)
+    assert restarted._block_active
+    assert restarted.status == PWMStatus.ON
+    assert restarted._block_delivered == pytest.approx(0.9)
+    assert restarted._block_target == pytest.approx(2.2)
+    assert restarted._credit == pytest.approx(0.4)
+    assert restarted._period_end == pytest.approx(clock + 1800, abs=5)
+    assert restarted._block_started == pytest.approx(clock - 600, abs=5)
+    assert restarted._last_block_end == pytest.approx(clock - 3000, abs=5)
+
+
+async def test_a_long_restart_plans_afresh() -> None:
+    clock = monotonic()
+    budget = HeatBudget(heat_loss_kw_per_k=0.05)
+    budget._credit = 0.4
+    budget._period_end = clock + 1800
+    budget._block_active = True
+    budget._block_started = clock
+    saved = budget._data_to_save()
+    saved["dispatch"]["saved"] -= 3600
+
+    restarted = await restart(saved)
+    assert not restarted._block_active
+    assert restarted._credit == 0.0
+    assert restarted._period_end is None
+
+
+async def test_a_resumed_pause_still_waits_for_the_boiler() -> None:
+    # The block ended two minutes before the restart: the next one may not start at once
+    clock = monotonic()
+    budget = HeatBudget(heat_loss_kw_per_k=0.05, minimum_off_seconds=600)
+    budget._last_block_end = clock - 120
+    budget._period_end = clock + 600
+    restarted = await restart(budget._data_to_save())
+    assert not restarted._may_start(clock)
+    assert restarted._may_start(clock + 500)
+
+
+async def test_the_piggyback_count_survives_a_restart() -> None:
+    budget = HeatBudget()
+    budget._piggybacks = 3
+    restarted = await restart(budget._data_to_save())
+    assert restarted.attributes["hot_water_piggybacks"] == 3
+
+
+async def test_a_broken_dispatch_is_ignored() -> None:
+    budget = HeatBudget()
+    saved = budget._data_to_save()
+    saved["dispatch"] = {"saved": "yesterday", "credit": "lots"}
+    restarted = await restart(saved)
+    assert restarted._credit == 0.0
+    saved["dispatch"] = {"saved": time(), "credit": "lots", "block_active": True}
+    restarted = await restart(saved)
+    assert restarted._credit == 0.0
+    assert not restarted._block_active

@@ -146,7 +146,7 @@ from .curve_advisor import CurveAdvisor
 from .efficiency import EfficiencyTracker, fuel_for
 from .entity import SatEntity
 from .errors import Error, Errors
-from .flow_guard import FlowGuard
+from .flow_guard import FlowGuard, LoopTracker
 from .heat_budget import (
     HeatBudget,
     HeatBudgetInputs,
@@ -514,6 +514,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._relight_hot_water_seen = False
         # Learns which open room valves let too little water through for an ignition
         self.flow_guard = FlowGuard()
+        # Room valves count as open only once they have had their time to open
+        self._loops = LoopTracker(self._valve_opening_time)
         self._flow_waiting = False
         self._overshoot_seen = False
         self._init_extras(coordinator, config_options)
@@ -780,6 +782,22 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self.async_on_remove(
             async_track_state_change_event(
                 self.hass, self.areas.items(), self._async_climate_changed
+            )
+        )
+
+        # The flow guard follows every valve change, so a thermostat switching each minute is
+        # never taken for an open loop
+        now = monotonic()
+        for entity_id in self._radiators + self.areas.items():
+            self._loops.seen(
+                entity_id,
+                open_=self._climate_wants_heat(self.hass.states.get(entity_id)),
+                now=now,
+                settled=True,
+            )
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass, self._radiators + self.areas.items(), self._async_loop_changed
             )
         )
 
@@ -1600,12 +1618,15 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         _LOGGER.debug("Control setpoint has been updated to: %.1f°C", self._setpoint)
 
     def _open_room_loops(self) -> frozenset[str]:
-        """Return the controlled room climates whose valves are open now."""
-        climates: list[str] = [*self._radiators, *self.areas.items()]
-        return frozenset(
-            entity_id
-            for entity_id in climates
-            if self._climate_wants_heat(self.hass.states.get(entity_id))
+        """Return the controlled room climates whose valves have been open long enough."""
+        return self._loops.open_loops(monotonic())
+
+    async def _async_loop_changed(self, event: Event[EventStateChangedData]) -> None:
+        """Note when a room thermostat starts or stops asking for heat."""
+        self._loops.seen(
+            event.data["entity_id"],
+            open_=self._climate_wants_heat(event.data.get("new_state")),
+            now=monotonic(),
         )
 
     def _wait_for_flow(self, *, on_phase: bool) -> bool:

@@ -26,6 +26,11 @@ WARM_OFFSET = 0.5
 COLD_OFFSET = -0.5
 OPEN_SHARE_LIMIT = 0.85
 FULL_OPEN_SHARE = 0.95
+# A valve that closes often gets too much water only against the others: when every room
+# closes as often, the house is at its room targets and turning all rotameters down would only
+# starve the boiler of water at its ignition. A room is told to reduce once its valve is open
+# this much less than the rooms' mean
+RELATIVE_SHARE_GAP = 0.15
 # Flow regression: about a week of burns of memory, and samples per state before a loop counts
 FLOW_FORGETTING = 0.995
 FLOW_COVARIANCE_LIMIT = 100.0
@@ -181,11 +186,16 @@ class LoopMonitor:
             return "learning", 0
 
         offset = room.offset or 0.0
-        if room.open_share < OPEN_SHARE_LIMIT or offset > WARM_OFFSET:
+        shares = [
+            other.open_share for other in self._rooms.values() if other.open_share is not None
+        ]
+        gap = sum(shares) / len(shares) - room.open_share
+        closes_often = room.open_share < OPEN_SHARE_LIMIT and gap >= RELATIVE_SHARE_GAP
+        if closes_often or offset > WARM_OFFSET:
             percent = (
                 10
                 + 20 * max(offset - WARM_OFFSET, 0.0)
-                + 50 * max(OPEN_SHARE_LIMIT - room.open_share, 0.0)
+                + 50 * (max(gap, 0.0) if closes_often else 0.0)
             )
             return "reduce", int(min(30, round(percent / 5) * 5))
 

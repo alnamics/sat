@@ -27,6 +27,34 @@ AFTER_HOT_WATER_SECONDS = 300.0
 MAXIMUM_SETS = 32
 
 
+# A thermal actuator takes minutes to open: a room valve counts as open once its thermostat has
+# asked for heat this long without a break, so one switching every minute never counts
+LOOP_SETTLE_SECONDS = 180.0
+
+
+class LoopTracker:
+    """Follow since when each room thermostat asks for heat, without a break."""
+
+    def __init__(self, settle_seconds: float = LOOP_SETTLE_SECONDS) -> None:
+        self.settle_seconds = max(LOOP_SETTLE_SECONDS, settle_seconds)
+        self._since: dict[str, float] = {}
+
+    def seen(self, entity_id: str, *, open_: bool, now: float, settled: bool = False) -> None:
+        """Note a thermostat's state; a valve found open at startup has had its time."""
+        if not open_:
+            self._since.pop(entity_id, None)
+        elif entity_id not in self._since:
+            self._since[entity_id] = now - self.settle_seconds if settled else now
+
+    def open_loops(self, now: float) -> frozenset[str]:
+        """Return the room valves that have been open long enough to carry water."""
+        return frozenset(
+            entity_id
+            for entity_id, since in self._since.items()
+            if now - since >= self.settle_seconds
+        )
+
+
 def _key(loops: frozenset[str]) -> str:
     return ",".join(sorted(loops))
 

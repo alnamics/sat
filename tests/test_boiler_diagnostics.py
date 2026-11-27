@@ -1,7 +1,9 @@
 """Tests for the boiler repair issues."""
 
 from datetime import date, timedelta
-from typing import TYPE_CHECKING
+from time import monotonic, time
+from typing import TYPE_CHECKING, Any
+from unittest.mock import patch
 
 from homeassistant.helpers import issue_registry as ir
 
@@ -337,3 +339,76 @@ async def test_without_a_water_meter_no_reheat_counts_are_shown(hass: HomeAssist
     diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
     run(diagnostics, 0.1)
     assert "cylinder_reheats_24h" not in diagnostics.attributes
+
+
+async def test_the_last_day_of_reheats_survives_a_restart(hass: HomeAssistant) -> None:
+    diagnostics = BoilerDiagnostics(hass, "entry", "SAT")
+    start = monotonic()
+
+    def step(target: BoilerDiagnostics, now: float, litres: float, *, hot_water: bool) -> None:
+        target.update(
+            now,
+            pressure=1.5,
+            fault=False,
+            fault_code=None,
+            exhaust=None,
+            return_temperature=None,
+            settled_heating_burn=False,
+            hot_water=hot_water,
+            water_litres=litres,
+        )
+
+    # Two dry reheats and one after a shower, all within the last few hours
+    now = start - 4 * 3600
+    step(diagnostics, now, 1000.0, hot_water=False)
+    step(diagnostics, now + 60, 1000.0, hot_water=True)
+    step(diagnostics, now + 7200, 1000.0, hot_water=False)
+    step(diagnostics, now + 7260, 1000.0, hot_water=True)
+    step(diagnostics, now + 9000, 1020.0, hot_water=False)
+    step(diagnostics, now + 9060, 1020.0, hot_water=True)
+    step(diagnostics, start, 1020.0, hot_water=False)
+    assert diagnostics.attributes["cylinder_reheats_24h"] == 3
+    saved = diagnostics._data()
+
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+    restarted = BoilerDiagnostics(hass, "entry", "SAT")
+    with patch(
+        "custom_components.sat.boiler_diagnostics.boiler_diagnostics_store",
+        return_value=FakeStore(),
+    ):
+        await restarted.async_initialize()
+    step(restarted, monotonic(), 1020.0, hot_water=False)
+
+    attributes = restarted.attributes
+    assert attributes["cylinder_reheats_24h"] == 3
+    assert attributes["cylinder_reheats_without_draw_24h"] == 2
+
+
+async def test_reheats_older_than_a_day_are_not_restored(hass: HomeAssistant) -> None:
+    saved = {"reheats": [[time() - 30 * 3600, True], [time() - 3600, True], ["x", True]]}
+
+    class FakeStore:
+        async def async_load(self) -> dict[str, Any]:
+            return saved
+
+    restarted = BoilerDiagnostics(hass, "entry", "SAT")
+    with patch(
+        "custom_components.sat.boiler_diagnostics.boiler_diagnostics_store",
+        return_value=FakeStore(),
+    ):
+        await restarted.async_initialize()
+    restarted.update(
+        monotonic(),
+        pressure=1.5,
+        fault=False,
+        fault_code=None,
+        exhaust=None,
+        return_temperature=None,
+        settled_heating_burn=False,
+        hot_water=False,
+        water_litres=500.0,
+    )
+    assert restarted.attributes["cylinder_reheats_24h"] == 1
