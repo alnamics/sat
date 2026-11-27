@@ -17,6 +17,7 @@ Ta strona pokazuje na jednym konkretnym mieszkaniu, co SAT robi z kotłem: kiedy
 - [Ciepła woda i zasobnik](#ciepła-woda-i-zasobnik)
 - [Zaniki płomienia](#zaniki-płomienia)
 - [Pętle i termostaty pokojowe](#pętle-i-termostaty-pokojowe)
+- [Wilgotność](#wilgotność)
 - [Okno, awaria, ochrona wylewki](#okno-awaria-ochrona-wylewki)
 - [Co pokazują sensory](#co-pokazują-sensory)
 - [Ustawienia tej instalacji](#ustawienia-tej-instalacji)
@@ -47,9 +48,9 @@ Parametry kotła (numer z iSense; na panelu kotła o jeden większy). SAT odczyt
 
 ## Problem: kocioł za duży dla domu
 
-Przy 5–12 °C na zewnątrz mieszkanie potrzebuje na ogrzewanie **7–20 kWh na dobę**, czyli średnio 0,3–0,8 kW. Kocioł nie zejdzie poniżej 5,3 kW, więc zawsze musi pracować z przerwami. Moc 33 kW dobrano pod ciepłą wodę.
+Przy 5 °C na zewnątrz mieszkanie potrzebuje na ogrzewanie około **37 kWh na dobę**, średnio 1,5 kW, a przy −2 °C około **52 kWh**, czyli 2,2 kW. Kocioł nie zejdzie poniżej 5,3 kW, więc zawsze musi pracować z przerwami. Moc 33 kW dobrano pod ciepłą wodę.
 
-Mieszkanie dostaje sporo darmowego ciepła: od sąsiadów z boku i z dołu, ludzi, sprzętów i ciepłego zasobnika. Dlatego potrzeba jest mniejsza, niż wynikałoby ze strat przez ściany i okna. SAT uczy się **efektywnych** strat (tu 45–55 W/K), czyli tego, ile ciepła dom naprawdę potrzebuje od kotła.
+SAT uczy się **efektywnych** strat, czyli tego, ile ciepła na kelwin dom naprawdę potrzebuje od kotła: tu **około 90 W/K**, przy pojemności cieplnej około 4,5 kWh/K (stała czasowa około 50 godzin). Ciepło od sąsiadów, ludzi i sprzętów jest już odjęte. W pierwszym tygodniu SAT nauczył się tylko 45–55 W/K, bo resztę przejęła pojemność; do czasu poprawki mieszkanie było 0,5–1 °C poniżej celu ([test na prawdziwym kotle](mpx.md#test-na-prawdziwym-kotle)).
 
 Cel SAT: **mało startów, długie palenia na minimalnej mocy, jak najchłodniejsza woda.**
 
@@ -59,7 +60,7 @@ Krzywa grzewcza i PID nadal są liczone, ale dopóki budżet jest gotowy, nie st
 
 1. **Potrzeba.** *H × (22 °C − temp. zewnętrzna) − słońce + korekta za błąd pokoju.* Każde 0,1 °C za ciepło lub za zimno zmienia potrzebę o około 40 W; część całkująca powoli wyrównuje to, czego model nie widzi.
 2. **Kredyt.** Co godzinę potrzeba trafia do kredytu, a ciepło z palnika (bez ciepłej wody) go zmniejsza.
-3. **Blok.** Gdy kredyt i potrzeba na godzinę dadzą co najmniej 10 minut palenia na minimum, rusza blok. Przy 0,4–0,6 kW wychodzi blok 12–15 minut co 2–3 godziny.
+3. **Blok.** Gdy kredyt i potrzeba na godzinę dadzą co najmniej minimalne palenie (tu 15 minut) na mocy minimalnej, rusza blok. Przy 1,5–2,4 kW wychodzi 17–27 minut co godzinę; w łagodny, słoneczny dzień budżet czasem opuszcza godzinę.
 4. **Nauka.** Co godzinę zapisuje ciepło, różnicę temperatur, słońce i zmianę temperatury w pokoju. Straty liczy z godzin bez słońca, a zysk ze słońca osobno z godzin słonecznych.
 
 Pokój ≥ 0,5 °C za ciepły nie dostaje nic; po obniżeniu celu budżet czeka, aż pokój zejdzie na 0,2 °C od nowego celu.
@@ -72,9 +73,9 @@ Pokój ≥ 0,5 °C za ciepły nie dostaje nic; po obniżeniu celu budżet czeka,
 | 0:05 | zapłon: modulacja 41%, wentylator 58 Hz (około 3500 obr/min) |
 | 0:30–1:30 | kocioł sam schodzi z mocą: wentylator 40 → 33 → 24 → **19 Hz** (minimum, około 1150 obr/min) |
 | 3:00 | zasilanie 35–40 °C, powrót 30–35 °C, spaliny kilka K nad powrotem: pełna kondensacja |
-| 12:00–15:00 | blok dostarczył zaplanowane ciepło, SAT wysyła 10 °C, płomień gaśnie |
+| 17:00–27:00 | blok dostarczył zaplanowane ciepło, SAT wysyła 10 °C; kocioł zmniejsza moc, a płomień gaśnie około 3 minuty później (SAT liczy też to ciepło) |
 
-Woda nie dochodzi do 45 °C, więc kocioł nie przerywa palenia na limicie temperatury. Przez pierwsze 4 minuty SAT co 10 sekund pyta kocioł o kod usterki.
+Przy wystarczającym przepływie woda nie dochodzi do 45 °C, więc kocioł nie przerywa palenia na limicie temperatury. Przez pierwsze 4 minuty SAT co 10 sekund pyta kocioł o kod usterki.
 
 ## Przerwa między blokami
 
@@ -88,11 +89,13 @@ Woda nie dochodzi do 45 °C, więc kocioł nie przerywa palenia na limicie tempe
 - Kocioł ma pierwszeństwo c.w.u. i sam decyduje o dogrzaniu zasobnika (do 45 °C, moc do około 16 kW z P13). W 4 dni było 51 dogrzań, zwykle po 1,5–4 minuty.
 - **Dogrzewanie bez flagi:** Lumea nie zawsze zgłasza grzanie wody. SAT rozpoznaje je po wodzie, która w 20 sekund rośnie o ponad 10 °C ponad nastawę.
 - **Przejęcie:** gdy zasobnik potrzebuje ciepła w trakcie bloku, kocioł przerywa grzanie i dogrzewa zasobnik. SAT nie liczy tego jako przerwania ani zaniku płomienia, a blok trwa dalej po dogrzaniu.
+- **Zapłon po dogrzaniu:** zapalony na ogrzewanie w ciągu pół minuty po dogrzaniu, jeszcze gorący wymiennik podnosił zasilanie z 40 do 50 °C w 15 sekund, a kocioł wyłączał palnik i czekał 10 minut. Teraz SAT trzyma setpoint ogrzewania na 10 °C w trakcie dogrzewania i co najmniej minutę po nim, przy pracującej pompie, aż zasilanie spadnie poniżej 35 °C (*Margines zapłonu po ciepłej wodzie*, 10 K poniżej 45 °C setpointu fazy ON).
+- **Dogrzanie jako początek bloku:** gdy zasobnik dogrzewa się pod koniec okresu, następny blok rusza zaraz po nim, na ciepłym kotle (`hot_water_piggybacks`).
 - **Poranne prysznice:** czujnik zasobnika schodzi wtedy do 28–34 °C, bo 16 kW nie nadąża za poborem. Jeśli woda pod koniec prysznica robi się letnia, pomoże większe P13 (np. 60–70%) albo nastawa 50 °C.
 
 ## Zaniki płomienia
 
-W 4 dni płomień zgasł w **10 z 39 startów** ogrzewania (26%). Kocioł zapala się ponownie po około 23 sekundach, czasem 3–4 razy pod rząd. Zaniki zdarzały się przy zimnym i przy ciepłym kotle, głównie wieczorem i rano, częściej w deszczu (36% wobec 20%). To wskazuje na spalanie: ciśnienie gazu w godzinach szczytu, recyrkulację spalin albo elektrodę jonizacyjną.
+W pierwsze 4 dni płomień zgasł w **10 z 39 startów** ogrzewania (26%); od 25 listopada nie zdarzyło się to ani razu. Kocioł zapala się ponownie po około 23 sekundach, czasem 3–4 razy pod rząd. Zaniki zdarzały się przy zimnym i przy ciepłym kotle, głównie wieczorem i rano, częściej w deszczu (36% wobec 20%). To wskazuje na spalanie: ciśnienie gazu w godzinach szczytu, recyrkulację spalin albo elektrodę jonizacyjną.
 
 SAT:
 - odróżnia zanik (zasilanie ponad 3 K poniżej nastawy) od przerwania na limicie temperatury;
@@ -107,7 +110,14 @@ Termostaty Z-Temp2 działają jak ograniczniki (sypialnia 22 °C, reszta 23 °C)
 
 - sprawdzenia, czy jakaś pętla przyjmie ciepło: przy wszystkich zamkniętych kocioł nie pali, a budżet nie nalicza kredytu;
 - sensorów *Open loops* i *Loops to rebalance* oraz podpowiedzi do rotametrów;
+- [ochrony zapłonu](mpx.md#ochrona-zapłonu): przy jakich zestawach otwartych pętli płynie za mało wody;
 - pomiaru pętli (`sat.measure_loops`).
+
+**Za mało wody.** 27 listopada salon i sypialnia przez cały dzień miały temperaturę z nastaw swoich termostatów i oprócz korytarza i łazienki otwarta była tylko pętla pokoju dziecięcego. Przez kocioł płynęło 10–11 l/min zamiast 13–18, zasilanie skakało z 31 do 50 °C w 15 sekund po każdym zapłonie i 25 z 27 zapłonów zgasło na granicy 45 °C (P15), za każdym razem z 10 minutami czekania. Pokój i tak trzymał 21,8–22,1 °C, bo budżet nadrabiał ciepło długimi paleniami, gdy tylko otworzyła się któraś pętla, ale kocioł miał dwa razy więcej startów. SAT uczy się teraz takich zestawów zaworów i pozwala blokowi czekać do 45 minut na kolejną pętlę. Termostaty, które przy temperaturze równej nastawie przełączają się co minutę (tak robiły dwa z nich), w ogóle nie otwierają pętli, bo siłownik potrzebuje 5–6 minut; prawdziwym lekarstwem jest większa histereza Z-Temp2, nastawy ograniczników o stopień wyżej albo szybsza pompa lub zawór upustowy.
+
+## Wilgotność
+
+Termostaty Z-Temp2 podają wilgotność, więc SAT liczy ryzyko pleśni w narożnikach przy ścianach zewnętrznych. Przy praniu suszonym w mieszkaniu sypialnia i pokój dziecięcy miały punkt rosy 13–16 °C, a narożniki 93–100 % (komunikat *Ryzyko pleśni*). Przy takiej wilgotności nawet 23 °C nie utrzymałoby narożników poniżej 80 %; punkt rosy 9–10 °C (45–50 % przy 21 °C) utrzymałby, już przy 20–21 °C. Pomaga osuszacz w pokoju, w którym schnie pranie, i wietrzenie, gdy *Warto wietrzyć* jest włączone; obniżanie temperatury, zanim powietrze będzie suchsze, pogarsza sprawę.
 
 ## Okno, awaria, ochrona wylewki
 
@@ -117,17 +127,21 @@ Termostaty Z-Temp2 działają jak ograniczniki (sypialnia 22 °C, reszta 23 °C)
 
 ## Co pokazują sensory
 
-Wartości z 21 listopada (+5 °C na zewnątrz):
+Wartości z 27 listopada (−2 °C na zewnątrz, wiatr 18 km/h):
 
 | Sensor / atrybut | Wartość | Co znaczy |
 |---|---|---|
-| `heat_loss_w_per_k` | około 50 | efektywne straty domu |
-| `heat_need_kw` | 0,76 | potrzeba w tej chwili |
-| `heat_block_minutes` | 13 | długość następnego bloku |
-| `flame_losses_24h` | 2–6 | zaniki płomienia w ostatniej dobie |
-| `flue_return_gap` | 2,7 K | czysty wymiennik, pełna kondensacja |
+| `heat_loss_w_per_k` | 91 | efektywne straty domu |
+| `heat_capacity_kwh_per_k` | 4,7 | ciepło magazynowane na kelwin |
+| `heat_need_kw` | 2,4 | potrzeba w tej chwili |
+| `heat_block_minutes` | 24 | długość następnego bloku |
+| `wind_heat_loss_percent_per_10kmh` | 0,3–2,3 | wiatr ma tu niewielkie znaczenie |
+| `flame_losses_24h` | 0 | zaniki płomienia w ostatniej dobie |
+| `flue_return_gap` | 2,8 K | czysty wymiennik, pełna kondensacja |
+| *Szacowana sprawność kotła* | około 96 % | powrót 28–32 °C |
 | *Prędkość wentylatora* | 19–58 Hz | 19 Hz to minimum, 58 Hz zapłon |
-| *Estimated water flow* | około 15 l/min | przy otwartych pętlach |
+| *Estimated water flow* | 10–18 l/min | 10–11 przy jednej otwartej pętli pokojowej, 13–18 przy większej liczbie |
+| *Moc kotła* | 5,28 kW | 33 kW × 16 % minimalnej modulacji, jak podaje kocioł |
 | *Identyfikatory OpenTherm* | 28 | identyfikatory, na które kocioł odpowiada; atrybuty: parametry kotła i kody usterek |
 
 Lumea nie podaje liczników startów i godzin (ID 116–123 nieznane), temperatury wymiennika (34) ani prądu jonizacji (36). SAT liczy starty, godziny, ciepło i gaz sam.
@@ -142,10 +156,16 @@ Lumea nie podaje liczników startów i godzin (ID 116–123 nieznane), temperatu
 | Kocioł i serwis → Blokada ponownego zapłonu w kotle | 10 min | tyle samo co P17 w kotle |
 | Kocioł i serwis → Czas otwarcia siłowników | 6 min | siłowniki Afriso |
 | Kocioł i serwis → Nie wyłączaj ogrzewania między fazami PWM | włączone | jedno dogrzanie zasobnika na noc zamiast pięciu |
-| Budżet ciepła → Budżet ciepła | Włączony | bloki 12–15 min co 2–3 godziny |
-| Budżet ciepła → Straty ciepła domu | 0 (nauka) | stała wartość tylko jako zabezpieczenie, wtedy około 45 W/K |
+| Budżet ciepła → Budżet ciepła | Włączony | bloki 17–27 min mniej więcej co godzinę |
+| Budżet ciepła → Minimalne palenie | 15 min | mniej, a dłuższych bloków |
+| Budżet ciepła → Straty ciepła domu | 0 (nauka) | stała wartość tylko jako zabezpieczenie, wtedy około 90 W/K |
+| Budżet ciepła → Pojemność cieplna domu | 0 (nauka) | około 4,5 kWh/K |
+| Budżet ciepła → Prognoza pogody | Met.no | trend, słońce i wiatr |
 | Budżet ciepła → Wyłączenie przy ciepłej pogodzie | włączone | ogrzewanie wyłącza się przy ciepłej średniej dobowej |
-| Obecność i okna → Wykrywaj otwarte okna po temperaturze | włączone | iSense podaje 0,1 °C |
+| Kocioł i serwis → Czekanie na otwartą pętlę | 45 min | domyślnie |
+| Kocioł i serwis → Margines zapłonu po ciepłej wodzie | 10 K | domyślnie |
+| Ciepła woda → Licznik wody | wodomierz mieszkania | odróżnia dogrzania po odkręceniu wody od tych bez poboru |
+| Obecność i okna → Wykrywaj otwarte okna po temperaturze | wyłączone | wyłączone przez właściciela; godziny z szybkim spadkiem temperatury i tak są pomijane w nauce |
 | Kocioł i serwis → Ostatni przegląd kotła | przegląd do 1.10.2027 | przypomnienie w Naprawach |
 
 Zalecane ustawienia termostatów Z-Temp2: raport co 300 s (parametr 1) i przy zmianie o 0,5 °C (parametr 2), histereza 0,5 °C (parametr 10).

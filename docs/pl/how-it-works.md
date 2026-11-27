@@ -79,7 +79,7 @@ Przejmuje sterowanie z powrotem, gdy wszystko wróci.
 
 ## Monitoring (MPX)
 
-Ten fork prowadzi też liczniki (starty, godziny pracy palnika, ciepło, gaz, koszt, stopniodni), szacuje sprawność kotła i przepływ wody, obserwuje pętle w pokojach i zgłasza w Naprawach spadające ciśnienie, brudny wymiennik, przegrzaną podłogę i inne problemy. Zobacz [Dodatki MPX](mpx.md#monitoring).
+Ten fork prowadzi też liczniki (starty, godziny pracy palnika, ciepło, gaz, koszt, stopniodni), szacuje sprawność kotła i przepływ wody, obserwuje pętle w pokojach i wilgotność przy ścianach i zgłasza w Naprawach spadające ciśnienie, brudny wymiennik, przegrzaną podłogę, ryzyko pleśni i inne problemy. Zobacz [Dodatki MPX](mpx.md#monitoring). Chroni też zapłony kotła po dogrzaniu zasobnika i przy zbyt małym przepływie; zobacz [Ochrona zapłonu](mpx.md#ochrona-zapłonu).
 
 ## Więcej do poczytania
 

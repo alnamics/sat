@@ -28,7 +28,7 @@ Zwykły termostat włącza i wyłącza kocioł, a kocioł grzeje wodę do stałe
 
 Ten fork powstał na bazie [SAT v2 Thiago Belliniego Ribeiro](https://github.com/bellini666/SAT), który sam jest forkiem oryginalnego [Smart Autotune Thermostat](https://github.com/Alexwijn/SAT) autorstwa [Alexa Wijnholdsa](https://github.com/Alexwijn). Został napisany dla przewymiarowanego kotła kondensacyjnego z zasobnikiem (De Dietrich Lumea, 33 kW, minimum około 5 kW) pracującego na ogrzewanie podłogowe w wylewce, za bramką OpenTherm Gateway. Dodaje to, czego taka instalacja potrzebuje, żeby kocioł przestał taktować i zużywał mniej gazu. Wszystko, co nowe, jest wyłączone albo tylko informuje, dopóki tego nie włączysz.
 
-Na testowym kotle budżet ciepła zmniejszył liczbę startów na ogrzewanie z około 27 do 8–10 na dobę, z paleniami po 12–23 minuty zamiast 2–3 i wodą o temperaturze 35–44 °C. Prawdziwy kocioł pokazał też kilka rzeczy, których nie wychwyciły testy; są już poprawione ([test na prawdziwym kotle](docs/pl/mpx.md#test-na-prawdziwym-kotle)).
+Na testowym kotle budżet ciepła zamienił palenia po 2–3 minuty (około 27 startów na dobę) w jeden blok po 16–35 minut mniej więcej co godzinę, z wodą o temperaturze 33–45 °C i spalinami 2–3 K cieplejszymi od powrotu. Prawdziwy kocioł pokazał też kilka rzeczy, których nie wychwyciły testy; są już poprawione ([test na prawdziwym kotle](docs/pl/mpx.md#test-na-prawdziwym-kotle)).
 
 ## Co dodaje ten fork
 
@@ -42,13 +42,16 @@ Wszystko jest opisane na stronie [Dodatki MPX][mpx].
 - 🚿 **Harmonogram ciepłej wody** z temperaturą ekonomiczną i cotygodniowym przegrzewem przeciw legionelli.
 - 🏃 **Obecność**: preset Away, gdy nikogo nie ma, i wcześniejszy powrót grzania w zadanej odległości od domu.
 - 🪟 **Wykrywanie otwartego okna** po szybkim spadku temperatury, bez czujników otwarcia.
+- 🔥 **Ochrona zapłonu**: wstrzymuje zapłon ogrzewania po dogrzaniu zasobnika, aż kocioł ostygnie, i pozwala blokowi poczekać na otwarcie kolejnej pętli, gdy płynie za mało wody, żeby zapalić.
 - ⚙️ Ustawienia dla konkretnego kotła: czas antytaktowania, czas otwarcia zaworów, liczba przerwanych paleń w fazie PWM, utrzymanie ogrzewania włączonego między fazami PWM, uczona wartość ochrony przed przegrzaniem.
 
 **Monitoring** (włączony, tylko informuje)
 - 📈 Liczniki do panelu Energia: starty i godziny pracy palnika, ciepło na ogrzewanie i ciepłą wodę, gaz, stopniodni grzania, koszt gazu.
 - 🍃 **Szacowana sprawność kotła** z temperatury spalin albo powrotu.
 - 💧 **Szacowany przepływ wody**, otwarte pętle i podpowiedź do rotametru dla każdego pokoju; akcja `sat.measure_loops` mierzy przepływ każdej pętli.
-- 🚨 Komunikaty w Naprawach: niskie lub spadające ciśnienie wody, błąd kotła, brudny wymiennik, przegrzanie wylewki, za mały przepływ, termin przeglądu, wzrost zużycia gazu.
+- 🚨 Komunikaty w Naprawach: niskie lub spadające ciśnienie wody, błąd kotła, częsta utrata płomienia, wychładzanie zasobnika przez ogrzewanie, brudny wymiennik, przegrzanie wylewki, za mały przepływ, termin przeglądu, wzrost zużycia gazu, ryzyko pleśni.
+- 🦠 **Ryzyko pleśni i wietrzenie**: wilgotność w najzimniejszym narożniku każdego pokoju i czujnik *Warto wietrzyć*, gdy powietrze z zewnątrz osuszy mieszkanie.
+- 📋 **Wczorajszy bilans**, **raport dla serwisu**, powiadomienia o zmianie parametru kotła i angielskie identyfikatory encji w każdym języku.
 - 📐 Sugerowany współczynnik krzywej grzewczej na podstawie tego, czego SAT się nauczył.
 
 ## Czego potrzebujesz

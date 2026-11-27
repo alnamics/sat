@@ -79,7 +79,7 @@ It takes control again once everything is back.
 
 ## Monitoring (MPX)
 
-This fork also keeps running totals (starts, burner hours, heat, gas, cost, degree days), estimates the boiler efficiency and the water flow, watches the room loops and raises repair issues for falling pressure, a dirty heat exchanger, an overheated floor and more. See [MPX additions](mpx.md#monitoring).
+This fork also keeps running totals (starts, burner hours, heat, gas, cost, degree days), estimates the boiler efficiency and the water flow, watches the room loops and the humidity at the walls, and raises repair issues for falling pressure, a dirty heat exchanger, an overheated floor, mould risk and more. See [MPX additions](mpx.md#monitoring). It also protects the boiler's ignitions after a cylinder reheat and when too little water flows; see [Ignition protection](mpx.md#ignition-protection).
 
 ## Further reading
 

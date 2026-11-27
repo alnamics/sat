@@ -112,7 +112,7 @@ Pozostałe encje wymienia [dokumentacja ESPHome OpenTherm](https://esphome.io/co
 
 - **Czujnik temperatury wewnętrznej**: temperatura pokoju, którym steruje SAT. Najlepiej działa czujnik podający dwa miejsca po przecinku i aktualizujący się co 30 sekund.
 - **Czujnik temperatury zewnętrznej**: czujnik temperatury albo encja pogody. Możesz wybrać kilka, a SAT użyje pierwszego, który ma odczyt.
-- **Czujnik wilgotności** (opcjonalnie): używany tylko przez [Temperaturę odczuwalną](options.md#zaawansowane).
+- **Czujnik wilgotności** (opcjonalnie): używany przez [Temperaturę odczuwalną](options.md#zaawansowane), a w tym forku także do [ryzyka pleśni i rady o wietrzeniu](mpx.md#monitoring) dla głównego pokoju.
 
 ## System grzewczy
 
@@ -124,7 +124,7 @@ Pomiń ten krok, jeśli SAT jest Twoim jedynym termostatem.
 
 - **Termostat**: termostat ścienny. Gdy zmienisz jego temperaturę zadaną, SAT pójdzie za nią.
 - **Grzejniki**: termostaty grzejnikowe (głowice) w tym samym pokoju co czujnik wewnętrzny.
-- **Pomieszczenia**: termostaty w innych pokojach, każdy z własną temperaturą zadaną. SAT grzeje, gdy którykolwiek z nich woła o ciepło.
+- **Pomieszczenia**: termostaty w innych pokojach, każdy z własną temperaturą zadaną. SAT grzeje, gdy którykolwiek z nich woła o ciepło. W tym forku ich zawory zasilają też monitor pętli i [ochronę zapłonu](mpx.md#ochrona-zapłonu), a ich wilgotność [ryzyko pleśni](mpx.md#monitoring).
 
 Gdy dodane są pokoje, [Tryb grzania](options.md#krzywa-grzewcza-i-pid) decyduje, czy SAT grzeje też pod pozostałe pokoje, czy tylko pod główny.
 

@@ -110,7 +110,7 @@ The [ESPHome OpenTherm docs](https://esphome.io/components/opentherm.html) list 
 
 - **Inside sensor**: the temperature of the room SAT controls. A sensor that reports two decimals and updates every 30 seconds works best.
 - **Outside sensor**: a temperature sensor or a weather entity. You can pick several, and SAT uses the first one that has a reading.
-- **Humidity sensor** (optional): only used by [Felt temperature](options.md#advanced).
+- **Humidity sensor** (optional): used by [Felt temperature](options.md#advanced), and in this fork for the main room's [mould risk and airing advice](mpx.md#monitoring).
 
 ## Heating system
 
@@ -122,7 +122,7 @@ Skip this step if SAT is your only thermostat.
 
 - **Thermostat**: your wall thermostat. When you change its target, SAT follows.
 - **Radiators**: radiator thermostats (TRVs) in the same room as the inside sensor.
-- **Rooms**: thermostats in other rooms, each with its own target. SAT heats when any of them asks for heat.
+- **Rooms**: thermostats in other rooms, each with its own target. SAT heats when any of them asks for heat. In this fork their valves also feed the loop monitor and the [ignition protection](mpx.md#ignition-protection), and their humidity the [mould risk](mpx.md#monitoring).
 
 With rooms added, [Heating Mode](options.md#heating-curve-and-pid) decides whether SAT also heats for the other rooms or only for the main one.
 

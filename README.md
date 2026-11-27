@@ -29,7 +29,7 @@ A regular thermostat turns the boiler on and off, and the boiler heats its water
 
 This fork builds on [SAT v2 by Thiago Bellini Ribeiro](https://github.com/bellini666/SAT), itself a fork of the original [Smart Autotune Thermostat](https://github.com/Alexwijn/SAT) by [Alex Wijnholds](https://github.com/Alexwijn). It was written for an oversized condensing combi boiler (De Dietrich Lumea, 33 kW, minimum about 5 kW) on screed underfloor heating behind an OpenTherm Gateway, and adds what such a setup needs to stop short cycling and save gas. Everything new is off, or only informs, until you turn it on.
 
-On the test boiler the heat budget cut heating starts from about 27 to 8–10 a day, with burns of 12–23 minutes instead of 2–3 and the water at 35–44 °C; the real boiler also showed several things no test had, which are fixed now ([field test][field]).
+On the test boiler the heat budget turned burns of 2–3 minutes (about 27 starts a day) into one block of 16–35 minutes about every hour, with the water at 33–45 °C and the flue gas 2–3 K above the return; the real boiler also showed several things no test had, which are fixed now ([field test][field]).
 
 ## What this fork adds
 
@@ -43,13 +43,16 @@ All of it is described in [MPX additions][mpx].
 - 🚿 **Hot water schedule** with an eco temperature and a weekly legionella boost.
 - 🏃 **Presence**: Away preset when nobody is home, back early within a return distance.
 - 🪟 **Open window detection** from fast temperature drops, without contact sensors.
+- 🔥 **Ignition protection**: holds the heating ignition after a cylinder reheat until the boiler has cooled, and lets a block wait for another room loop when too little water flows to light.
 - ⚙️ Boiler-specific settings: anti-cycling time, valve opening time, cut-short burns per PWM phase, keep heating enabled between PWM phases, learned overshoot protection value.
 
 **Monitoring** (on, only informs)
 - 📈 Running totals for the Energy dashboard: burner starts and hours, heat for heating and hot water, gas, heating degree days, gas cost.
 - 🍃 **Estimated boiler efficiency** from the flue gas or return temperature.
 - 💧 **Estimated water flow**, open loops and a per-room rotameter hint; `sat.measure_loops` measures each loop's flow.
-- 🚨 Repair issues: low or falling water pressure, boiler fault, dirty heat exchanger, screed overheat, too little water flow, service due, gas use up.
+- 🚨 Repair issues: low or falling water pressure, boiler fault, frequent flame loss, heating cooling the cylinder, dirty heat exchanger, screed overheat, too little water flow, service due, gas use up, mould risk.
+- 🦠 **Mould risk and airing**: humidity at the coldest corner of each room, and a *Worth airing* sensor when the outside air would dry the flat.
+- 📋 **Yesterday's summary**, a **service report** for the technician, alerts when a boiler parameter changes, and English entity IDs on any language.
 - 📐 A suggested heating curve coefficient from what was learned.
 
 ## What you need
