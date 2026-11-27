@@ -111,6 +111,8 @@ Sekcja jest domyślnie zwinięta.
 - **Nie wyłączaj ogrzewania między fazami PWM** (Keep heating enabled between PWM on-phases, domyślnie wyłączone): dla kotłów dwufunkcyjnych, w których wybieg pompy wychładza zasobnik. Nie ma go w trybie przełącznika.
 - **Blokada ponownego zapłonu w kotle** (Boiler anti-cycling time): własna przerwa kotła przed ponownym zapłonem z ustawień instalatora (domyślnie 0: nieustawiona).
 - **Czas otwarcia siłowników** (Valve opening time): ile otwierają się siłowniki termostatów pokojowych (domyślnie 0: kocioł zapala się od razu).
+- **Czekanie na otwartą pętlę** (Wait for an open loop, minuty, domyślnie 45): gdy zapłony przy otwartych tylko niektórych zaworach pokojowych gasną z braku wody, faza PWM ON czeka tyle na otwarcie kolejnej pętli, a potem i tak zapala; 0 – bez czekania. Nauka działa w obu przypadkach.
+- **Margines zapłonu po ciepłej wodzie** (Relight margin after hot water, K, domyślnie 10): po dogrzaniu zasobnika ogrzewanie zapala, gdy zasilanie spadnie o tyle poniżej setpointu fazy ON, po co najmniej minucie i najwyżej trzech; 0 – zapłon od razu.
 - **Maksymalne zasilanie dla wylewki** (Maximum flow for the screed): tylko podłogówka (domyślnie 55 °C; 0 wyłącza).
 - **Kocioł kondensacyjny** (Condensing boiler, domyślnie włączone): do szacowania sprawności bez czujnika spalin.
 - **Zużycie gazu na minimalnej i maksymalnej mocy** (Gas use at minimum / maximum power): z instrukcji kotła, w m³/h. SAT szacuje z nich zużycie gazu oraz moc palnika, gdy kocioł jej nie podaje. Tylko OpenTherm.

@@ -62,7 +62,8 @@ def _key(loops: frozenset[str]) -> str:
 class FlowGuard:
     """Learn which open room valves cut ignitions out, and hold a block while they are all."""
 
-    def __init__(self) -> None:
+    def __init__(self, maximum_wait_seconds: float = MAXIMUM_WAIT_SECONDS) -> None:
+        self.maximum_wait_seconds = max(0.0, maximum_wait_seconds)
         # Weighted ignitions and cut-outs per set of open room valves
         self._sets: dict[str, list[float]] = {}
         # When the heating burn started and its open valves; no valves to learn after hot water
@@ -141,7 +142,7 @@ class FlowGuard:
 
     def wait(self, now: float, *, flame: bool, loops: frozenset[str]) -> bool:
         """Return True while an on-phase holds its ignition for another valve to open."""
-        if flame or self._released:
+        if flame or self._released or self.maximum_wait_seconds <= 0:
             return False
         if not self.too_little_flow(loops):
             if self._waiting_since is not None:
@@ -151,7 +152,7 @@ class FlowGuard:
         if self._waiting_since is None:
             self._waiting_since = now
             self.waits += 1
-        if now - self._waiting_since >= MAXIMUM_WAIT_SECONDS:
+        if now - self._waiting_since >= self.maximum_wait_seconds:
             self._released = True
             self._waiting_since = None
             return False

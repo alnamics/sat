@@ -77,6 +77,7 @@ from .const import (
     CONF_COMFORT_SCHEDULE_ENTITY_ID,
     CONF_CONDENSING_BOILER,
     CONF_DEFAULT_HVAC_MODE,
+    CONF_FLOW_WAIT_MINUTES,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
     CONF_FROST_PROTECTION_TEMPERATURE,
     CONF_GAS_ENERGY_CONTENT,
@@ -91,6 +92,7 @@ from .const import (
     CONF_HEATING_SYSTEM,
     CONF_HOT_WATER_COMFORT_TEMPERATURE,
     CONF_HOT_WATER_ECO_TEMPERATURE,
+    CONF_HOT_WATER_RELIGHT_MARGIN,
     CONF_HOT_WATER_SCHEDULE_ENTITY_ID,
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
     CONF_INSIDE_SENSOR_ENTITY_ID,
@@ -215,11 +217,10 @@ AFTER_HOT_WATER_SECONDS = 300
 # Right after a cylinder reheat the heat exchanger is still hot: lit at once for heating, the
 # ignition power lifts the flow some 10 K within seconds and the boiler cuts out above the
 # setpoint, then waits its anti-cycling time. The on-phase holds the setpoint down while the
-# pump carries that heat into the floor, at least a minute and until the flow is this far below
-# the on-phase setpoint, at most three minutes
+# pump carries that heat into the floor, at least a minute and until the flow is the relight
+# margin (an option, 10 K by default) below the on-phase setpoint, at most three minutes
 HOT_WATER_RELIGHT_MINIMUM_SECONDS = 60
 HOT_WATER_RELIGHT_MAXIMUM_SECONDS = 180
-HOT_WATER_RELIGHT_MARGIN = 10.0
 # A flame this long after the reheat is a heating burn already under way; it is not stopped
 HOT_WATER_TAIL_SECONDS = 15
 # The flue gas of a clean heat exchanger is only judged this close to the minimum power
@@ -513,7 +514,17 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._relight_hold_since: float | None = None
         self._relight_hot_water_seen = False
         # Learns which open room valves let too little water through for an ignition
-        self.flow_guard = FlowGuard()
+        self.flow_guard = FlowGuard(
+            float(
+                config_options.get(CONF_FLOW_WAIT_MINUTES, OPTIONS_DEFAULTS[CONF_FLOW_WAIT_MINUTES])
+            )
+            * 60
+        )
+        self._relight_margin = float(
+            config_options.get(
+                CONF_HOT_WATER_RELIGHT_MARGIN, OPTIONS_DEFAULTS[CONF_HOT_WATER_RELIGHT_MARGIN]
+            )
+        )
         # Room valves count as open only once they have had their time to open
         self._loops = LoopTracker(self._valve_opening_time)
         self._flow_waiting = False
@@ -1655,6 +1666,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
     def _hold_relight_after_hot_water(self, *, on_phase: bool) -> bool:
         """Return True while a heating ignition right after a cylinder reheat is held back."""
+        if self._relight_margin <= 0:
+            self._relight_hot_water_seen = False
+            self._relight_hold_since = None
+            return False
         coordinator = self._coordinator
         now = monotonic()
         if coordinator.heating_hot_water:
@@ -1674,7 +1689,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         held = now - started
         flow = coordinator.boiler_temperature
-        cooled = flow is not None and flow <= self.minimum_setpoint_value - HOT_WATER_RELIGHT_MARGIN
+        cooled = flow is not None and flow <= self.minimum_setpoint_value - self._relight_margin
         burning = coordinator.flame_active and held >= HOT_WATER_TAIL_SECONDS
         if (
             burning

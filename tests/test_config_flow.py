@@ -172,6 +172,8 @@ async def test_options_steps_save_their_settings(hass: HomeAssistant) -> None:
             "keep_heating_in_pwm_off": True,
             "boiler_anti_cycling_time": "00:10:00",
             "valve_opening_time": "00:06:00",
+            "flow_wait_minutes": 20,
+            "hot_water_relight_margin": 12,
             "screed_maximum_temperature": 55,
             "condensing_boiler": True,
             "gas_price": 0,
@@ -180,6 +182,23 @@ async def test_options_steps_save_their_settings(hass: HomeAssistant) -> None:
     )
     assert entry.options["keep_heating_in_pwm_off"] is True
     assert entry.options["valve_opening_time"] == "00:06:00"
+    assert entry.options["flow_wait_minutes"] == 20
+    assert entry.options["hot_water_relight_margin"] == 12
+    climate = entry.runtime_data.climate
+    assert climate.flow_guard.maximum_wait_seconds == 20 * 60
+    assert climate._relight_margin == 12
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_flow_options_default_to_45_minutes_and_10_kelvin(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data=DEFAULT_USER_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    climate = entry.runtime_data.climate
+    assert climate.flow_guard.maximum_wait_seconds == 45 * 60
+    assert climate._relight_margin == 10
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

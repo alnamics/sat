@@ -111,6 +111,8 @@ This section is collapsed by default.
 - **Keep heating enabled between PWM on-phases** (default off): for combi boilers whose pump overrun cools the hot water cylinder. Not in switch mode.
 - **Boiler anti-cycling time**: the boiler's own wait before relighting, from its installer settings (default 0: not set).
 - **Valve opening time**: how long the room thermostats' actuators take to open (default 0: light at once).
+- **Wait for an open loop** (minutes, default 45): when ignitions with only some room valves open keep cutting out for too little water, a PWM on-phase waits this long for another loop to open, then lights anyway; 0 never waits. The learning goes on either way.
+- **Relight margin after hot water** (K, default 10): after a cylinder reheat, heating lights once the flow is this far below the on-phase setpoint, after at least a minute and at most three; 0 lights at once.
 - **Maximum flow for the screed**: underfloor heating only (default 55 °C; 0 turns it off).
 - **Condensing boiler** (default on): for the efficiency estimate without a flue gas sensor.
 - **Gas use at minimum and maximum power**: from the boiler's manual, in m³/h. SAT uses them to estimate gas use, and the burner power when the boiler does not report its capacity. OpenTherm only.

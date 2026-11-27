@@ -52,6 +52,7 @@ from .const import (
     CONF_DERIVATIVE_TIME_WEIGHT,
     CONF_DEVICE,
     CONF_DUTY_CYCLE,
+    CONF_FLOW_WAIT_MINUTES,
     CONF_FORCE_PULSE_WIDTH_MODULATION,
     CONF_FROST_PROTECTION_TEMPERATURE,
     CONF_GAS_ENERGY_CONTENT,
@@ -68,6 +69,7 @@ from .const import (
     CONF_HOME_TEMPERATURE,
     CONF_HOT_WATER_COMFORT_TEMPERATURE,
     CONF_HOT_WATER_ECO_TEMPERATURE,
+    CONF_HOT_WATER_RELIGHT_MARGIN,
     CONF_HOT_WATER_SCHEDULE_ENTITY_ID,
     CONF_HUMIDITY_SENSOR_ENTITY_ID,
     CONF_INSIDE_SENSOR_ENTITY_ID,
@@ -1299,6 +1301,15 @@ class SatOptionsFlowHandler(OptionsFlowWithReload):
         schema[vol.Required(CONF_VALVE_OPENING_TIME, default=options[CONF_VALVE_OPENING_TIME])] = (
             selector.TimeSelector()
         )
+        if self._takes_setpoint:
+            schema[
+                vol.Required(CONF_FLOW_WAIT_MINUTES, default=options[CONF_FLOW_WAIT_MINUTES])
+            ] = _number(0, 120, 5, "min")
+            schema[
+                vol.Required(
+                    CONF_HOT_WATER_RELIGHT_MARGIN, default=options[CONF_HOT_WATER_RELIGHT_MARGIN]
+                )
+            ] = _number(0, 25, 1, "K")
         if self._takes_setpoint:
             schema[
                 vol.Required(

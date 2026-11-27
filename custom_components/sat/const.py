@@ -77,6 +77,8 @@ CONF_HEAT_BUDGET_PERIOD = "heat_budget_period"
 CONF_HEAT_BUDGET_MINIMUM_BURN = "heat_budget_minimum_burn"
 CONF_HEAT_LOSS_COEFFICIENT = "heat_loss_coefficient"
 CONF_HEAT_CAPACITY = "heat_capacity"
+CONF_FLOW_WAIT_MINUTES = "flow_wait_minutes"
+CONF_HOT_WATER_RELIGHT_MARGIN = "hot_water_relight_margin"
 CONF_WEATHER_FORECAST_ENTITY_ID = "weather_forecast_entity_id"
 CONF_COMFORT_SCHEDULE_ENTITY_ID = "comfort_schedule_entity_id"
 CONF_SETBACK_TEMPERATURE = "setback_temperature"
@@ -192,6 +194,11 @@ OPTIONS_DEFAULTS: dict[str, Any] = {
     CONF_HEAT_LOSS_COEFFICIENT: 0,
     # Heat stored per kelvin in kWh/K; 0 learns it from the heat loss
     CONF_HEAT_CAPACITY: 0,
+    # How long a block waits for another room loop when too little water flows; 0 never waits
+    CONF_FLOW_WAIT_MINUTES: 45,
+    # After a cylinder reheat, heating lights once the flow is this far below the on-phase
+    # setpoint (at least a minute, at most three); 0 lights at once
+    CONF_HOT_WATER_RELIGHT_MARGIN: 10,
     CONF_WEATHER_FORECAST_ENTITY_ID: None,
     # An outdoor humidity sensor (Airly, a weather station) for the airing advice
     CONF_OUTSIDE_HUMIDITY_ENTITY_ID: None,

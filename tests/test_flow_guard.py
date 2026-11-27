@@ -168,3 +168,19 @@ def test_a_broken_restore_is_ignored() -> None:
     guard.restore({"climate.kids": "x", 3: [1, 1], "climate.a": [1.0]})
     guard.restore(None)
     assert guard.attributes["flow_guard_sets"] == {}
+
+
+def test_a_shorter_or_no_wait_can_be_set() -> None:
+    for minutes, waits in ((10, True), (0, False)):
+        guard = FlowGuard(minutes * 60.0)
+        now = 0.0
+        for _ in range(3):
+            now = ignition(guard, now, KIDS, 15)
+        assert guard.wait(now, flame=False, loops=KIDS) is waits
+        if waits:
+            assert guard.wait(now + 599, flame=False, loops=KIDS)
+            assert not guard.wait(now + 600, flame=False, loops=KIDS)
+
+
+def test_the_default_wait_is_45_minutes() -> None:
+    assert FlowGuard().maximum_wait_seconds == 45 * 60

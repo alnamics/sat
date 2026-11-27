@@ -28,6 +28,7 @@ def climate() -> SimpleNamespace:
             boiler_temperature=30.0,
         ),
         minimum_setpoint_value=45.0,
+        _relight_margin=10.0,
         _relight_hold_since=None,
         _relight_hot_water_seen=False,
     )
@@ -136,3 +137,31 @@ def test_an_unflagged_reheat_is_held_only_after_it() -> None:
         entity._coordinator.heating_hot_water = False
         entity._coordinator.flame_active = False
         assert hold(entity)
+
+
+def test_a_zero_margin_never_holds() -> None:
+    clock = Clock()
+    entity = climate()
+    entity._relight_margin = 0.0
+    with patch("custom_components.sat.climate.monotonic", clock):
+        entity._coordinator.heating_hot_water = True
+        entity._coordinator.hot_water_active = True
+        assert not hold(entity)
+        entity._coordinator.heating_hot_water = False
+        entity._coordinator.hot_water_active = False
+        entity._coordinator.boiler_temperature = 60.0
+        assert not hold(entity)
+
+
+def test_a_wider_margin_waits_for_a_cooler_flow() -> None:
+    clock = Clock()
+    entity = climate()
+    entity._relight_margin = 15.0
+    with patch("custom_components.sat.climate.monotonic", clock):
+        reheat(entity, clock)
+        entity._coordinator.boiler_temperature = 34.0
+        clock.now += HOT_WATER_RELIGHT_MINIMUM_SECONDS
+        # 34 °C is 11 K below 45 °C: not yet 15 K
+        assert hold(entity)
+        entity._coordinator.boiler_temperature = 30.0
+        assert not hold(entity)
