@@ -812,19 +812,18 @@ def test_a_day_without_cut_outs_still_teaches_the_wind() -> None:
 def test_cut_outs_are_counted_in_the_hour_they_happen() -> None:
     budget = HeatBudget()
     now = 0.0
-    ends: tuple[float, ...] = ()
     # An earlier cut-out, before the budget started watching, is not counted
-    ends = (-100.0,)
-    budget.update(inputs(now, cut_short_burn_ends=ends))
+    ends: list[float] = [-100.0]
+    budget.update(inputs(now, cut_short_burn_ends=tuple(ends)))
     for minute in range(1, 50):
         now = minute * 60.0
         if minute in (10, 20):
-            ends = (*ends, now)
-        budget.update(inputs(now, cut_short_burn_ends=ends))
+            ends.append(now)
+        budget.update(inputs(now, cut_short_burn_ends=tuple(ends)))
     assert budget._hour.cut_outs == 2
     # A lost flame counts too
     now += 60
-    budget.update(inputs(now, cut_short_burn_ends=ends, flame_loss_ends=(now,)))
+    budget.update(inputs(now, cut_short_burn_ends=tuple(ends), flame_loss_ends=(now,)))
     assert budget._hour.cut_outs == 3
 
 
