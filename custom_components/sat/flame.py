@@ -170,6 +170,8 @@ class Flame:
         self._relight_waits: deque[float] = deque(maxlen=10)
         self._last_burn_heating = False
         self._setpoint_floor = self.UNFLAGGED_HOT_WATER_SETPOINT_FLOOR
+        # The highest heating setpoint the boiler takes, to tell the cut-out warning apart
+        self._setpoint_ceiling: float | None = None
 
         # Health
         self._health_status: FlameStatus = FlameStatus.INSUFFICIENT_DATA
@@ -341,13 +343,23 @@ class Flame:
         self._pending_cut_out = None
         self._last_cut_short_peak_flow = peak
         self._last_cut_short_setpoint = setpoint
-        _LOGGER.warning(
-            "The boiler stopped a PWM burn after %.0fs with the flow at %.1f°C "
-            "against a %.1f°C setpoint; raise the overshoot protection value",
-            duration,
-            peak,
-            setpoint,
-        )
+        if self._setpoint_ceiling is not None and setpoint >= self._setpoint_ceiling - 0.5:
+            # No room above: the water through the boiler is too little, not the setpoint
+            _LOGGER.warning(
+                "The boiler stopped a PWM burn after %.0fs with the flow at %.1f°C against "
+                "its highest %.1f°C setpoint; too little water flows, open more loops",
+                duration,
+                peak,
+                setpoint,
+            )
+        else:
+            _LOGGER.warning(
+                "The boiler stopped a PWM burn after %.0fs with the flow at %.1f°C "
+                "against a %.1f°C setpoint; raise the overshoot protection value",
+                duration,
+                peak,
+                setpoint,
+            )
         if self._store:
             self._store.async_delay_save(self._data_to_save)
 
@@ -359,6 +371,10 @@ class Flame:
     def flame_loss_ends(self) -> tuple[float, ...]:
         """When heating burns lost their flame well below the setpoint, oldest first."""
         return tuple(self._flame_losses)
+
+    def set_setpoint_ceiling(self, maximum: float | None) -> None:
+        """Take the highest heating setpoint the boiler takes."""
+        self._setpoint_ceiling = maximum
 
     def set_setpoint_floor(self, minimum: float | None) -> None:
         """Take the boiler's lowest heating setpoint, which it raises lower setpoints to."""

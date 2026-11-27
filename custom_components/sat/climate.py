@@ -146,6 +146,7 @@ from .curve_advisor import CurveAdvisor
 from .efficiency import EfficiencyTracker, fuel_for
 from .entity import SatEntity
 from .errors import Error, Errors
+from .flow_guard import FlowGuard
 from .heat_budget import (
     HeatBudget,
     HeatBudgetInputs,
@@ -273,6 +274,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         {
             "boiler_flame_timing",
             "mould_risk",
+            "flow_guard_sets",
+            "flow_guard_waits",
             "airing",
             "boiler_temperature_cold",
             "boiler_temperature_derivative",
@@ -509,6 +512,10 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         # When the on-phase began holding its ignition back after a cylinder reheat
         self._relight_hold_since: float | None = None
         self._relight_hot_water_seen = False
+        # Learns which open room valves let too little water through for an ignition
+        self.flow_guard = FlowGuard()
+        self._flow_waiting = False
+        self._overshoot_seen = False
         self._init_extras(coordinator, config_options)
 
         if self._simulation:
@@ -913,6 +920,9 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             self._presence_previous_preset = previous
             self.presence.resume_away(monotonic())
 
+        # The valve sets that cut ignitions out are known again at once
+        self.flow_guard.restore(attributes.get("flow_guard_sets"))
+
         # A boost that already ran this week is not repeated after a restart
         if self.hot_water_schedule is not None:
             self.hot_water_schedule.restore_last_boost(attributes.get("hot_water_last_boost_week"))
@@ -1036,6 +1046,7 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             **(self.boiler_diagnostics.attributes if self.boiler_diagnostics is not None else {}),
             **({"mould_risk": mould} if (mould := self.mould.attributes) else {}),
             **({"airing": self.airing} if self.airing is not None else {}),
+            **self.flow_guard.attributes,
             **self._extras_attributes(),
         }
 
@@ -1570,7 +1581,8 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
             # Followed in every phase, so a block that starts right after a reheat is held too
             holding = self._hold_relight_after_hot_water(on_phase=pwm_state.status == PWMStatus.ON)
-            if pwm_state.status == PWMStatus.ON and holding:
+            waiting = self._wait_for_flow(on_phase=pwm_state.status == PWMStatus.ON)
+            if pwm_state.status == PWMStatus.ON and (holding or waiting):
                 self._setpoint = MINIMUM_SETPOINT
                 _LOGGER.debug(
                     "Holding the heating ignition while the boiler cools after hot water."
@@ -1586,6 +1598,38 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
         self._setpoint = min(self._setpoint, self._coordinator.maximum_setpoint)
         await self._coordinator.async_set_control_setpoint(self._setpoint)
         _LOGGER.debug("Control setpoint has been updated to: %.1f°C", self._setpoint)
+
+    def _open_room_loops(self) -> frozenset[str]:
+        """Return the controlled room climates whose valves are open now."""
+        return frozenset(
+            entity_id
+            for entity_id in self._radiators + self.areas.items()
+            if self._climate_wants_heat(self.hass.states.get(entity_id))
+        )
+
+    def _wait_for_flow(self, *, on_phase: bool) -> bool:
+        """Return True while an on-phase waits for a room valve, as too little water flows."""
+        if not on_phase or not (self._radiators or self.areas.items()):
+            self._flow_waiting = False
+            return False
+        loops = self._open_room_loops()
+        waiting = self.flow_guard.wait(
+            monotonic(), flame=self._coordinator.flame_active, loops=loops
+        )
+        if waiting != self._flow_waiting:
+            if waiting:
+                _LOGGER.info(
+                    "Too little water flows with only %s open; the heating ignition waits "
+                    "for another loop to open (at most 45 minutes).",
+                    ", ".join(sorted(loops)) or "the always open loops",
+                )
+            else:
+                _LOGGER.info(
+                    "The heating ignition goes ahead with %s open.",
+                    ", ".join(sorted(loops)) or "the always open loops",
+                )
+            self._flow_waiting = waiting
+        return waiting
 
     def _hold_relight_after_hot_water(self, *, on_phase: bool) -> bool:
         """Return True while a heating ignition right after a cylinder reheat is held back."""
@@ -1831,9 +1875,13 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
                 )
 
             # Check for overshoot
-            if self._coordinator.device_status == BoilerStatus.OVERSHOOT_HANDLING:
-                _LOGGER.info("Overshoot Handling detected, enabling Pulse Width Modulation.")
+            overshoot = self._coordinator.device_status == BoilerStatus.OVERSHOOT_HANDLING
+            if overshoot:
+                # Said once per overshoot, not at every step of a long burn above the setpoint
+                if not self._overshoot_seen:
+                    _LOGGER.info("Overshoot Handling detected, enabling Pulse Width Modulation.")
                 self.pwm.enable()
+            self._overshoot_seen = overshoot
 
             # Without open valves there is no demand,
             # so PWM stays idle and the boiler is held at the minimum setpoint
@@ -1898,7 +1946,11 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
             kept_on = self._heating_kept_on_in_pwm_off()
             await self.async_set_heater_state(
                 DeviceState.ON
-                if (self._setpoint is not None and self._setpoint > COLD_SETPOINT) or kept_on
+                if (self._setpoint is not None and self._setpoint > COLD_SETPOINT)
+                or kept_on
+                # The pump keeps running while the ignition waits, which cools the boiler
+                or self._relight_hold_since is not None
+                or self._flow_waiting
                 else DeviceState.OFF
             )
 
@@ -2469,6 +2521,15 @@ class SatClimate(SatEntity, ClimateEntity, RestoreEntity):
 
         if self._last_hot_water_active and not hot_water:
             self._hot_water_ended_at = now
+
+        if self._radiators or self.areas.items():
+            self.flow_guard.update(
+                now,
+                flame=flame,
+                hot_water=hot_water,
+                on_phase=self.pwm.status == PWMStatus.ON,
+                loops=self._open_room_loops(),
+            )
 
         self.efficiency.update(
             now,

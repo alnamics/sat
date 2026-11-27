@@ -569,6 +569,7 @@ class SatDataUpdateCoordinator(DataUpdateCoordinator):
         # upgrade if outages turn out to be long
         if self.online and self.flame_reported:
             self._flame.set_setpoint_floor(self.minimum_heating_setpoint)
+            self._flame.set_setpoint_ceiling(self.maximum_setpoint)
             self._flame.update(boiler_state=self.boiler, pwm_state=pwm_state)
 
             if self._overshoot_learner is not None:
